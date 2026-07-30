@@ -165,6 +165,9 @@ dinámico, autorización faltante), ver la skill `laravel-security-review`.
 
 ## CI: todo lo anterior es obligatorio, no opcional
 
+Además, `.github/workflows/issue-format.yml` valida el formato de los issues del
+backlog al abrirse o editarse (ver la sección de Backlog más abajo).
+
 `.github/workflows/ci.yml` corre en cada push/PR a `main`: Pint, PHPUnit,
 `composer stan`, `composer audit` (CVEs conocidos en dependencias),
 `laravel-api-review` (complejidad + arquitectura), `laravel-security-review`
@@ -184,8 +187,40 @@ skill `github-backlog-issue` (`.claude/skills/github-backlog-issue/SKILL.md`), q
 rellena el template correcto y valida el borrador con
 `scripts/validate_issue.py` antes de proponer publicarlo en GitHub.
 
+Dos reglas del formato que no son negociables, porque son lo que hace que los issues
+sean comparables entre sí:
+
+- **Ninguna sección del template es opcional.** Todos los issues llevan el mismo
+  esqueleto, en el mismo orden. Si una sección no aplica a un caso concreto, se escribe
+  `Ninguno.` explícitamente; nunca se borra la sección.
+- **La estimación es una talla de la escala cerrada `XS|S|M|L|XL`**, nunca puntos ni
+  días, para que todo el backlog se mida con la misma unidad.
+
+Ambas se validan automáticamente: `scripts/validate_issue.py` las verifica, y el
+workflow `.github/workflows/issue-format.yml` lo corre sobre cada issue `[US]`/`[TASK]`
+al abrirse o editarse, comentando los errores en el propio issue. Así el formato no
+depende de que quien abre el issue se acuerde de usar la skill.
+
+## Modelo de datos para roles pasajero y conductor (decidido en #1)
+
+**Decisión**: un único modelo `User` con campo `role` (enum `passenger`|`driver`) +
+tabla `driver_profiles` para datos específicos del conductor.
+
+- `users.role` almacena el rol de autenticación del usuario. El enum `App\Enums\UserRole`
+  define los casos `Passenger` y `Driver`.
+- `driver_profiles` (relación 1:1 opcional con `users`) almacena `license_number` y
+  cualquier dato exclusivo del conductor. Un conductor sin perfil creado no puede
+  recibir viajes.
+- `User::isDriver()` / `User::isPassenger()` son los helpers canónicos para verificar
+  el rol; no usar el campo `role` directamente fuera de esos métodos.
+- Si en el futuro un mismo `User` necesita ambos roles, se añade el caso `Both` al enum
+  o se migra a una tabla pivot `user_roles` — la capa de modelos actual no lo bloquea.
+
+**Justificación**: una sola tabla de autenticación simplifica el JWT (el `sub` siempre
+es el id de `User`), y `driver_profiles` mantiene la extensibilidad sin pre-optimizar
+una estructura multi-rol que todavía no existe en el producto.
+
 ## Pendiente de decidir (no bloquea empezar)
 
-- Si `User` es un solo modelo con rol (`passenger`/`driver`) o tablas separadas.
 - Estrategia de refresh token concreta para JWT.
 - Cálculo de tarifas (por distancia/tiempo) y proveedor de mapas/geocoding.
