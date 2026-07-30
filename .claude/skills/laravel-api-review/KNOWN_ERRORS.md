@@ -50,3 +50,30 @@ límite acá.
 vía `nikic/php-parser`) + `ast_client.py`. Match, ternarios, heredoc y closures ya se
 interpretan correctamente — ver las limitaciones (distintas) documentadas ahora en
 `SKILL.md`.
+
+---
+
+### 2026-07-30 — PHPStan reporta comparaciones === siempre-false en Models con casts a enum
+
+**Qué pasó:** `User.php` tenía `$this->role === UserRole::Driver` en los helpers
+`isDriver()` / `isPassenger()`. PHPStan reportó:
+```
+Strict comparison using === between 'driver'|'passenger' and App\Enums\UserRole::Driver
+will always evaluate to false.
+```
+
+**Por qué pasó:** PHPStan/Larastan no infiere automáticamente el tipo post-cast de los
+atributos Eloquent declarados en `casts()`. Ve el tipo de la columna en BD
+(`'driver'|'passenger'`, string) en vez del resultado del cast (`UserRole`). Por eso
+la comparación con una instancia de enum le parece imposible en análisis estático.
+
+**Cómo evitarlo:** al escribir o revisar un Model que tenga un cast a enum (o a
+cualquier tipo que no sea el nativo de la columna), verificar que el docblock del Model
+declare `@property` con el tipo correcto:
+```php
+/** @property App\Enums\UserRole $role */
+class User extends Authenticatable { … }
+```
+Esto está también en `.claude/STANDARDS.md` como regla de código. Si `composer stan`
+reporta este patrón en un PR, la corrección siempre es agregar la anotación
+`@property` — nunca cambiar la comparación ni el cast.

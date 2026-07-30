@@ -94,6 +94,15 @@ routes/
   - Enums en PascalCase con casos también PascalCase: `RideStatus::Requested`.
 - Los Models solo tienen relaciones, scopes y accessors/casts simples — cualquier
   otra cosa va en una Action.
+- **Todo atributo Eloquent cuyo cast devuelva un tipo distinto al de la columna
+  (enum, Value Object, Carbon…) debe declararse con `@property` en el docblock del
+  Model.** Sin esa anotación, PHPStan/Larastan lo sigue viendo como el tipo de la
+  columna en BD (generalmente `string`) y marca las comparaciones con el tipo real
+  como siempre-false. Ejemplo obligatorio para casts a enum:
+  ```php
+  /** @property UserRole $role */
+  class User extends Authenticatable { … }
+  ```
 - **Nomenclatura de archivos y carpetas: 100% en inglés**, aunque el contenido/prosa
   esté en español (que sí se mantiene en español en este proyecto, ver el resto de
   este documento). Ej.: `known-errors.md`, no `errores-conocidos.md`; `user-story.md`,
