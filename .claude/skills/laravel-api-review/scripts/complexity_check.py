@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Reporta complejidad ciclomática y anidación excesiva en métodos PHP.
+"""Reporta complejidad ciclomática y anidación excesiva en métodos PHP,
+usando un AST real de PHP (nikic/php-parser, vía scripts/ast_dump.php) — no
+un análisis basado en regex. Requiere `php` en el PATH y `composer install`
+ya corrido (nikic/php-parser es dependencia transitiva del proyecto).
 
-Es un análisis heurístico basado en texto (ver php_lite.py), no un AST real.
-Útil como señal rápida, no como verdad absoluta — un método flageado puede
-tener una razón legítima para su forma; usa criterio antes de forzar un
-refactor solo para bajar el número.
+Un método flageado puede tener una razón legítima para su forma; usa criterio
+antes de forzar un refactor solo para bajar el número.
 
 Uso:
     python complexity_check.py [ruta ...] [--max-complexity 10] [--max-nesting 3]
 
-Por defecto analiza app/. Sale 0 si no hay violaciones, 1 si encuentra alguna,
-2 si hubo un problema para ejecutar (ruta inexistente, etc.).
+Por defecto analiza app/. Sale 0 si no hay violaciones, 1 si encuentra alguna
+violación o algún archivo con error de sintaxis, 2 si hubo un problema para
+ejecutar (ruta inexistente, `php` no encontrado, etc.).
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from php_lite import cyclomatic_complexity, iter_php_files, max_nesting_depth, parse_methods  # noqa: E402
+from ast_client import iter_php_files, run_ast_dump  # noqa: E402
 
 DEFAULT_PATHS = ["app"]
 
@@ -42,27 +44,36 @@ def main() -> int:
         print(f"No se encontraron archivos .php en: {', '.join(args.paths)}")
         return 0
 
-    violations: list[str] = []
-    for file in files:
-        code = file.read_text(encoding="utf-8")
-        for method in parse_methods(code):
-            complexity = cyclomatic_complexity(method.body)
-            nesting = max_nesting_depth(method.body)
+    try:
+        results = run_ast_dump(files)
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    problems: list[str] = []
+    for item in results:
+        if "parseError" in item:
+            problems.append(f"{item['file']}: error de sintaxis — {item['parseError']}")
+            continue
+        for method in item.get("methods", []):
+            complexity = method["complexity"]
+            nesting = method["maxNesting"]
             if complexity > args.max_complexity:
-                violations.append(
-                    f"{file}:{method.start_line}: {method.name}() complejidad ciclomática "
+                problems.append(
+                    f"{item['file']}:{method['startLine']}: {method['name']}() complejidad ciclomática "
                     f"{complexity} > {args.max_complexity}"
                 )
             if nesting > args.max_nesting:
-                violations.append(
-                    f"{file}:{method.start_line}: {method.name}() anidación {nesting} > {args.max_nesting}"
+                problems.append(
+                    f"{item['file']}:{method['startLine']}: {method['name']}() anidación "
+                    f"{nesting} > {args.max_nesting}"
                 )
 
-    for v in violations:
-        print(f"ERROR: {v}")
+    for p in problems:
+        print(f"ERROR: {p}")
 
-    if violations:
-        print(f"\n{len(violations)} violacion(es) encontradas en {len(files)} archivo(s).")
+    if problems:
+        print(f"\n{len(problems)} problema(s) encontrados en {len(files)} archivo(s).")
         return 1
 
     print(

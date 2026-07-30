@@ -1,6 +1,6 @@
 ---
 name: laravel-api-review
-description: Revisa código PHP/Laravel de MotoYa contra las buenas prácticas de arquitectura de API REST definidas en .claude/STANDARDS.md — complejidad ciclomática, anidación excesiva, Controllers con lógica de negocio, Models con lógica que debería estar en una Action, Actions que conocen HTTP, SQL crudo disperso, y versionado de rutas. Usar esta skill siempre después de escribir o modificar un Controller, Model o Action en PHP, antes de dar por terminada una tarea de backend, o cuando el usuario pida "revisar" código, "buenas prácticas", "refactor", "complejidad", o si el código "sigue la arquitectura". También usarla si piden validar la arquitectura o complejidad de un archivo o carpeta específica.
+description: Revisa código PHP/Laravel de MotoYa contra las buenas prácticas de arquitectura de API REST definidas en .claude/STANDARDS.md — complejidad ciclomática (AST real vía nikic/php-parser), anidación excesiva, Controllers con lógica de negocio, Models con lógica que debería estar en una Action, Actions que conocen HTTP, SQL crudo disperso, versionado de rutas, y análisis de tipos real con PHPStan/Larastan (composer stan). Usar esta skill siempre después de escribir o modificar un Controller, Model o Action en PHP, antes de dar por terminada una tarea de backend, o cuando el usuario pida "revisar" código, "buenas prácticas", "refactor", "complejidad", "tipos", "phpstan", o si el código "sigue la arquitectura". También usarla si piden validar la arquitectura o complejidad de un archivo o carpeta específica.
 ---
 
 # Revisión de arquitectura y complejidad — Laravel API (MotoYa)
@@ -14,9 +14,14 @@ erosione con el tiempo si nadie lo revisa activamente. Esta skill automatiza una
 primera pasada de esa revisión con dos scripts en `scripts/`, y deja un registro de
 sus propios errores en [`KNOWN_ERRORS.md`](KNOWN_ERRORS.md) para mejorar con el uso.
 
-**Importante:** los scripts son heurísticos (análisis basado en texto, no un AST real
-de PHP). Son una señal, no un veredicto. Ver "Limitaciones conocidas" más abajo antes
-de tratar un hallazgo como un hecho incuestionable.
+`scripts/complexity_check.py` y `scripts/architecture_check.py` corren sobre un AST
+real de PHP (`nikic/php-parser`, ya instalado como dependencia transitiva del
+proyecto) vía `scripts/ast_dump.php` — no son regex sobre texto. Aun así son una
+señal, no un veredicto: entienden la sintaxis correctamente, pero las reglas de
+arquitectura siguen siendo heurísticas sobre nombres de métodos y llamadas. Ver
+"Limitaciones conocidas" antes de tratar un hallazgo como un hecho incuestionable.
+Complementan (no reemplazan) a PHPStan/Larastan para tipos, y a la skill
+`laravel-security-review` para seguridad — ver `.claude/STANDARDS.md`.
 
 ## Flujo
 
@@ -27,13 +32,18 @@ de tratar un hallazgo como un hecho incuestionable.
 2. **Revisa [`KNOWN_ERRORS.md`](KNOWN_ERRORS.md)** antes de interpretar resultados —
    ahí se acumulan patrones que estos scripts han marcado mal antes (falsos
    positivos/negativos conocidos), para no repetir la misma mala interpretación.
-3. **Corre los dos scripts** sobre los archivos/carpetas relevantes:
+3. **Corre los tres checks** sobre los archivos/carpetas relevantes:
    ```bash
    python .claude/skills/laravel-api-review/scripts/complexity_check.py <ruta...>
    python .claude/skills/laravel-api-review/scripts/architecture_check.py <ruta...>
+   composer stan   # PHPStan/Larastan — análisis de tipos real, complementa lo anterior
    ```
    Si no se pasan rutas, `complexity_check.py` analiza `app/` completo y
-   `architecture_check.py` analiza `app/` + `routes/api.php`.
+   `architecture_check.py` analiza `app/` + `routes/api.php`. `composer stan` corre
+   PHPStan a nivel 5 (`phpstan.neon`) sobre `app/` y `routes/` — detecta bugs de tipos
+   (métodos inexistentes, tipos de retorno incorrectos) que ninguna heurística de
+   `complexity_check.py`/`architecture_check.py` puede ver, así que no es opcional
+   cuando hay código PHP nuevo.
 4. **Interpreta cada hallazgo con criterio, no mecánicamente**:
    - Un método largo con complejidad alta casi siempre se beneficia de un guard
      clause / early return, o de extraerse a métodos privados más chicos, o (si es
@@ -55,17 +65,24 @@ de tratar un hallazgo como un hecho incuestionable.
 
 ## Limitaciones conocidas (leer antes de confiar ciegamente en un hallazgo)
 
-- No es un parser real de PHP: no entiende expresiones `match` de PHP 8.1+, no cuenta
-  operadores ternarios (`? :`, `?:`) como puntos de decisión, y maneja mal strings
-  heredoc/nowdoc (`<<<EOT ... EOT`).
-- Solo analiza métodos con nombre; no analiza closures anónimos ni arrow functions
-  (`fn() => ...`), incluyendo los closures de rutas en `routes/*.php`.
-- La "anidación" cuenta profundidad de `{ }` en general, así que un closure o una
-  clase anónima dentro de un método suman a la profundidad igual que un `if` anidado.
-- Las reglas de arquitectura se basan en la ruta del archivo (`Controllers/`,
-  `Models/`, `Actions/`) y en coincidencias de texto (nombres de métodos, llamadas);
-  un archivo fuera de esa estructura de carpetas no se categoriza y no se revisa con
-  esas reglas.
+- Requiere `php` en el PATH y `composer install` ya corrido (usa el
+  `nikic/php-parser` instalado en `vendor/`). Sin eso, los scripts salen con
+  exit 2 y un mensaje explicando qué falta — no fallan en silencio.
+- La complejidad/anidación de un método **incluye** lo que pasa dentro de closures y
+  arrow functions definidos en su cuerpo (porque ejecutarlos es parte de ejecutar el
+  método), pero esos closures no se reportan como entradas separadas — así que un
+  método con un closure grande puede aparecer con un número alto sin que quede claro
+  a simple vista que el problema está "adentro" del closure, no en el método en sí.
+- Las reglas de arquitectura (persistencia en Controllers, SQL crudo, HTTP en
+  Actions, etc.) siguen siendo heurísticas: matchean nombres de método/clase
+  (`::create`, `->save`, `DB::raw`, tipos de parámetro) sin resolver a qué clase
+  pertenecen realmente en tiempo de ejecución — un método `save()` de una clase que
+  no es un Eloquent Model daría un falso positivo si viviera en un Controller.
+- Se basan en la ruta del archivo (`Controllers/`, `Models/`, `Actions/`) para decidir
+  qué reglas aplicar; un archivo fuera de esa estructura de carpetas no se categoriza
+  y no se revisa con esas reglas.
+- No resuelven herencia/traits entre archivos: un método heredado de una clase base
+  en otro archivo no se ve al analizar el archivo hijo.
 
 ## Referencia rápida de comandos
 

@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Calidad (estilo, tests, tipos, arquitectura, seguridad, conformidad)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_sqlite, sqlite3, bcmath, intl
+          coverage: none
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache dependencias de Composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Instalar dependencias PHP
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Preparar entorno (.env, key, sqlite, migraciones)
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          mkdir -p database
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Instalar dependencias Python (laravel-feature-workflow)
+        run: pip install -r .claude/skills/laravel-feature-workflow/scripts/requirements.txt
+
+      - name: Pint (estilo de código)
+        run: vendor/bin/pint --test
+
+      - name: PHPUnit
+        run: php artisan test
+
+      - name: PHPStan / Larastan (tipos)
+        run: composer stan
+
+      - name: Composer audit (CVEs en dependencias)
+        run: composer audit
+
+      - name: laravel-api-review — complejidad y anidación
+        run: python .claude/skills/laravel-api-review/scripts/complexity_check.py
+
+      - name: laravel-api-review — arquitectura
+        run: python .claude/skills/laravel-api-review/scripts/architecture_check.py
+
+      - name: laravel-security-review
+        run: python .claude/skills/laravel-security-review/scripts/security_check.py
+
+      - name: openapi.yaml — conformidad estática (spec + rutas reales)
+        run: python .claude/skills/laravel-feature-workflow/scripts/static_conformance.py
+
+      - name: openapi.yaml — conformidad dinámica (requests reales vs. schema)
+        run: python .claude/skills/laravel-feature-workflow/scripts/dynamic_conformance.py --start-server

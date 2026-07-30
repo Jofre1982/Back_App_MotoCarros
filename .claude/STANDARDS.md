@@ -141,16 +141,39 @@ Toda feature de la API sigue este orden, orquestado por la skill
    vivo, valida el body de la respuesta contra el schema documentado) antes de dar la
    feature por terminada.
 
-## Revisión de código: complejidad y arquitectura
+## Revisión de código: complejidad, arquitectura y tipos
 
 Antes de dar por terminada una tarea que toca Controllers, Models o Actions, correr
 la skill `laravel-api-review` (`.claude/skills/laravel-api-review/SKILL.md`), que
-valida complejidad ciclomática, anidación excesiva y las reglas de arquitectura de
-este documento (Controllers finos, Models sin lógica de negocio, Actions sin
-conocimiento de HTTP, SQL crudo contenido, rutas versionadas) con dos scripts en
-`scripts/complexity_check.py` y `scripts/architecture_check.py`. Son heurísticos, no
-un linter de PHP real — tratar los hallazgos como señal a evaluar con criterio, no
-como regla mecánica.
+valida tres cosas:
+
+- Complejidad ciclomática y anidación excesiva, y las reglas de arquitectura de este
+  documento (Controllers finos, Models sin lógica de negocio, Actions sin
+  conocimiento de HTTP, SQL crudo contenido, rutas versionadas), con
+  `scripts/complexity_check.py` y `scripts/architecture_check.py` — corren sobre un
+  AST real de PHP (`nikic/php-parser` vía `scripts/ast_dump.php`), pero las reglas de
+  arquitectura en sí siguen siendo heurísticas (nombres de método/clase); tratar los
+  hallazgos como señal a evaluar con criterio, no como regla mecánica.
+- Tipos reales con **PHPStan/Larastan** (`composer stan`, config en `phpstan.neon`,
+  nivel 5 sobre `app/` y `routes/`) — detecta bugs de tipos (métodos inexistentes,
+  retornos incorrectos) que ninguna herramienta basada en heurísticas puede ver. El
+  nivel puede subirse con el tiempo a medida que el código madure; no bajarlo para
+  silenciar errores reales.
+
+Para seguridad (mass assignment, campos sensibles expuestos, SQL crudo con input
+dinámico, autorización faltante), ver la skill `laravel-security-review`.
+
+## CI: todo lo anterior es obligatorio, no opcional
+
+`.github/workflows/ci.yml` corre en cada push/PR a `main`: Pint, PHPUnit,
+`composer stan`, `composer audit` (CVEs conocidos en dependencias),
+`laravel-api-review` (complejidad + arquitectura), `laravel-security-review`
+(incluye consistencia `.env.example` vs `config/*.php`), y la conformidad OpenAPI
+(estática + dinámica) de `laravel-feature-workflow`. Esto existe porque una skill
+que solo corre "si alguien se acuerda de invocarla" no es una garantía — el CI es lo que convierte estas
+validaciones de convención a requisito. Si un cambio necesita saltarse alguno de
+estos checks, es una señal de que algo en el check o en el cambio está mal, no una
+razón para deshabilitar el paso en el workflow.
 
 ## Backlog: historias de usuario e issues
 

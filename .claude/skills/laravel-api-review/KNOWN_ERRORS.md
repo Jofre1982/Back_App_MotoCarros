@@ -45,3 +45,8 @@ los scripts para ese método — revísalo manualmente. Si este tipo de código 
 común en el proyecto (por ejemplo, empezamos a usar `match` seguido en Actions), vale
 la pena extender `php_lite.py` para soportarlo en vez de seguir documentando el
 límite acá.
+
+**Resuelto el 2026-07-30:** `php_lite.py` se reemplazó por `ast_dump.php` (AST real
+vía `nikic/php-parser`) + `ast_client.py`. Match, ternarios, heredoc y closures ya se
+interpretan correctamente — ver las limitaciones (distintas) documentadas ahora en
+`SKILL.md`.
