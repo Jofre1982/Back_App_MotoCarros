@@ -1,0 +1,4 @@
+PyYAML>=6.0
+jsonschema>=4.18
+requests>=2.31
+openapi-spec-validator>=0.7

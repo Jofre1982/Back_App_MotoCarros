@@ -1,0 +1,22 @@
+openapi: 3.0.3
+info:
+  title: MotoYa API
+  description: >-
+    API REST del backend de MotoYa (solicitud de transporte tipo moto-taxi).
+    Este archivo es la fuente de verdad del contrato de la API: se actualiza
+    en el paso de SDD de cada feature, antes de escribir tests o código (ver
+    .claude/skills/laravel-feature-workflow/SKILL.md y .claude/STANDARDS.md).
+  version: "0.1.0"
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Desarrollo local
+security:
+  - bearerAuth: []
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas: {}

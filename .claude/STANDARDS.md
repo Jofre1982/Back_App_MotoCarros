@@ -122,6 +122,36 @@ Este backend es exclusivamente HTTP API REST, sin frontend propio. Como consecue
 - Errores en formato JSON consistente a través del exception handler de Laravel
   (`message` + `errors` cuando aplica), no manejo de errores ad-hoc por controller.
 
+## Ciclo de desarrollo de una feature: Issue → SDD → TDD → conformidad
+
+Toda feature de la API sigue este orden, orquestado por la skill
+`laravel-feature-workflow` (`.claude/skills/laravel-feature-workflow/SKILL.md`):
+
+1. **Issue**: parte de un issue del backlog (ver sección de Backlog más abajo).
+2. **SDD**: se especifica el contrato en [`openapi.yaml`](../openapi.yaml) — un único
+   spec OpenAPI 3.0.3 en la raíz del repo que crece con cada feature, con ejemplos
+   reales (no solo schemas) — antes de escribir tests o código.
+3. **TDD**: se escriben los tests (Feature/Unit) contra ese contrato y deben fallar
+   antes de que exista la implementación.
+4. **Implementación**: siguiendo el resto de este documento (Actions, Form Requests,
+   API Resources, Policies).
+5. **Conformidad**: se valida que la implementación cumple el spec con
+   `scripts/static_conformance.py` (spec válido + rutas documentadas vs. reales, sin
+   servidor) y `scripts/dynamic_conformance.py` (requests reales contra un servidor
+   vivo, valida el body de la respuesta contra el schema documentado) antes de dar la
+   feature por terminada.
+
+## Revisión de código: complejidad y arquitectura
+
+Antes de dar por terminada una tarea que toca Controllers, Models o Actions, correr
+la skill `laravel-api-review` (`.claude/skills/laravel-api-review/SKILL.md`), que
+valida complejidad ciclomática, anidación excesiva y las reglas de arquitectura de
+este documento (Controllers finos, Models sin lógica de negocio, Actions sin
+conocimiento de HTTP, SQL crudo contenido, rutas versionadas) con dos scripts en
+`scripts/complexity_check.py` y `scripts/architecture_check.py`. Son heurísticos, no
+un linter de PHP real — tratar los hallazgos como señal a evaluar con criterio, no
+como regla mecánica.
+
 ## Backlog: historias de usuario e issues
 
 El backlog se gestiona desde un GitHub Project. Todo issue (historia de usuario o
