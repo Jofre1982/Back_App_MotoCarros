@@ -94,6 +94,11 @@ routes/
   - Enums en PascalCase con casos también PascalCase: `RideStatus::Requested`.
 - Los Models solo tienen relaciones, scopes y accessors/casts simples — cualquier
   otra cosa va en una Action.
+- **Nomenclatura de archivos y carpetas: 100% en inglés**, aunque el contenido/prosa
+  esté en español (que sí se mantiene en español en este proyecto, ver el resto de
+  este documento). Ej.: `known-errors.md`, no `errores-conocidos.md`; `user-story.md`,
+  no `historia-usuario.md`. Aplica a cualquier archivo nuevo, no solo a los de dominio
+  (docs, templates, scripts).
 
 ## Alcance: solo API, sin scaffolding web
 
@@ -116,6 +121,15 @@ Este backend es exclusivamente HTTP API REST, sin frontend propio. Como consecue
 - Validación de entrada siempre vía Form Request, uno por endpoint.
 - Errores en formato JSON consistente a través del exception handler de Laravel
   (`message` + `errors` cuando aplica), no manejo de errores ad-hoc por controller.
+
+## Backlog: historias de usuario e issues
+
+El backlog se gestiona desde un GitHub Project. Todo issue (historia de usuario o
+tarea técnica) sigue el formato de `.github/ISSUE_TEMPLATE/` — esa carpeta es la
+fuente de verdad del formato, no un documento aparte. Para crear issues nuevos usar la
+skill `github-backlog-issue` (`.claude/skills/github-backlog-issue/SKILL.md`), que
+rellena el template correcto y valida el borrador con
+`scripts/validate_issue.py` antes de proponer publicarlo en GitHub.
 
 ## Pendiente de decidir (no bloquea empezar)
 
