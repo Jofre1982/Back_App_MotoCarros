@@ -803,6 +803,93 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/estimate:
+    post:
+      tags:
+        - Rides
+      operationId: estimateRide
+      summary: Ver la tarifa estimada de un viaje antes de solicitarlo
+      description: >-
+        Le muestra al pasajero cuánto costaría un viaje entre dos coordenadas
+        antes de pedirlo (historia #14). No crea nada — el modelo `Ride` todavía
+        no existe (historia #15) — así que es solo una consulta contra el
+        proveedor de mapas y el motor de tarifa configurados, con la misma
+        fórmula que se usa para cobrar el viaje real.
+
+        No cuelga de `/me` como el vehículo: no es un sub-recurso de la
+        cuenta, es una consulta puntual. Requiere un token vigente igual que
+        el resto de la API, y no solo el límite de tasa de los endpoints
+        anónimos, porque cada request golpea al proveedor de mapas, que se
+        paga por consulta.
+
+        `estimated_fare` no representa un cobro: la respuesta lo marca
+        explícitamente con `is_estimate: true`. El monto final del viaje se
+        recalcula al completarlo (historia #24) con el trayecto realmente
+        recorrido, no con este estimado.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RideEstimateRequest"
+            example:
+              origin:
+                latitude: 4.710989
+                longitude: -74.072092
+              destination:
+                latitude: 4.698
+                longitude: -74.061
+      responses:
+        "200":
+          description: Distancia, duración y tarifa estimadas del trayecto.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RideEstimate"
+              example:
+                data:
+                  distance_meters: 7421
+                  duration_seconds: 842
+                  currency: COP
+                  estimated_fare: 8850
+                  is_estimate: true
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "422":
+          description: >-
+            La entrada no pasó la validación (falta una coordenada o está
+            fuera de rango), o el proveedor de mapas no encontró una ruta
+            entre origen y destino (zona sin cobertura).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The origin.latitude field must be between -90 and 90.
+                errors:
+                  origin.latitude:
+                    - The origin.latitude field must be between -90 and 90.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -1222,6 +1309,74 @@ components:
             máximo es el año en curso más uno, por eso no se fija acá como
             número.
           example: 2023
+    Coordinates:
+      type: object
+      description: Un punto geográfico.
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 4.710989
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: -74.072092
+    RideEstimateRequest:
+      type: object
+      description: Origen y destino entre los que se quiere estimar un viaje.
+      required:
+        - origin
+        - destination
+      properties:
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination:
+          $ref: "#/components/schemas/Coordinates"
+    RideEstimate:
+      type: object
+      description: >-
+        Distancia, duración y tarifa estimadas de un trayecto entre dos
+        coordenadas, calculadas con el proveedor de mapas y la tarifa
+        vigentes.
+      required:
+        - distance_meters
+        - duration_seconds
+        - currency
+        - estimated_fare
+        - is_estimate
+      properties:
+        distance_meters:
+          type: integer
+          description: Distancia del trayecto, en metros.
+          example: 7421
+        duration_seconds:
+          type: integer
+          description: Duración estimada del trayecto, en segundos.
+          example: 842
+        currency:
+          type: string
+          description: Código ISO 4217 de tres letras de la moneda del monto.
+          example: COP
+        estimated_fare:
+          type: integer
+          description: >-
+            Monto estimado del viaje, entero en la unidad mínima de
+            `currency` (ver la nota sobre dinero en config/fares.php).
+          example: 8850
+        is_estimate:
+          type: boolean
+          description: >-
+            Siempre `true`: este monto no representa un cobro y puede variar
+            en el monto final, que se recalcula al completar el viaje con el
+            trayecto realmente recorrido.
+          example: true
     BroadcastAuthRequest:
       type: object
       description: >-

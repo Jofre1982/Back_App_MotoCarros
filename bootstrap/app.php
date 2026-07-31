@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\Auth\InvalidCredentialsException;
+use App\Exceptions\RouteEstimationFailed;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -68,6 +69,19 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (InvalidCredentialsException $e) => new JsonResponse(
                 ['message' => $e->getMessage()],
                 JsonResponse::HTTP_UNAUTHORIZED,
+            ),
+        );
+
+        // El proveedor de mapas no pudo entregar una ruta utilizable (fuera de
+        // cobertura, no contactable, o una respuesta que no se pudo leer). Es
+        // 422 y no 502/503: para quien pidió la estimación es indistinguible
+        // de una entrada que su formulario no puede resolver, y el mensaje
+        // genérico no filtra cuál de los tres motivos fue (ver
+        // RouteEstimationFailed).
+        $exceptions->render(
+            fn (RouteEstimationFailed $e) => new JsonResponse(
+                ['message' => 'No fue posible calcular una ruta entre esas coordenadas. Puede que la zona no esté cubierta por el servicio.'],
+                JsonResponse::HTTP_UNPROCESSABLE_ENTITY,
             ),
         );
     })->create();
