@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
+use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
 use Illuminate\Broadcasting\BroadcastController;
@@ -85,4 +86,14 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me/vehicle', UpdateVehicleController::class)
         ->name('vehicles.update');
+
+    // No cuelga de `me` como el vehículo: no es un sub-recurso de la cuenta,
+    // es una consulta puntual que no persiste nada (historia #14). Exige
+    // `auth:api` igual que el resto de la API y no solo `throttle:auth`
+    // porque cada request golpea al proveedor de mapas, que se paga por
+    // consulta — dejarlo anónimo abriría la puerta a agotar la cuota del
+    // proveedor sin que haya una cuenta a la que atribuírselo.
+    Route::middleware('auth:api')
+        ->post('rides/estimate', EstimateRideController::class)
+        ->name('rides.estimate');
 });
