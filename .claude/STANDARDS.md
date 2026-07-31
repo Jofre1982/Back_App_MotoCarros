@@ -180,6 +180,59 @@ canónicos) y agrega lo propio del rol:
   duplicado en cada Form Request: si las dos altas divergieran, la misma persona podría
   terminar con una cuenta por rol usando el mismo email escrito distinto.
 
+### Inicio de sesión (decidido en #8)
+
+`POST /api/v1/auth/login` es **un solo endpoint para ambos roles**: el rol no se manda
+ni se elige, sale de la cuenta encontrada y viaja de vuelta en `user.role` solo para
+que el cliente sepa qué UI mostrar. Responde **200** con el mismo schema
+`AuthenticatedUser` (`{user, token}`) que los dos registros, así que la app móvil
+procesa igual el alta y el login.
+
+- **Los dos fallos posibles son indistinguibles, y eso es el requisito, no un
+  detalle**: contraseña que no coincide y email sin cuenta responden 401 con el mismo
+  cuerpo palabra por palabra. Cualquier diferencia —código, mensaje, un `errors` de
+  más— convierte al endpoint en un oráculo para averiguar qué emails tienen cuenta,
+  que es el primer paso de un relleno de credenciales. Lo sostienen tres decisiones
+  concretas:
+  - Una sola excepción de dominio (`App\Exceptions\Auth\InvalidCredentialsException`)
+    para ambos motivos, **sin ningún dato que permita distinguirlos**. Si el motivo
+    llegara hasta el controller, tarde o temprano alguien lo renderizaría.
+  - El mensaje se define en un único lugar y la traducción a 401 vive en
+    `bootstrap/app.php`, junto al resto de fallos de autenticación — no en el
+    controller, que no captura nada.
+  - **La Action gasta un hash contra nada cuando el email no existe.** Sin eso, el
+    email sin cuenta responde sin haber ejecutado bcrypt y el email real responde
+    después de ejecutarlo: la diferencia de tiempo es medible y reconstruye el mismo
+    oráculo que el mensaje genérico evita. Laravel no lo hace por su cuenta
+    (`EloquentUserProvider::retrieveByCredentials()` devuelve `null` y nadie llega a
+    comparar nada), así que corresponde a la Action.
+- **El login NO valida la contraseña contra `Password::defaults()`.** Es la única
+  excepción a la política de la sección siguiente, y es deliberada: aplicarla haría
+  que una contraseña corta respondiera 422 y una bien formada 401, y esa diferencia de
+  código de estado delata cuál de los dos campos falló. Una contraseña que no cumple
+  la política simplemente no coincide con ninguna cuenta. Tampoco hay
+  `exists:users,email`, por el mismo motivo. Del `email` se valida la forma y nada
+  más: una cadena que no es un email no puede corresponder a ninguna cuenta, así que
+  su 422 no depende de qué haya en la base.
+- **El `email` se normaliza con el mismo trait `NormalizesAccountInput` que los
+  registros.** No es una comodidad: el alta guardó el email en minúsculas, así que un
+  login que normalizara distinto —o que no normalizara— dejaría a quien tecleó
+  `Ana@Example.COM` afuera de su propia cuenta, y encima con un mensaje que le dice
+  que su contraseña está mal.
+- Va sin `auth:api` y por lo tanto bajo el limitador `auth` (10/min por IP), que acá
+  es además la contención principal contra la fuerza bruta sobre contraseñas.
+- La contraseña en claro viaja en `App\DTOs\LoginCredentials` marcada con
+  `#[\SensitiveParameter]`, igual que hace Laravel en
+  `EloquentUserProvider::validateCredentials()`: sin eso queda como argumento en el
+  stack trace de cualquier excepción lanzada más abajo, y los reporters que vuelcan
+  los argumentos de cada frame la escribirían en el log.
+
+Queda **fuera** de #8: recuperación de contraseña, login con proveedores externos
+(Google/Apple), bloqueo de cuenta tras N intentos fallidos y rehash de la contraseña
+al iniciar sesión. El bloqueo por cuenta, en particular, es una decisión de producto
+con su propio costo (permite que un tercero deje sin servicio a un usuario conocido
+solo con fallar sus intentos) y merece su propia historia.
+
 ### Política de contraseñas (decidida en #6)
 
 Mínimo **8 caracteres, con al menos una letra y al menos un número**, declarada una

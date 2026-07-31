@@ -13,6 +13,98 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      operationId: login
+      summary: Iniciar sesión con email y contraseña
+      description: >-
+        Autentica una cuenta ya registrada y devuelve un access token. Es el
+        mismo endpoint para pasajeros y conductores: el rol no se manda ni se
+        elige, viaja de vuelta en `user.role` para que el cliente sepa qué UI
+        mostrar.
+
+        El `email` se normaliza a minúsculas antes de buscarlo, igual que en el
+        registro (ver .claude/STANDARDS.md): quien se registró como
+        `ana@example.com` entra escribiendo `Ana@Example.COM`.
+
+        **Credenciales incorrectas y email no registrado responden exactamente
+        lo mismo**: 401 con un mensaje genérico, sin `errors`. Distinguir ambos
+        casos convertiría al endpoint en un oráculo para averiguar qué emails
+        tienen cuenta, que es el primer paso de un relleno de credenciales.
+
+        No requiere autenticación, y por eso comparte con el resto de endpoints
+        de auth el límite de 10 requests por minuto e IP — que acá es además la
+        contención principal contra la fuerza bruta sobre contraseñas.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: ana@example.com
+              password: motoya2026
+      responses:
+        "200":
+          description: Credenciales correctas; sesión iniciada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthenticatedUser"
+              example:
+                data:
+                  user:
+                    id: 1
+                    name: Ana García
+                    email: ana@example.com
+                    phone: "+573001234567"
+                    role: passenger
+                  token:
+                    access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
+                    token_type: bearer
+                    expires_in: 900
+        "401":
+          description: >-
+            La contraseña no coincide, o el email no corresponde a ninguna
+            cuenta. Ambos casos devuelven este mismo cuerpo, palabra por
+            palabra.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: El email o la contraseña no son correctos.
+        "422":
+          description: >-
+            La entrada está incompleta o malformada: falta `email` o
+            `password`, o el email no tiene forma de email. **No** se usa para
+            credenciales incorrectas — eso es 401.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The email field is required.
+                errors:
+                  email:
+                    - The email field is required.
+        "429":
+          description: >-
+            Se superó el límite de intentos por minuto para esta IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /auth/refresh:
     post:
       tags:
@@ -382,6 +474,43 @@ components:
           $ref: "#/components/schemas/User"
         token:
           $ref: "#/components/schemas/AuthToken"
+    LoginRequest:
+      type: object
+      description: >-
+        Credenciales con las que una cuenta ya registrada inicia sesión. No
+        lleva rol: el mismo endpoint sirve a pasajeros y conductores.
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: >-
+            Email de la cuenta. Se normaliza a minúsculas antes de buscarla,
+            igual que en el registro, así que la capitalización con la que se
+            escriba es indiferente.
+          example: ana@example.com
+        password:
+          type: string
+          format: password
+          description: >-
+            Contraseña en claro. A diferencia del registro, acá **no** se
+            valida contra la política mínima de contraseñas: hacerlo
+            respondería 422 en vez de 401 a una contraseña que no la cumple, y
+            esa diferencia de código de estado delataría cuál de los dos campos
+            falló. Una contraseña que no cumple la política simplemente no
+            coincide con ninguna cuenta.
+
+
+            La única forma que sí se rechaza con 422 es el byte nulo
+            (`U+0000`), que bcrypt no puede hashear y que por lo tanto tampoco
+            puede ser la contraseña de ninguna cuenta: ese 422 no depende de qué
+            haya en la base. Tampoco hay `maxLength`, para no dejar afuera a una
+            cuenta registrada con una contraseña más larga que el tope.
+          pattern: "^[^\\u0000]*$"
+          example: motoya2026
     DriverRegistrationRequest:
       type: object
       description: >-

@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\Auth\InvalidCredentialsException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -51,6 +52,21 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(
             fn (TokenExpiredException|TokenInvalidException|UserNotDefinedException $e) => new JsonResponse(
                 ['message' => 'Token inválido o expirado. Inicia sesión de nuevo.'],
+                JsonResponse::HTTP_UNAUTHORIZED,
+            ),
+        );
+
+        // Credenciales que no corresponden a ninguna cuenta (login, historia
+        // #8). Se traduce acá y no en el controller por el mismo motivo que lo
+        // anterior, y además porque el cuerpo tiene que ser palabra por palabra
+        // el mismo para los dos motivos posibles —contraseña incorrecta y email
+        // sin cuenta—: definirlo en un solo lugar es lo que garantiza que no
+        // puedan separarse. `$e->getMessage()` ya es ese mensaje genérico (ver
+        // InvalidCredentialsException); la excepción no lleva ningún dato del
+        // motivo, así que no hay nada que se pueda filtrar por acá.
+        $exceptions->render(
+            fn (InvalidCredentialsException $e) => new JsonResponse(
+                ['message' => $e->getMessage()],
                 JsonResponse::HTTP_UNAUTHORIZED,
             ),
         );
