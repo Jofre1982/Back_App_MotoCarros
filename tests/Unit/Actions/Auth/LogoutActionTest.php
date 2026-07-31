@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use Tymon\JWTAuth\Blacklist;
+use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Exceptions\TokenBlacklistedException;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 use Tymon\JWTAuth\Exceptions\TokenInvalidException;
@@ -114,6 +115,33 @@ class LogoutActionTest extends TestCase
             $usuario->id,
             JWTAuth::setToken($tableta)->authenticate()?->id,
         );
+    }
+
+    public function test_no_cierra_nada_si_la_blacklist_esta_deshabilitada(): void
+    {
+        // Escribir en el `Blacklist` directo —en vez de pasar por
+        // `Manager::invalidate()`— se salta el único punto donde jwt-auth
+        // comprueba que la blacklist esté habilitada. Sin esta verificación, la
+        // Action escribía una entrada que después nadie consulta al validar y
+        // terminaba sin excepción: el token seguía sirviendo hasta vencer solo
+        // mientras el endpoint respondía 204.
+        config(['jwt.blacklist_enabled' => false]);
+
+        $token = JWTAuth::fromUser(User::factory()->create());
+        $payload = JWTAuth::setToken($token)->getPayload();
+
+        try {
+            $this->action()->handle($token);
+            $this->fail('Se esperaba una JWTException por la blacklist deshabilitada.');
+        } catch (JWTException $e) {
+            // Tiene que ser la clase base y no una de sus hijas: las hijas
+            // (TokenInvalid/TokenExpired) están mapeadas a 401 en
+            // bootstrap/app.php, y esto no es culpa del token del cliente sino
+            // del despliegue. Solo la clase base escala a 500.
+            $this->assertSame(JWTException::class, $e::class);
+        }
+
+        $this->assertFalse($this->app->make(Blacklist::class)->has($payload));
     }
 
     public function test_no_deja_el_token_muerto_cacheado_en_la_instancia_del_guard(): void

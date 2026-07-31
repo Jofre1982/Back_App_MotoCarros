@@ -65,6 +65,41 @@ class LogoutTest extends TestCase
             ->assertJsonStructure(['message']);
     }
 
+    public function test_cierra_la_sesion_del_token_que_el_guard_acepto_aunque_no_venga_en_la_cabecera(): void
+    {
+        // jwt-auth no busca el token solo en `Authorization`: su cadena de
+        // parsers incluye `QueryString`, `InputSource`, `RouteParams` y
+        // `Cookies`, y este repo no la restringe. Todo token que el guard acepte
+        // tiene que poder cerrarse, porque el 401 alternativo es indistinguible
+        // —desde el cliente— del de una sesión ya cerrada, y dejaría vivo el
+        // token que el usuario pidió matar.
+        $token = JWTAuth::fromUser(User::factory()->create());
+
+        $this->postJson(self::LOGOUT_URI.'?token='.$token)->assertNoContent();
+
+        $this->olvidarGuards();
+
+        $this->withToken($token)
+            ->getJson(self::PROBE_URI)
+            ->assertUnauthorized()
+            ->assertJsonStructure(['message']);
+    }
+
+    public function test_la_blacklist_deshabilitada_no_se_disfraza_de_sesion_cerrada(): void
+    {
+        // Sin blacklist el token sigue sirviendo hasta vencer solo, así que
+        // responder 204 sería mentir sobre lo único que el endpoint promete.
+        // Es un error de configuración del servidor y escala a 500 para que el
+        // monitoreo lo vea (ver .claude/STANDARDS.md y JwtExceptionRenderingTest).
+        config(['jwt.blacklist_enabled' => false]);
+
+        $token = JWTAuth::fromUser(User::factory()->create());
+
+        $this->withToken($token)
+            ->postJson(self::LOGOUT_URI)
+            ->assertStatus(500);
+    }
+
     public function test_el_token_cerrado_tampoco_sirve_para_renovarse(): void
     {
         // Si se pudiera canjear por uno nuevo, cerrar sesión no serviría de

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Auth;
 
 use Tymon\JWTAuth\Blacklist;
+use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 use Tymon\JWTAuth\JWT;
@@ -31,12 +32,32 @@ final class LogoutAction
     ) {}
 
     /**
+     * @throws JWTException si la blacklist está deshabilitada: sin ella no
+     *                      hay forma de cerrar la sesión. Escala a 500 a
+     *                      propósito (ver más abajo).
      * @throws TokenExpiredException si el token ya venció.
      * @throws TokenInvalidException si es ilegible, si la firma no cierra, o si
      *                               la sesión ya se había cerrado con él.
      */
     public function handle(string $token): void
     {
+        // Sin blacklist no hay cierre de sesión posible: la entrada se
+        // escribiría igual, pero nadie la consultaría al validar, así que el
+        // token seguiría sirviendo hasta vencer solo mientras el endpoint
+        // responde 204. Es la peor respuesta posible — el usuario cree que
+        // cerró la sesión y no la cerró.
+        //
+        // Esta es la verificación que trae de regalo `Manager::invalidate()`
+        // (el único punto donde jwt-auth la hace) y que se pierde al escribir
+        // en el `Blacklist` directo, como hace la línea de más abajo. Se
+        // comprueba antes que el token porque es un error de configuración del
+        // servidor, no del cliente: se lanza `JWTException`, que a propósito
+        // **no** está mapeada a 401 en bootstrap/app.php y escala a 500 para
+        // que el monitoreo la vea (ver .claude/STANDARDS.md).
+        if (! config('jwt.blacklist_enabled')) {
+            throw new JWTException('You must have the blacklist enabled to invalidate a token.');
+        }
+
         // `getPayload()` es lo que valida el token —firma, vencimiento y
         // blacklist— antes de tocar nada. El endpoint va detrás de `auth:api`,
         // que ya lo rechazaría, pero la Action tiene que sostener sus `@throws`
