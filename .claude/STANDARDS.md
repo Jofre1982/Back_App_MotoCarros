@@ -129,6 +129,79 @@ sigue la API (`{"data": {...}}` en éxito). Los errores no se envuelven: van com
 - Eventos (`ShouldBroadcast`) se disparan al final de la Action correspondiente,
   nunca desde el controller.
 
+### Canales y autorización (decidido en #5)
+
+**Todos los canales son privados.** No hay nada en este dominio que se pueda
+escuchar de forma anónima: por estos canales viaja la ubicación en vivo de
+personas concretas.
+
+| Canal | Quién entra | Qué lleva |
+|---|---|---|
+| `ride.{rideId}` | El pasajero del viaje y el conductor asignado | Cambios de estado y ubicación durante el viaje |
+| `driver.{driverId}` | Ese conductor, si tiene perfil creado | Solicitudes de viaje cercanas y avisos que son para él |
+
+- `{driverId}` es el id del `User`, **no** el de `driver_profiles`: la API ya
+  identifica a todo el mundo por el id de `User` (es el `sub` del JWT) y tener dos
+  numeraciones para la misma persona es una fuente de errores de autorización.
+- `routes/channels.php` solo declara qué canales existen; la regla de cada uno vive
+  en una clase de `app/Broadcasting/` (canales class-based de Laravel), que se prueba
+  sin levantar HTTP. Los canales se registran en `App\Providers\BroadcastServiceProvider`.
+- Todos los canales declaran `['guards' => ['api']]` de forma explícita: la API es
+  stateless con JWT y no existe el guard `web`.
+- El canal `ride.{id}` ya tiene su regla definitiva, pero el modelo `Ride` llega con
+  la historia #15. Hasta entonces resuelve los participantes contra
+  `App\Services\Realtime\RideParticipants`, cuya implementación registrada
+  (`PendingRideParticipants`) no conoce ningún viaje y por lo tanto **deniega todo**.
+  Fallar cerrado es la única opción aceptable acá: un canal abierto "provisionalmente"
+  expone posiciones en vivo a cualquier usuario autenticado que adivine un id. Cuando
+  exista la tabla, se cambia el binding en `AppServiceProvider` y nada más.
+
+### La ruta de autorización es una ruta de la API
+
+`POST /api/v1/broadcasting/auth` (con `auth:api`), declarada en `routes/api.php` y
+documentada en [`openapi.yaml`](../openapi.yaml) como cualquier otro endpoint. No se
+usa el helper `withBroadcasting()` de `bootstrap/app.php` porque registra la ruta con
+`GET` y `POST` y fuera del prefijo `/api/v1`, lo que rompe tanto la convención de
+versionado como la correspondencia entre spec y rutas reales que valida
+`static_conformance.py`.
+
+Acá el token expirado **no** sirve (a diferencia de `POST /api/v1/auth/refresh`): el
+cliente renueva y vuelve a suscribirse.
+
+### Configuración
+
+- `config/broadcasting.php` solo declara las conexiones que se usan (`reverb`, `log`,
+  `null`); las de Pusher y Ably del skeleton se quitaron, mismo criterio que el resto
+  del scaffolding sin usar.
+- Variables en `.env.example` (`REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`,
+  `REVERB_HOST`, `REVERB_PORT`, `REVERB_SCHEME`, `REVERB_SERVER_HOST`,
+  `REVERB_SERVER_PORT`). Las credenciales de la aplicación Reverb no tienen default:
+  son un secreto por entorno igual que `JWT_SECRET`, y se generan con
+  `php artisan reverb:install`.
+- La suite de tests corre con `BROADCAST_CONNECTION=null` (`phpunit.xml`): ningún test
+  abre conexiones. Un test que necesite el broadcaster real tiene que fijar la conexión
+  en el entorno **antes** de que arranque la aplicación — los canales se registran
+  contra el broadcaster configurado al bootear, así que cambiarla después con
+  `Config::set` deja al nuevo broadcaster sin canales.
+- Toda variable de entorno que un test necesite se declara en `phpunit.xml`, **no** en
+  un `setUp()`. El repositorio de phpdotenv es inmutable y se llena en el primer boot
+  del proceso: una variable que no esté definida antes de ese boot queda registrada como
+  cargada desde `.env`, y en cada boot posterior el writer la repisa con el valor del
+  archivo, pisando lo que haya puesto el `setUp()`. El síntoma es un test que pasa
+  aislado (primer boot) y falla dentro de la suite, con un resultado que además depende
+  del `.env` de cada máquina — en CI, `.env` sale de `.env.example`. Fijar una variable
+  desde `setUp()` solo funciona si ya está declarada en `phpunit.xml` (ese es el caso de
+  `BROADCAST_CONNECTION`): al no entrar nunca en el conjunto *loaded*, nadie la repisa.
+  Las credenciales `REVERB_APP_*` de prueba están en `phpunit.xml` por esta razón.
+- Prueba de concepto: con `php artisan reverb:start` corriendo y un cliente suscrito a
+  `private-driver.{id}`, `php artisan realtime:ping <id> "<mensaje>"` recorre la cadena
+  completa (autorización del canal, publicación y entrega). El evento
+  `App\Events\Realtime\RealtimePingSent` es `ShouldBroadcastNow` por ser una prueba;
+  los eventos de negocio usan `ShouldBroadcast` y salen por la cola.
+
+**Fuera de alcance de #5**: los eventos de negocio concretos (solicitudes cercanas,
+tracking del viaje), que llegan con sus propias historias.
+
 ## Testing: PHPUnit
 
 - Se mantiene PHPUnit (ya está en el skeleton); no se migra a Pest.

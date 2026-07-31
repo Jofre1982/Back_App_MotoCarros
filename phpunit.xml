@@ -31,6 +31,20 @@
         <env name="JWT_SECRET" value="testing-only-not-a-real-secret-000000000000"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
+        <!-- Credenciales de Reverb solo para la suite: no son secretos reales.
+             Van acá y no en el setUp() de un test porque el repositorio de
+             phpdotenv es inmutable y se llena en el primer boot del proceso:
+             una variable que no esté definida antes de ese boot queda marcada
+             como cargada desde .env y se repisa con el valor del archivo en
+             cada boot posterior (en CI, .env sale de .env.example y trae las
+             REVERB_APP_* vacías). Declaradas acá, PHPUnit las fija antes del
+             primer boot y phpdotenv nunca las toca. -->
+        <env name="REVERB_APP_ID" value="motoya-testing"/>
+        <env name="REVERB_APP_KEY" value="motoya-testing-key"/>
+        <env name="REVERB_APP_SECRET" value="motoya-testing-secret"/>
+        <env name="REVERB_HOST" value="127.0.0.1"/>
+        <env name="REVERB_PORT" value="8080"/>
+        <env name="REVERB_SCHEME" value="http"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
