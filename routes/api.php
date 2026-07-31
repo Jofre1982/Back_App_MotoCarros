@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
@@ -23,12 +24,14 @@ Route::prefix('v1')->group(function () {
 
     // Endpoints de autenticación: van sin `auth:api` a propósito, así que
     // cualquiera puede golpearlos sin credenciales. Por eso el grupo lleva un
-    // límite de tasa más estricto que el general de la API — es el patrón que
-    // hereda el login cuando llegue (ver AppServiceProvider).
+    // límite de tasa más estricto que el general de la API (ver
+    // AppServiceProvider); para el login es, además, la contención principal
+    // contra la fuerza bruta sobre contraseñas.
     Route::middleware('throttle:auth')
         ->prefix('auth')
         ->name('auth.')
         ->group(function () {
+            Route::post('login', LoginController::class)->name('login');
             Route::post('refresh', RefreshTokenController::class)->name('refresh');
             Route::post('register/driver', RegisterDriverController::class)->name('register.driver');
             Route::post('register/passenger', RegisterPassengerController::class)->name('register.passenger');
