@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use InvalidArgumentException;
 
 class AppServiceProvider extends ServiceProvider
@@ -94,6 +95,20 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+        $this->configurePasswordPolicy();
+    }
+
+    /**
+     * Política mínima de contraseñas: 8 caracteres, con al menos una letra y al
+     * menos un número (ver .claude/STANDARDS.md).
+     *
+     * Se declara como `Password::defaults()` y no suelta en cada Form Request
+     * para que registro, login y un eventual cambio de contraseña no puedan
+     * divergir: si mañana sube el mínimo, sube en un solo lugar.
+     */
+    private function configurePasswordPolicy(): void
+    {
+        Password::defaults(fn () => Password::min(8)->letters()->numbers());
     }
 
     /**
