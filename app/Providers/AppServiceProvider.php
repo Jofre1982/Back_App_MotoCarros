@@ -2,10 +2,14 @@
 
 namespace App\Providers;
 
+use App\Services\Maps\GoogleRoutesEstimator;
+use App\Services\Maps\RouteEstimator;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use InvalidArgumentException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -14,7 +18,34 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->registerRouteEstimator();
+    }
+
+    /**
+     * Resuelve el proveedor de mapas configurado (ver config/maps.php y la
+     * decisión en .claude/STANDARDS.md).
+     *
+     * La resolución es diferida (`singleton` con closure): la API key solo se
+     * exige cuando alguien pide de verdad una estimación, así que el resto de
+     * la aplicación —y la suite de tests que no toca mapas— arranca sin
+     * necesidad de credenciales del proveedor.
+     */
+    private function registerRouteEstimator(): void
+    {
+        $this->app->singleton(RouteEstimator::class, static function (): RouteEstimator {
+            $provider = Config::string('maps.provider');
+
+            return match ($provider) {
+                'google' => new GoogleRoutesEstimator(
+                    apiKey: Config::string('maps.google.key'),
+                    endpoint: Config::string('maps.google.routes_endpoint'),
+                    timeoutSeconds: Config::integer('maps.google.timeout'),
+                ),
+                default => throw new InvalidArgumentException(
+                    "Proveedor de mapas no soportado: '{$provider}' (revisa MAPS_PROVIDER)."
+                ),
+            };
+        });
     }
 
     /**

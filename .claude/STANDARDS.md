@@ -45,6 +45,8 @@ app/
   Policies/
   Enums/        # RideStatus, UserRole, etc. (enums nativos de PHP)
   DTOs/         # opcional, para pasar datos entre capas sin arrays
+  Services/     # clientes de proveedores externos (mapas, pagos): infraestructura,
+                # no casos de uso. Se consumen por interfaz desde las Actions.
 
 routes/
   api.php       # crear; todas las rutas de negocio van aquí, versionadas /api/v1
@@ -284,6 +286,73 @@ tabla `driver_profiles` para datos específicos del conductor.
 es el id de `User`), y `driver_profiles` mantiene la extensibilidad sin pre-optimizar
 una estructura multi-rol que todavía no existe en el producto.
 
+## Proveedor de mapas/geocoding (decidido en #3)
+
+**Decisión**: **Google Maps Platform** — Routes API v2 (`computeRoutes`) para
+distancia/duración y Geocoding API cuando haga falta resolver direcciones.
+
+> **Supuesto de región**: el backlog no declara en qué ciudades opera MotoYa. Esta
+> comparación asume ciudades intermedias de Colombia (mercado natural del moto-taxi).
+> Si la región resulta ser otra, el eje de cobertura hay que reevaluarlo; los ejes de
+> costo y de modo de dos ruedas no cambian.
+
+### Comparación
+
+| | Google Maps Platform | Mapbox | OpenRouteService / OSRM |
+|---|---|---|---|
+| Datos base | Propios | OSM + propios | OSM |
+| Modo moto | **Sí** (`TWO_WHEELER` en Routes API) | No: solo `driving`/`cycling`/`walking` | No como tal (perfiles `driving-car`/`cycling-*`) |
+| ETA con tráfico | Sí (`TRAFFIC_AWARE`) | Sí (`driving-traffic`) | No |
+| Cobertura de direcciones en ciudades intermedias de Colombia | La mejor de las tres | Buena en capitales, desigual fuera | Depende de qué tan mapeada esté la ciudad en OSM |
+| Costo por request | El más alto de los tres | Intermedio | Gratis (self-hosted: costo de infraestructura) |
+| Volumen gratuito mensual | Sí, acotado por API | Sí, más holgado | Plan gratuito con cuota diaria / ilimitado si se auto-hospeda |
+
+Las cifras exactas de precio y cuota gratuita cambian con frecuencia y no se copian
+acá para que no envejezcan mal: **confirmar en el tarifario del proveedor antes de
+contratar o de dimensionar el costo por viaje**. Lo que sí es estable —y es lo que
+sostiene la decisión— son las diferencias de la tabla que no son de precio.
+
+### Justificación
+
+1. **Modo de dos ruedas.** La Routes API tiene un modo de moto real. Es el único de
+   los tres candidatos que lo tiene, y es exactamente el vehículo del producto:
+   rutear una moto como si fuera un auto sobreestima tiempo y distancia, y eso entra
+   directo en la tarifa que ve el pasajero.
+2. **Calidad del geocoding donde opera el moto-taxi.** El moto-taxi es fuerte en
+   ciudades intermedias, que es justo donde la cobertura OSM es más despareja. Un
+   geocoding equivocado no degrada la experiencia: cancela el viaje.
+3. **Tráfico.** Parte de la tarifa es tiempo; sin ETA con tráfico, la estimación en
+   hora pico se separa sistemáticamente de la realidad.
+
+El costo es el precio a pagar por lo anterior, y es un riesgo real a volumen. Se
+mitiga así:
+
+- **Field mask mínimo** (`routes.distanceMeters,routes.duration`): en la Routes API el
+  SKU facturado depende de los campos pedidos, así que no se piden polylines ni tramos
+  mientras no se usen.
+- **La decisión es reversible por diseño**: todo el sistema depende de la interfaz
+  `App\Services\Maps\RouteEstimator`, nunca de la implementación. Cambiar de proveedor
+  es escribir otra implementación y cambiar `MAPS_PROVIDER`.
+- **Segunda opción documentada**: si el costo por viaje deja de cerrar, el reemplazo es
+  Mapbox (o un OSRM propio para el cálculo de ruta, dejando el geocoding en Google), y
+  se acepta perder el modo moto a cambio.
+
+### Integración
+
+- Configuración en [`config/maps.php`](../config/maps.php); variables en `.env.example`
+  (`MAPS_PROVIDER`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_TIMEOUT`). La API key no tiene
+  default: se restringe por API y por IP en cada entorno, y nunca se commitea.
+- Los clientes de proveedores externos viven en **`app/Services/{Dominio}/`**: son
+  infraestructura (hablan HTTP con un tercero), no casos de uso, así que no son
+  Actions. Una Action del dominio —el motor de tarifa, por ejemplo— recibe el
+  `RouteEstimator` por constructor y no sabe qué proveedor hay detrás.
+- Prueba de concepto: `php artisan maps:estimate "<lat,lng>" "<lat,lng>"` consulta al
+  proveedor real con la key configurada. Los tests cubren el contrato con `Http::fake()`;
+  el CI no llama a la API real (no tiene credenciales y gastaría cuota en cada corrida).
+
+**Fuera de alcance de #3**: el uso productivo de estas estimaciones dentro del cálculo
+de tarifa, que es el issue #4.
+
 ## Pendiente de decidir (no bloquea empezar)
 
-- Cálculo de tarifas (por distancia/tiempo) y proveedor de mapas/geocoding.
+- Cálculo de tarifas (por distancia/tiempo): fórmula, tarifa mínima y redondeo.
