@@ -11,12 +11,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
 /**
  * @property UserRole $role
  */
 #[Fillable(['name', 'email', 'phone', 'password', 'role'])]
-class User extends Authenticatable
+class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
@@ -44,5 +45,28 @@ class User extends Authenticatable
     public function isPassenger(): bool
     {
         return $this->role === UserRole::Passenger;
+    }
+
+    /**
+     * Identificador que viaja en el claim `sub` del JWT.
+     */
+    public function getJWTIdentifier(): mixed
+    {
+        return $this->getKey();
+    }
+
+    /**
+     * Claims extra del JWT.
+     *
+     * `role` va solo para que el cliente móvil sepa qué UI mostrar sin una
+     * request extra. La autorización de negocio NO se resuelve con este claim:
+     * se resuelve con Policies contra el `User` autenticado (ver
+     * .claude/STANDARDS.md).
+     *
+     * @return array<string, string>
+     */
+    public function getJWTCustomClaims(): array
+    {
+        return ['role' => $this->role->value];
     }
 }

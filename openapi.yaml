@@ -12,11 +12,88 @@ servers:
     description: Desarrollo local
 security:
   - bearerAuth: []
-paths: {}
+paths:
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      operationId: refreshToken
+      summary: Renovar el access token
+      description: >-
+        Emite un nuevo access token a partir del token enviado en la cabecera
+        `Authorization: Bearer`. A diferencia del resto de endpoints protegidos,
+        acepta un token **ya expirado**, siempre que siga dentro de la ventana
+        de refresh (`JWT_REFRESH_TTL`, 14 días desde la emisión original). El
+        token usado queda invalidado al renovarlo.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Token renovado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthToken"
+              example:
+                data:
+                  access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
+                  token_type: bearer
+                  expires_in: 900
+        "401":
+          description: >-
+            Falta el token, es inválido, o el plazo para renovarlo ya venció y
+            hay que autenticarse de nuevo con credenciales.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Token inválido o expirado. Inicia sesión de nuevo.
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-  schemas: {}
+  schemas:
+    AuthToken:
+      type: object
+      description: >-
+        Access token JWT emitido por la API. Viaja dentro del envelope `data`
+        que agregan los API Resources de Laravel (ver .claude/STANDARDS.md).
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: "JWT firmado que el cliente envía en la cabecera `Authorization: Bearer`."
+        token_type:
+          type: string
+          enum:
+            - bearer
+        expires_in:
+          type: integer
+          description: Segundos que faltan para que el access token expire.
+          example: 900
+    Error:
+      type: object
+      description: Formato de error de la API (exception handler de Laravel).
+      required:
+        - message
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          description: Presente solo en errores de validación (422).
+          additionalProperties:
+            type: array
+            items:
+              type: string

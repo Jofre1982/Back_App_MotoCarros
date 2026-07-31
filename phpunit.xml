@@ -26,6 +26,9 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <!-- Secreto de firma solo para la suite de tests: no es un secreto real
+             ni se usa en ningún entorno desplegado (ahí viene de JWT_SECRET). -->
+        <env name="JWT_SECRET" value="testing-only-not-a-real-secret-000000000000"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

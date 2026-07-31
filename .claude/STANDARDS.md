@@ -63,6 +63,39 @@ routes/
   endpoint de refresh es el patrón recomendado con jwt-auth, ya que no trae
   refresh tokens nativos como Sanctum/Passport).
 
+### Expiración y refresh (decidido en #2)
+
+| Parámetro | Valor | Env |
+|---|---|---|
+| Duración del access token | **15 minutos** | `JWT_TTL` |
+| Ventana de refresh | **14 días** (20160 min) desde la emisión del token original | `JWT_REFRESH_TTL` |
+| Gracia de blacklist | **30 segundos** | `JWT_BLACKLIST_GRACE_PERIOD` |
+
+- No hay refresh token separado: **el propio access token es lo que se canjea** en
+  `POST /api/v1/auth/refresh`. Es lo que permite jwt-auth sin inventar una tabla de
+  refresh tokens.
+- Un token expirado **no sirve para consumir la API** (el guard `api` lo rechaza con
+  401) pero **sí para renovarse**, mientras siga dentro de la ventana de 14 días. Pasada
+  esa ventana hay que volver a autenticarse con credenciales.
+- Por eso `auth:api` **no** se aplica a la ruta de refresh: rechazaría el token expirado
+  antes de llegar al controller, que es justo el caso que el endpoint existe para
+  atender. La validación (firma + ventana) la hace jwt-auth dentro de la Action.
+- La gracia de blacklist de 30 s existe porque las apps móviles disparan requests en
+  paralelo: sin ella, la primera que refresca invalidaría el token que las otras ya
+  tenían en vuelo.
+- Cualquier `JWTException` se traduce a un 401 con el formato de error estándar en
+  `bootstrap/app.php`, no en cada controller.
+- `JWT_SECRET` no tiene default: se genera por entorno con `php artisan jwt:secret`.
+  La suite de tests usa un secreto propio fijado en `phpunit.xml`, que no es un
+  secreto real ni se usa en ningún entorno desplegado.
+
+### Envelope de las respuestas
+
+Los API Resources de Laravel envuelven la respuesta en `data` y ese es el formato que
+sigue la API (`{"data": {...}}` en éxito). Los errores no se envuelven: van como
+`{"message": ...}` (+ `errors` en validación). Ambas formas están documentadas en
+[`openapi.yaml`](../openapi.yaml).
+
 ## Tiempo real: Laravel Reverb
 
 - Broadcasting para: nueva solicitud de viaje disponible a conductores cercanos,
@@ -231,5 +264,4 @@ una estructura multi-rol que todavía no existe en el producto.
 
 ## Pendiente de decidir (no bloquea empezar)
 
-- Estrategia de refresh token concreta para JWT.
 - Cálculo de tarifas (por distancia/tiempo) y proveedor de mapas/geocoding.
