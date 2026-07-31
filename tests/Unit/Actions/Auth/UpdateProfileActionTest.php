@@ -48,6 +48,34 @@ class UpdateProfileActionTest extends TestCase
         $this->assertEquals($actualizadoEn, $usuario->fresh()->updated_at);
     }
 
+    /**
+     * La Action no depende de que la haya llamado el Form Request: un job o un
+     * comando pueden armar el DTO a mano, y un contacto vacío dejaría la cuenta
+     * sin email de login o reventando el índice único de `users`.
+     */
+    public function test_ignora_los_campos_que_vienen_vacios_en_el_dto(): void
+    {
+        $usuario = User::factory()->create([
+            'name' => 'Ana García',
+            'email' => 'ana@example.com',
+            'phone' => '+573001234567',
+        ]);
+
+        $resultado = $this->action()->handle(
+            $usuario,
+            new ProfileUpdate(name: '   ', email: '', phone: ''),
+        );
+
+        $this->assertSame('Ana García', $resultado->name);
+        $this->assertSame('ana@example.com', $resultado->email);
+        $this->assertSame('+573001234567', $resultado->phone);
+
+        $recargado = $usuario->fresh();
+
+        $this->assertSame('ana@example.com', $recargado->email);
+        $this->assertSame('+573001234567', $recargado->phone);
+    }
+
     public function test_el_rol_no_cambia_porque_el_dto_no_lo_tiene(): void
     {
         $usuario = User::factory()->create();

@@ -524,6 +524,9 @@ paths:
         `role` (o un `id`) mandado por el cliente llegue a aplicarse. Cambio
         de contraseña y de email verificado son historias aparte (ver el
         issue #11).
+
+        Un campo presente no puede venir vacío: `{"email": ""}` responde 422,
+        no borra el email. Para dejar un dato como está, no se manda.
       security:
         - bearerAuth: []
       requestBody:
@@ -564,8 +567,9 @@ paths:
                 message: Unauthenticated.
         "422":
           description: >-
-            La entrada no pasó la validación: un campo tiene un formato
-            inválido, o el email/teléfono ya están en uso por otra cuenta.
+            La entrada no pasó la validación: un campo presente vino vacío,
+            tiene un formato inválido, o el email/teléfono ya están en uso por
+            otra cuenta.
           content:
             application/json:
               schema:
@@ -810,14 +814,22 @@ components:
         propósito — el rol no se acepta como entrada acá tampoco, así que no
         hay forma de escalar de pasajero a conductor (u otro usuario) por
         esta vía.
+
+        **Opcional no es vaciable.** Un campo que viene tiene que traer un
+        valor: `minLength: 1` en los tres. La forma de no cambiar un dato es
+        no mandarlo, no mandarlo vacío — la cuenta necesita email y teléfono
+        para iniciar sesión y para que la contacten, y ninguno de los dos
+        admite `null` en la base.
       properties:
         name:
           type: string
+          minLength: 1
           maxLength: 255
           example: Ana García Pérez
         email:
           type: string
           format: email
+          minLength: 1
           maxLength: 255
           description: >-
             Se normaliza a minúsculas antes de validar, igual que en el
@@ -825,6 +837,7 @@ components:
           example: ana.garcia@example.com
         phone:
           type: string
+          minLength: 1
           description: >-
             Mismo formato y normalización que en el registro (`+` opcional en
             la entrada, se guarda siempre con él). Cambiarlo a uno ya usado

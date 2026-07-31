@@ -8,6 +8,7 @@ use App\Models\DriverProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -154,6 +155,51 @@ class UpdateProfileTest extends TestCase
             ->patchJson(self::URI, ['phone' => 'no-es-un-telefono'])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['phone']);
+    }
+
+    /**
+     * Un campo presente pero vacío es 422, no un borrado: `users.email` es NOT
+     * NULL UNIQUE y el login es por email, así que aceptarlo dejaría la cuenta
+     * sin forma de entrar —y a la segunda que lo hiciera, con un 500 por el
+     * índice único en vez del 422 que el resto del repo garantiza.
+     *
+     * @param  string  $campo  el que va vacío en el body
+     * @param  string  $vacio  la forma de "vacío" que se prueba
+     */
+    #[DataProvider('camposVacios')]
+    public function test_rechaza_un_campo_presente_pero_vacio(string $campo, string $vacio): void
+    {
+        $usuario = User::factory()->create([
+            'name' => 'Ana García',
+            'email' => 'ana@example.com',
+            'phone' => '+573001234567',
+        ]);
+
+        $this->withToken(JWTAuth::fromUser($usuario))
+            ->patchJson(self::URI, [$campo => $vacio])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors([$campo]);
+
+        $recargado = $usuario->fresh();
+
+        $this->assertSame('Ana García', $recargado->name);
+        $this->assertSame('ana@example.com', $recargado->email);
+        $this->assertSame('+573001234567', $recargado->phone);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function camposVacios(): array
+    {
+        return [
+            'name vacío' => ['name', ''],
+            'name solo espacios' => ['name', '   '],
+            'email vacío' => ['email', ''],
+            'email solo espacios' => ['email', '   '],
+            'phone vacío' => ['phone', ''],
+            'phone solo espacios' => ['phone', '   '],
+        ];
     }
 
     public function test_ignora_un_rol_enviado_en_el_body(): void

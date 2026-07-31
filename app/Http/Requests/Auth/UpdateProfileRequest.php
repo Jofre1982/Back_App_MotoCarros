@@ -33,10 +33,19 @@ class UpdateProfileRequest extends FormRequest
     }
 
     /**
-     * Todas las reglas van con `sometimes`: es un PATCH parcial, así que un
-     * campo ausente no es un error, es "no lo toques". La unicidad de email y
-     * phone se ignora contra la propia cuenta —si no, reenviar el mismo valor
-     * sin cambiarlo respondería 422 contra uno mismo.
+     * Todas las reglas van con `sometimes|required`: es un PATCH parcial, así
+     * que un campo ausente no es un error, es "no lo toques"; pero uno presente
+     * no puede venir vacío. `sometimes` a secas no alcanza —al contrario, sería
+     * un agujero—: ante una cadena vacía Laravel se salta TODAS las reglas no
+     * implícitas (`Validator::presentOrRuleIsImplicit()`), incluidas `email`,
+     * `regex` y `unique`, así que `{"email": ""}` pasaría la validación y
+     * borraría el email de la cuenta. Y `users.email`/`users.phone` son NOT
+     * NULL UNIQUE, con lo que la segunda cuenta que lo hiciera reventaría el
+     * índice con un 500. `required` es implícita, corre igual sobre la cadena
+     * vacía y también cubre la que trae solo espacios.
+     *
+     * La unicidad de email y phone se ignora contra la propia cuenta —si no,
+     * reenviar el mismo valor sin cambiarlo respondería 422 contra uno mismo.
      *
      * @return array<string, array<int, mixed>>
      */
@@ -45,13 +54,13 @@ class UpdateProfileRequest extends FormRequest
         $usuario = $this->user();
 
         return [
-            'name' => ['sometimes', 'string', 'max:255'],
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => [
-                'sometimes', 'string', 'email', 'max:255',
+                'sometimes', 'required', 'string', 'email', 'max:255',
                 Rule::unique('users', 'email')->ignore($usuario->getKey()),
             ],
             'phone' => [
-                'sometimes', 'string', 'max:20', 'regex:/^\+[0-9]{7,15}$/',
+                'sometimes', 'required', 'string', 'max:20', 'regex:/^\+[0-9]{7,15}$/',
                 Rule::unique('users', 'phone')->ignore($usuario->getKey()),
             ],
         ];
@@ -73,7 +82,8 @@ class UpdateProfileRequest extends FormRequest
      * garantiza que nada que no esté acá —un `role` o un `id` mandado por el
      * cliente, por ejemplo— pueda colarse hasta la Action. Se lee con `has()`
      * y no con `filled()` porque lo que importa es si el campo vino en la
-     * request, no si vino vacío: un `email` vacío ya murió en `rules()`.
+     * request: para cuando esto corre, un valor vacío ya murió en el
+     * `required` de `rules()`, así que lo que llega es un valor real.
      */
     public function toUpdate(): ProfileUpdate
     {
