@@ -69,6 +69,95 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /auth/register/driver:
+    post:
+      tags:
+        - Auth
+      operationId: registerDriver
+      summary: Registrar una cuenta de conductor
+      description: >-
+        Crea una cuenta con rol `driver` junto a su perfil de conductor
+        (`license_number`) y devuelve, en la misma respuesta, un access token
+        válido — igual que el registro de pasajero.
+
+        La cuenta y el perfil se crean de forma atómica: si el número de
+        licencia resulta duplicado en la escritura, no queda una cuenta
+        huérfana sin perfil.
+
+        El rol **no** se acepta como entrada — lo fija el endpoint. Lo que
+        distingue a este registro del de pasajero es exactamente el
+        `license_number`; el vehículo se registra aparte (historia #12),
+        porque un conductor puede dar de alta su cuenta antes de tener la
+        moto cargada.
+
+        La respuesta reutiliza el schema `AuthenticatedUser` del registro de
+        pasajero y **no** incluye el `license_number`: el dato del perfil se
+        consulta por el endpoint de perfil (historia #10), y así el schema
+        `User` no gana un campo que para las cuentas de pasajero siempre
+        estaría vacío.
+
+        No requiere autenticación, y por eso comparte con el resto de
+        endpoints de auth el límite de 10 requests por minuto e IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriverRegistrationRequest"
+            example:
+              name: Carlos Ramírez
+              email: carlos@example.com
+              phone: "+573009876543"
+              password: motoya2026
+              license_number: LIC-445566
+      responses:
+        "201":
+          description: Cuenta de conductor creada, con su perfil, y sesión iniciada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthenticatedUser"
+              example:
+                data:
+                  user:
+                    id: 1
+                    name: Carlos Ramírez
+                    email: carlos@example.com
+                    phone: "+573009876543"
+                    role: driver
+                  token:
+                    access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJkcml2ZXIifQ.HCJUJDXBM6BAvUcTGF6ZiHR2Wr3ubuRxKh7uBB4Umt4
+                    token_type: bearer
+                    expires_in: 900
+        "422":
+          description: >-
+            La entrada no pasó la validación: falta un campo requerido, el
+            email, el teléfono o el número de licencia ya están registrados,
+            o la contraseña no cumple la política mínima.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The license number has already been taken.
+                errors:
+                  license_number:
+                    - The license number has already been taken.
+        "429":
+          description: >-
+            Se superó el límite de requests por minuto para esta IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /auth/register/passenger:
     post:
       tags:
@@ -293,6 +382,67 @@ components:
           $ref: "#/components/schemas/User"
         token:
           $ref: "#/components/schemas/AuthToken"
+    DriverRegistrationRequest:
+      type: object
+      description: >-
+        Datos con los que se da de alta un conductor. El rol no se manda: lo
+        fija el endpoint.
+
+        Repite los campos de cuenta de `PassengerRegistrationRequest` en vez
+        de componerse sobre él: son dos altas distintas que hoy coinciden en
+        cuatro campos, y el registro de conductor es el que va a crecer
+        (documentos, verificación de licencia) sin arrastrar al de pasajero.
+      required:
+        - name
+        - email
+        - phone
+        - password
+        - license_number
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: Carlos Ramírez
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: >-
+            Único entre todas las cuentas, sin importar el rol. Se normaliza a
+            minúsculas antes de validarlo y de guardarlo.
+          example: carlos@example.com
+        phone:
+          type: string
+          maxLength: 20
+          description: >-
+            Único entre todas las cuentas, sin importar el rol. Se acepta en
+            formato E.164 (`+` y de 7 a 15 dígitos); el `+` es opcional en la
+            entrada, pero el número se guarda y se devuelve siempre con él.
+          example: "+573009876543"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: >-
+            Mínimo 8 caracteres, con al menos una letra y al menos un número
+            (ver la política en .claude/STANDARDS.md).
+          example: motoya2026
+        license_number:
+          type: string
+          minLength: 5
+          maxLength: 50
+          description: >-
+            Número de la licencia de conducir, único entre todos los
+            conductores. Se normaliza a mayúsculas y sin espacios antes de
+            validarlo y de guardarlo, así que `lic-445566` y `LIC-445566` son
+            la misma licencia y la segunda alta responde 422. Solo se admiten
+            letras, dígitos y guiones.
+
+            La API **no** verifica que la licencia exista de verdad ni que
+            esté vigente contra ninguna entidad externa: registra el dato tal
+            como lo declara el conductor.
+          pattern: "^[A-Z0-9-]{5,50}$"
+          example: LIC-445566
     PassengerRegistrationRequest:
       type: object
       description: >-

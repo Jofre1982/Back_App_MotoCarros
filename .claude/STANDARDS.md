@@ -148,6 +148,38 @@ cuando lleguen.
   local con libphonenumber): eso es una decisión de negocio con migración de los datos
   ya guardados, y el lugar para tomarla es cuando llegue el OTP por SMS.
 
+### Registro de conductor (decidido en #7)
+
+`POST /api/v1/auth/register/driver` sigue punto por punto lo anterior (rol fijado por
+el endpoint, 201 con `AuthenticatedUser`, limitador `auth`, email y teléfono
+canónicos) y agrega lo propio del rol:
+
+- **Cuenta y perfil se crean en una transacción.** Una cuenta con rol `driver` y sin
+  fila en `driver_profiles` no es un estado válido del dominio. El Form Request ya
+  valida que la licencia esté libre, pero entre esa consulta y el `INSERT` cabe otra
+  alta con la misma licencia, y ahí el índice único rechaza la escritura: sin la
+  transacción quedaría la cuenta a medias, y el propio conductor no podría reintentar
+  porque su email y su teléfono ya estarían tomados por ella.
+- **`license_number` también tiene forma canónica**: se recorta y se pasa a mayúsculas
+  en `prepareForValidation()`, por el mismo motivo que el email — `unique` es un
+  `where license_number = ?` sobre una columna con índice único, así que sin
+  normalizar bastaría escribirla en minúsculas para tener dos conductores con la misma
+  habilitación. No se tocan los espacios interiores: `LIC 445 566` es una licencia mal
+  escrita y corresponde un 422 explicable, no que el servidor adivine cómo debería
+  haberse escrito.
+- **La respuesta no incluye la licencia**: reutiliza el schema `AuthenticatedUser` del
+  registro de pasajero y del login, y el dato del perfil se consulta por el endpoint de
+  perfil (#10). Así el schema `User` no gana un campo que en las cuentas de pasajero
+  estaría siempre vacío.
+- La API **no verifica** que la licencia exista ni que esté vigente contra ninguna
+  entidad externa: registra lo que el conductor declara (explícitamente fuera de
+  alcance en #7). El vehículo se registra aparte (#12), porque un conductor puede dar
+  de alta su cuenta antes de tener la moto cargada.
+- Lo común a ambos registros (normalización de email/teléfono y reglas de los campos de
+  cuenta) vive en el trait `App\Http\Requests\Concerns\NormalizesAccountInput`, no
+  duplicado en cada Form Request: si las dos altas divergieran, la misma persona podría
+  terminar con una cuenta por rol usando el mismo email escrito distinto.
+
 ### Política de contraseñas (decidida en #6)
 
 Mínimo **8 caracteres, con al menos una letra y al menos un número**, declarada una
