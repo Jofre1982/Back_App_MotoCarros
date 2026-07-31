@@ -113,6 +113,45 @@ el blanco natural de la fuerza bruta; en el caso del refresh, además, cada acie
 escribe una entrada de blacklist en el cache. Login y registro heredan este mismo grupo
 cuando lleguen.
 
+### Registro de cuentas (decidido en #6)
+
+**Un endpoint de registro por rol**, no uno solo con el rol como campo de entrada:
+`POST /api/v1/auth/register/passenger` (historia #6) y el de conductor con la #7.
+
+- El rol **nunca se acepta como entrada**. Lo fija la Action correspondiente. El DTO
+  de entrada (`App\DTOs\PassengerRegistration`) directamente no tiene campo de rol, y
+  el Form Request arma ese DTO campo por campo en vez de pasar `validated()` completo:
+  así no hay ningún camino por el que un `role` del cliente llegue hasta `users`.
+  Importa porque `role` es fillable en el modelo, y porque registrarse como conductor
+  exige requisitos (perfil, documentos) que el endpoint de pasajeros no pide.
+- El registro **devuelve un access token**, no solo la cuenta creada: obligar a un
+  login inmediatamente después haría que la app móvil mande la contraseña dos veces
+  por la red para completar un alta. Responde **201** con el schema
+  `AuthenticatedUser` (`{user, token}`), que el login reutiliza.
+- Los endpoints de registro van sin `auth:api` y, por lo tanto, bajo el limitador
+  `auth` (10/min por IP): anónimos, sirven para crear cuentas en masa y para sondear
+  qué emails ya existen.
+- `email` y `phone` son únicos en `users`; ambos se validan con `unique` en el Form
+  Request, no solo con el índice de la tabla — sin la regla, un duplicado escala a un
+  500 por violación de constraint en vez del 422 que el cliente puede mostrar.
+
+### Política de contraseñas (decidida en #6)
+
+Mínimo **8 caracteres, con al menos una letra y al menos un número**, declarada una
+sola vez como `Password::defaults()` en `AppServiceProvider` y referenciada desde los
+Form Requests. Centralizarla es lo que evita que registro, login y un eventual cambio
+de contraseña diverjan.
+
+No se exigen símbolos ni mayúsculas y minúsculas: para una app de transporte en móvil
+esas reglas empujan a contraseñas anotadas o a variaciones triviales (`Motoya1!`), y
+las guías actuales (NIST SP 800-63B) favorecen longitud sobre composición. Si más
+adelante hace falta endurecerla, el lugar es subir el mínimo de longitud.
+
+Queda **fuera** `uncompromised()` (contraste contra la lista de Pwned Passwords): hace
+una llamada HTTP a un servicio externo dentro del ciclo de validación, lo que ataría
+el registro a la disponibilidad de un tercero y metería red en la suite de tests. Es
+una mejora razonable a futuro si se resuelve con timeout y degradación explícita.
+
 ### Envelope de las respuestas
 
 Los API Resources de Laravel envuelven la respuesta en `data` y ese es el formato que

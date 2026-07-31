@@ -69,6 +69,82 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /auth/register/passenger:
+    post:
+      tags:
+        - Auth
+      operationId: registerPassenger
+      summary: Registrar una cuenta de pasajero
+      description: >-
+        Crea una cuenta con rol `passenger` y devuelve, en la misma respuesta,
+        un access token válido: la app móvil queda autenticada sin tener que
+        encadenar un login inmediatamente después del registro.
+
+        El rol **no** se acepta como entrada — lo fija el endpoint. Registrarse
+        como conductor es otro endpoint (historia #7), porque además del rol
+        exige los datos del perfil de conductor.
+
+        No requiere autenticación, y por eso comparte con el resto de
+        endpoints de auth el límite de 10 requests por minuto e IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PassengerRegistrationRequest"
+            example:
+              name: Ana García
+              email: ana@example.com
+              phone: "+573001234567"
+              password: motoya2026
+      responses:
+        "201":
+          description: Cuenta creada y sesión iniciada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthenticatedUser"
+              example:
+                data:
+                  user:
+                    id: 1
+                    name: Ana García
+                    email: ana@example.com
+                    phone: "+573001234567"
+                    role: passenger
+                  token:
+                    access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
+                    token_type: bearer
+                    expires_in: 900
+        "422":
+          description: >-
+            La entrada no pasó la validación: falta un campo requerido, el
+            email o el teléfono ya están registrados, o la contraseña no
+            cumple la política mínima.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The email has already been taken.
+                errors:
+                  email:
+                    - The email has already been taken.
+        "429":
+          description: >-
+            Se superó el límite de requests por minuto para esta IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /broadcasting/auth:
     post:
       tags:
@@ -168,6 +244,91 @@ components:
             sobre el claim `exp` del token emitido. Es `null` cuando el token
             no expira (`JWT_TTL` sin valor).
           example: 900
+    User:
+      type: object
+      description: >-
+        Datos públicos de una cuenta. Nunca incluye la contraseña (el modelo la
+        declara en `$hidden`).
+      required:
+        - id
+        - name
+        - email
+        - phone
+        - role
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Ana García
+        email:
+          type: string
+          format: email
+          example: ana@example.com
+        phone:
+          type: string
+          example: "+573001234567"
+        role:
+          type: string
+          description: >-
+            Rol de autenticación de la cuenta (ver la decisión de modelo de
+            datos en .claude/STANDARDS.md). Sirve para que el cliente sepa qué
+            UI mostrar; la autorización de negocio se resuelve con Policies en
+            el servidor, no con este campo.
+          enum:
+            - passenger
+            - driver
+          example: passenger
+    AuthenticatedUser:
+      type: object
+      description: >-
+        Cuenta más el access token con el que quedó autenticada. Es la
+        respuesta común del registro y del login.
+      required:
+        - user
+        - token
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          $ref: "#/components/schemas/AuthToken"
+    PassengerRegistrationRequest:
+      type: object
+      description: >-
+        Datos con los que se da de alta un pasajero. El rol no se manda: lo
+        fija el endpoint.
+      required:
+        - name
+        - email
+        - phone
+        - password
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: Ana García
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Único entre todas las cuentas.
+          example: ana@example.com
+        phone:
+          type: string
+          maxLength: 20
+          description: >-
+            Único entre todas las cuentas. Se acepta en formato E.164 (`+` y
+            de 7 a 15 dígitos); el `+` es opcional.
+          example: "+573001234567"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: >-
+            Mínimo 8 caracteres, con al menos una letra y al menos un número
+            (ver la política en .claude/STANDARDS.md).
+          example: motoya2026
     BroadcastAuthRequest:
       type: object
       description: >-
