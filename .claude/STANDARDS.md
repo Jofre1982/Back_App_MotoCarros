@@ -353,6 +353,81 @@ mitiga así:
 **Fuera de alcance de #3**: el uso productivo de estas estimaciones dentro del cálculo
 de tarifa, que es el issue #4.
 
+## Cálculo de tarifas (decidido en #4)
+
+**Decisión**: tarifa base + distancia + tiempo, con piso mínimo y redondeo hacia arriba.
+La implementa `App\Actions\Payments\CalculateFareAction`, que es la **única** fuente de
+verdad del monto: la tarifa estimada que se le muestra al pasajero antes de pedir el
+viaje y el cobro al terminarlo salen de la misma Action con los mismos parámetros, y lo
+único que cambia entre ambos momentos es el `RouteEstimate` que recibe (el estimado del
+proveedor de mapas primero, el trayecto realmente recorrido después).
+
+### Fórmula
+
+```
+distancia = round(metros      × per_kilometer / 1000)
+tiempo    = round(segundos    × per_minute    / 60)
+espera    = round(seg_espera  × per_waiting_minute / 60)
+
+subtotal  = base + distancia + tiempo + espera
+total     = ceil_al_múltiplo(max(subtotal, minimum), rounding_step)
+```
+
+| Parámetro | Default | Env | Qué cubre |
+|---|---|---|---|
+| `base` | 1500 | `FARE_BASE` | Cargo fijo por viaje: el desplazamiento del conductor hasta el punto de recogida. |
+| `per_kilometer` | 800 | `FARE_PER_KILOMETER` | Distancia recorrida. |
+| `per_minute` | 100 | `FARE_PER_MINUTE` | Tiempo en ruta. |
+| `per_waiting_minute` | 60 | `FARE_PER_WAITING_MINUTE` | Espera solicitada con el viaje ya aceptado. |
+| `minimum` | 3000 | `FARE_MINIMUM` | Piso del cobro. |
+| `rounding_step` | 50 | `FARE_ROUNDING_STEP` | Múltiplo al que se redondea el total. |
+| `currency` | `COP` | `FARE_CURRENCY` | Moneda (ISO 4217). |
+
+Los valores numéricos son un punto de partida a validar con el negocio, y por eso viven
+en [`config/fares.php`](../config/fares.php) y no en el código: ajustarlos no es un
+cambio de software. La **fórmula** sí es una decisión de arquitectura y cambiarla pasa
+por este documento.
+
+### Reglas que sostienen la fórmula
+
+- **Se cobra distancia y tiempo, no uno u otro.** Sin el componente de tiempo, un
+  trayecto en hora pico paga lo mismo que el mismo trayecto a medianoche ocupando al
+  conductor el triple; sin el de distancia, un viaje largo y fluido queda regalado. La
+  duración viene del proveedor de mapas con tráfico (ver la sección anterior).
+- **Las fracciones se prorratean, no se redondean a la unidad completa**: 1500 m pagan
+  kilómetro y medio, no dos. Cobrar la unidad entera produce saltos de precio que el
+  pasajero percibe como arbitrarios entre dos destinos casi iguales.
+- **El mínimo se aplica antes del redondeo, y el redondeo es hacia arriba.** El mínimo
+  es un piso: un redondeo al múltiplo más cercano podría perforarlo.
+- **El paso de redondeo existe por el efectivo.** Buena parte de estos viajes se pagan
+  en efectivo y el vuelto tiene que existir físicamente. Por eso `minimum` debería ser
+  siempre múltiplo de `rounding_step` (lo verifica un test).
+- **La espera se cobra más barato que el minuto en ruta**: el conductor está detenido,
+  sin gastar combustible.
+
+### Dinero: enteros, nunca float
+
+Todos los montos son **enteros** en la unidad mínima de la moneda configurada — para COP
+esa unidad es el peso, que no tiene subunidad en circulación. Los float no representan
+dinero de forma exacta y el error se acumula justo donde más se nota (totales, cuadres,
+comisiones). Esto aplica también a las columnas de BD cuando lleguen los pagos: entero,
+no `float`/`double`.
+
+### Estructura
+
+- `App\DTOs\FareSchedule` — los parámetros vigentes, construidos desde `config/fares.php`
+  en `AppServiceProvider`. Valida en el constructor: una tarifa negativa o un paso de
+  redondeo en 0 revientan al resolver el servicio, no al cobrarle a un pasajero real.
+- `App\DTOs\FareBreakdown` — el resultado: total **y desglose**. El desglose no es
+  decorativo; cuando el cobro final no coincide con lo estimado (trayecto distinto,
+  espera) hay que poder explicar la diferencia sin recalcular a mano.
+- La Action recibe `RouteEstimate` y los segundos de espera. **No conoce HTTP ni el
+  modelo `Ride`**, así que sirve igual desde un controller, un job o un test.
+
+**Fuera de alcance de #4**: tarifas dinámicas por demanda (surge pricing), descuentos y
+promociones; y los endpoints que consumen este cálculo, que son las historias de tarifa
+estimada (#14) y pago del viaje (#25).
+
 ## Pendiente de decidir (no bloquea empezar)
 
-- Cálculo de tarifas (por distancia/tiempo): fórmula, tarifa mínima y redondeo.
+- Nada pendiente por ahora.

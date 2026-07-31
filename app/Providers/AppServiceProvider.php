@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\DTOs\FareSchedule;
 use App\Services\Maps\GoogleRoutesEstimator;
 use App\Services\Maps\RouteEstimator;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -19,6 +20,28 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->registerRouteEstimator();
+        $this->registerFareSchedule();
+    }
+
+    /**
+     * Arma los parámetros de tarifa vigentes desde config/fares.php (ver la
+     * fórmula en .claude/STANDARDS.md).
+     *
+     * Diferido igual que el estimador: el constructor de FareSchedule rechaza
+     * una configuración imposible, y esa validación tiene que ocurrir cuando
+     * alguien va a calcular una tarifa, no en cada arranque de la aplicación.
+     */
+    private function registerFareSchedule(): void
+    {
+        $this->app->singleton(FareSchedule::class, static fn (): FareSchedule => new FareSchedule(
+            currency: Config::string('fares.currency'),
+            base: Config::integer('fares.base'),
+            perKilometer: Config::integer('fares.per_kilometer'),
+            perMinute: Config::integer('fares.per_minute'),
+            perWaitingMinute: Config::integer('fares.per_waiting_minute'),
+            minimum: Config::integer('fares.minimum'),
+            roundingStep: Config::integer('fares.rounding_step'),
+        ));
     }
 
     /**
