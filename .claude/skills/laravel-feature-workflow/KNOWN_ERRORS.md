@@ -104,3 +104,28 @@ que `dynamic_conformance.py` ordene las operaciones dejando para el final las qu
 invalidan el token (hoy `POST /auth/logout`), o que pida un token nuevo por operación.
 No se hizo dentro del PR de #12 para no mezclar un cambio de tooling que corre en CI
 con una feature — merece su propio issue.
+
+### 2026-07-31 — El chequeo dinámico nunca prueba el 401 sin `Accept: application/json`
+
+**Qué pasó:** implementando `PATCH /me/vehicle` (#13), el chequeo dinámico dio
+`OK: 9 operación(es) probadas` y el 401 documentado del endpoint validó sin problema.
+Pero pegándole al servidor real **sin** cabecera `Accept`, ese mismo 401 no existe:
+la API responde **500** (`Route [login] not defined.`) porque
+`AuthenticationException` cae en la rama de redirección al login web en vez de la de
+JSON. No es del endpoint nuevo — `GET /me` (#10) y `POST /me/vehicle` (#12) hacen
+exactamente lo mismo, así que el spec viene prometiendo un 401 que solo se cumple si
+el cliente manda `Accept`.
+
+**Por qué pasó:** `dynamic_conformance.py` fija `headers = {"Accept": "application/json"}`
+para todas las requests, así que el único camino que ejercita es justo el que funciona.
+Los tests de PHPUnit tampoco lo ven: `patchJson()`/`getJson()` ponen esa misma cabecera.
+Entre las dos herramientas, el caso quedó sin cubrir por ninguna.
+
+**Cómo evitarlo:** no dar por verificado un 401 documentado solo porque el chequeo
+dinámico lo valide — probarlo también sin `Accept` (`curl -X PATCH -H 'Content-Type:
+application/json' ...`) antes de cerrar una feature autenticada. La corrección de fondo
+es del backend, no del script (que `shouldRenderJsonWhen` aplique también a la rama de
+`unauthenticated()`, o `redirectGuestsTo(null)`), y toca a todos los endpoints
+protegidos a la vez: merece su propio issue en vez de colarse en el PR de una historia.
+Si se arregla, agregar al script una request de control sin `Accept` para que no
+vuelva a pasar inadvertido.

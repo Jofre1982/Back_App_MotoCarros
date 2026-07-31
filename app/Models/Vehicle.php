@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * vehículo, y una autorización que depende de que nadie renombre la clase es
  * más frágil de lo que conviene.
  *
+ * @property int $user_id
  * @property int $year
  */
 #[Fillable(['user_id', 'plate', 'model', 'year'])]
