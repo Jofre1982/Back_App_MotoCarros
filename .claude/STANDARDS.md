@@ -84,7 +84,8 @@ routes/
   atender. La validación (firma + ventana) la hace jwt-auth dentro de la Action.
 - La gracia de blacklist de 30 s existe porque las apps móviles disparan requests en
   paralelo: sin ella, la primera que refresca invalidaría el token que las otras ya
-  tenían en vuelo.
+  tenían en vuelo. **Aplica solo a la renovación**: el cierre de sesión la ignora a
+  propósito (ver "Cierre de sesión").
 - Los fallos del token que manda el cliente (`TokenExpiredException`,
   `TokenInvalidException` —de la que hereda `TokenBlacklistedException`— y
   `UserNotDefinedException`) se traducen a un 401 con el formato de error estándar en
@@ -233,6 +234,70 @@ al iniciar sesión. El bloqueo por cuenta, en particular, es una decisión de pr
 con su propio costo (permite que un tercero deje sin servicio a un usuario conocido
 solo con fallar sus intentos) y merece su propia historia.
 
+### Cierre de sesión (decidido en #9)
+
+`POST /api/v1/auth/logout` invalida el access token con el que se autenticó la request.
+Responde
+**204 sin cuerpo**: no hay ningún recurso que devolver y lo único que el cliente hace
+con la respuesta es descartar el token que ya tenía, así que envolver un mensaje en
+`data` sería inventar un recurso que no existe. Es la excepción declarada al envelope
+de la sección "Envelope de las respuestas", no una omisión.
+
+- **Sí lleva `auth:api`**, al revés que el refresh. Un token vencido ya no sirve para
+  consumir la API, que es exactamente el estado al que el logout quiere llevarlo: no
+  queda nada que cerrar y el 401 del guard es la respuesta correcta.
+- **No hay periodo de gracia, y es la decisión central de la historia.** Los 30 s de
+  `JWT_BLACKLIST_GRACE_PERIOD` existen para que las requests en vuelo sobrevivan a una
+  *renovación*; aplicarlos acá dejaría vivo medio minuto más justo el token que el
+  usuario pide matar porque perdió el dispositivo. `LogoutAction` baja la gracia a 0
+  solo para esa escritura y la restaura en un `finally`: el `Blacklist` es un singleton
+  compartido con el refresh y dejarlo en 0 le quitaría el margen que sí necesita.
+- **Se invalida con `Blacklist::add()`, no con `invalidate(forceForever: true)`**,
+  aunque las dos formas son inmediatas. `add()` guarda la entrada solo hasta que el
+  token deja de ser renovable (14 días) y el cache la reclama sola; `addForever()` la
+  escribiría de forma permanente y la blacklist crecería sin techo, un cierre de sesión
+  a la vez.
+- **Con `JWT_BLACKLIST_ENABLED=false` el logout falla con 500, no responde 204.**
+  Escribir en el `Blacklist` directo se salta la única comprobación que jwt-auth hace
+  de esa opción (`Manager::invalidate()`), así que `LogoutAction` la repite a mano y
+  corta antes de tocar el token. Sin ella la entrada se escribe pero nadie la consulta
+  al validar: el token sigue vivo hasta vencer solo mientras el endpoint responde 204,
+  y el usuario cree que cerró una sesión que sigue abierta. Es un error de
+  configuración del servidor, no del token del cliente, y por eso escala a 500 como el
+  resto de ellos (ver "Autenticación" más arriba) en vez de disfrazarse de éxito.
+- **Se cierra el token que el guard aceptó, no el que traiga la cabecera.** El
+  controller lo lee de la instancia `tymon.jwt` —la misma que recibe el `JWTGuard`— y
+  no con `Request::bearerToken()`. jwt-auth no busca el token solo en `Authorization`:
+  su cadena de parsers es `AuthHeaders`, `QueryString`, `InputSource`, `RouteParams` y
+  `Cookies`, y este repo no la restringe, así que un `POST /auth/logout?token=<jwt>`
+  autentica igual. Con `bearerToken()` esos casos respondían 401 **con la sesión sin
+  cerrar**, que es el peor fallo posible acá: desde el cliente es indistinguible del
+  401 de "ya estaba cerrada", así que quien perdió el teléfono se queda con el token
+  vivo creyendo lo contrario. La convención `(string) $request->bearerToken()` del
+  refresh no sirve de precedente porque ese endpoint va **sin** `auth:api` y la
+  cabecera es su única fuente por definición; el logout es el primero que invalida un
+  token después de que el guard ya lo parseó. El contrato publicado en `openapi.yaml`
+  sigue siendo `bearerAuth`: esto es consistencia con el guard, no una nueva forma de
+  autenticarse.
+- **El token cerrado tampoco se puede renovar.** Sale gratis —el refresh valida contra
+  la blacklist— pero es el requisito de fondo: si se pudiera canjear por uno nuevo,
+  cerrar sesión no serviría de nada frente al caso que la historia describe.
+- **Se invalida el token enviado, no la cuenta**: cerrar sesión en el teléfono no echa
+  a la tableta. El cierre remoto en todos los dispositivos queda fuera de #9 y necesita
+  llevar registro de los tokens activos por usuario.
+- **La Action recibe `Tymon\JWTAuth\JWT`, no su subclase `JWTAuth`.** Son dos singletons
+  distintos (`tymon.jwt` y `tymon.jwt.auth`) y el guard `api` se construye con el
+  primero. Como `JWT::getToken()` devuelve lo que tenga cacheado antes de leer la
+  cabecera, la Action suelta el token con `unsetToken()` al terminar —igual que
+  `JWTGuard::logout()`—: si no, un contenedor que sobrevive a la request (worker de
+  colas, suite de tests, Octane) reusaría el token ya invalidado en la siguiente
+  autenticación y rechazaría credenciales válidas.
+- **Queda bajo el limitador general `api`, no bajo `throttle:auth`.** Exige token
+  vigente, así que no es un endpoint anónimo; bajo `throttle:auth` compartiría la cuota
+  por IP con el login y una IP con muchos usuarios detrás —el NAT de una oficina, una
+  red móvil— se quedaría sin poder cerrar sesión porque otros estuvieron intentando
+  entrar.
+
 ### Política de contraseñas (decidida en #6)
 
 Mínimo **8 caracteres, con al menos una letra y al menos un número**, declarada una
@@ -256,6 +321,10 @@ Los API Resources de Laravel envuelven la respuesta en `data` y ese es el format
 sigue la API (`{"data": {...}}` en éxito). Los errores no se envuelven: van como
 `{"message": ...}` (+ `errors` en validación). Ambas formas están documentadas en
 [`openapi.yaml`](../openapi.yaml).
+
+Una operación que no devuelve ningún recurso responde **204 sin cuerpo** en vez de
+envolver un mensaje en `data` (hoy: el cierre de sesión). El envelope es para
+recursos; inventar uno para decir "listo" no le da nada al cliente.
 
 ## Tiempo real: Laravel Reverb
 

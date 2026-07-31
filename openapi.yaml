@@ -105,6 +105,58 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      operationId: logout
+      summary: Cerrar sesión invalidando el access token
+      description: >-
+        Invalida el access token que viaja en `Authorization: Bearer`, sin
+        esperar a que venza por su cuenta. El caso que justifica el endpoint es
+        perder el dispositivo o cambiar de teléfono.
+
+        A diferencia del refresh, **no hay periodo de gracia**: el token queda
+        inservible en el mismo instante, tanto para consumir la API como para
+        renovarse en `/auth/refresh`. La gracia de 30 s existe para que las
+        requests en vuelo sobrevivan a una renovación; aplicarla acá dejaría el
+        token robado vivo medio minuto más, que es justo lo que quien cierra
+        sesión está pidiendo evitar (ver .claude/STANDARDS.md).
+
+        Invalida **solo el token enviado**, no las demás sesiones de la misma
+        cuenta: cerrar sesión en el teléfono no debe echar a la tableta. El
+        cierre remoto en todos los dispositivos queda fuera de esta historia.
+
+        Lleva `auth:api`, así que un token ausente, ilegible, ya expirado o ya
+        cerrado responde 401 — no hay nada que invalidar en ninguno de esos
+        casos.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: >-
+            Sesión cerrada; el token quedó invalidado. Sin cuerpo: no hay
+            ningún recurso que devolver, y el cliente lo único que hace con la
+            respuesta es descartar el token que ya tenía.
+        "401":
+          description: >-
+            Falta el access token, es ilegible, ya venció, o ya se había
+            cerrado la sesión con él.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "429":
+          description: >-
+            Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /auth/refresh:
     post:
       tags:
