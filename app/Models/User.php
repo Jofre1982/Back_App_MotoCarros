@@ -37,6 +37,23 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasOne(DriverProfile::class);
     }
 
+    /**
+     * La moto del conductor. Uno a uno: `vehicles.user_id` es único, y un
+     * conductor que quiere cambiar de moto actualiza la que tiene en vez de
+     * registrar otra.
+     *
+     * El tipo de la relación se declara con sus genéricos porque
+     * `RegisterVehicleAction` escribe a través de ella: sin esto, `create()`
+     * devuelve un `Model` genérico y PHPStan no puede verificar que la Action
+     * cumple su propio contrato de retorno.
+     *
+     * @return HasOne<Vehicle, $this>
+     */
+    public function vehicle(): HasOne
+    {
+        return $this->hasOne(Vehicle::class);
+    }
+
     public function isDriver(): bool
     {
         return $this->role === UserRole::Driver;

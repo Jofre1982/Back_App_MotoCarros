@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
+use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,4 +60,13 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->get('me', ShowProfileController::class)
         ->name('profile.show');
+
+    // El vehículo del conductor cuelga de `me` porque es un sub-recurso de la
+    // cuenta: se llega a él por el token, nunca por un id propio. Que solo los
+    // conductores puedan registrarlo no se declara acá con un middleware de
+    // rol, sino con `VehiclePolicy` (ver .claude/STANDARDS.md: la autorización
+    // de negocio va en Policies, no en el token ni en la ruta).
+    Route::middleware('auth:api')
+        ->post('me/vehicle', RegisterVehicleController::class)
+        ->name('vehicles.store');
 });

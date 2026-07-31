@@ -602,6 +602,58 @@ tabla `driver_profiles` para datos específicos del conductor.
 es el id de `User`), y `driver_profiles` mantiene la extensibilidad sin pre-optimizar
 una estructura multi-rol que todavía no existe en el producto.
 
+## Vehículo del conductor (decidido en #12)
+
+`POST /api/v1/me/vehicle` da de alta la moto del conductor autenticado. Responde
+**201** con el schema `Vehicle` (`plate`, `model`, `year`).
+
+- **Cuelga de `/me` y no de `/vehicles`**, por lo mismo que el perfil: es un
+  sub-recurso de la cuenta y se llega a él por el token, nunca por un id propio. Por
+  eso `VehicleResource` tampoco publica el `id` de la fila ni el `user_id`, igual que
+  `DriverProfileResource`.
+- **La relación es 1:1 y la sostiene el índice único de `vehicles.user_id`**, no solo
+  la validación. Un segundo registro responde **422**, no reemplaza al vehículo
+  existente: el endpoint es de alta, y un cliente móvil que reintenta una request que
+  ya había llegado no debe pisar en silencio los datos de la moto con la que el
+  conductor está trabajando. Actualizarla es la #13.
+- **Ese 422 viaja bajo la clave `vehicle`, que no es un campo de la entrada**, porque
+  no lo decide nada de lo que el cliente manda sino el estado de la cuenta. Se agrega
+  desde `after()` en el Form Request, no como regla de un campo.
+- **El rol se autoriza con `VehiclePolicy`, y una cuenta de pasajero recibe 403, no
+  422**: no es una entrada que se pueda corregir mandando otros datos, es una operación
+  que su rol no tiene. La Policy se invoca desde `authorize()` del Form Request para
+  que el 403 se resuelva **antes** que la validación — al revés, el 422 le detallaría a
+  una cuenta sin permiso qué forma tiene que tener la entrada. El primer uso de
+  Policies del proyecto; se declara con `#[UsePolicy]` en el modelo en vez de dejarla a
+  la convención de nombres.
+- **Que la cuenta ya tenga vehículo no se decide en la Policy**, aunque podría: el
+  conductor sí tiene el permiso, lo que le falta es actualizar lo que ya registró. Un
+  403 ahí le diría que el problema es de permisos, que es otra cosa.
+- **La `plate` tiene forma canónica** (recorte y mayúsculas en `prepareForValidation()`),
+  por el mismo motivo que `license_number`: `unique` es un `where plate = ?` sobre una
+  columna con índice único, así que sin normalizar bastaría escribirla en minúsculas
+  para registrar dos veces la misma moto — y ahí la placa dejaría de identificar a un
+  vehículo, que es para lo único que sirve. Los espacios interiores no se limpian:
+  `ABC 12D` es una placa mal escrita y corresponde un 422 explicable.
+- **El `regex` de la placa no codifica el formato de ningún país** (`^[A-Z0-9-]{5,10}$`).
+  El supuesto de región de la #3 es Colombia, pero atarlo al formato `AAA00A` haría que
+  cambiar de país fuera un cambio de código; la API tampoco verifica contra ninguna
+  entidad externa que la placa exista o esté vigente, igual que con la licencia.
+- **Los límites de `year` (1970 … año en curso + 1) atajan el dedazo, no declaran una
+  antigüedad máxima de la flota.** El tope es el año siguiente porque los modelos se
+  venden adelantados al calendario. Si el negocio quiere una política de antigüedad, es
+  otra decisión y su lugar es la configuración, no una regla de validación.
+- **La Action no usa transacción**, a diferencia del alta de conductor: escribe una sola
+  fila, así que no existe el estado a medias que allá había que evitar. Dos altas
+  simultáneas que pasen la validación a la vez terminan con la última perdiendo contra
+  el índice único (500), que es el mismo trato que la #7 le da a una licencia duplicada.
+
+Queda **fuera** de #12: los documentos del vehículo (la historia los menciona, pero no
+tiene criterio de aceptación para ellos y almacenarlos exige decidir antes dónde viven
+los archivos y quién los verifica — la verificación administrativa está declarada fuera
+de alcance en el propio issue); actualizar el vehículo (#13); y que un conductor tenga
+más de una moto.
+
 ## Proveedor de mapas/geocoding (decidido en #3)
 
 **Decisión**: **Google Maps Platform** — Routes API v2 (`computeRoutes`) para

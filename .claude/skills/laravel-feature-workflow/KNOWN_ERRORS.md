@@ -84,3 +84,23 @@ schema **rechace** un cuerpo inválido — sin ella no se distingue un schema co
 uno vacuamente permisivo. Alternativa de fondo, si el patrón se repite: que
 `dynamic_conformance.py` pida un token nuevo por operación, o que deje `/auth/logout`
 para el final.
+
+### 2026-07-31 — El "verde por omisión" del token compartido se repitió en #12
+
+**Qué pasó:** el mismo caso de la entrada anterior, ahora con `POST /me/vehicle` (#12):
+`dynamic_conformance.py --start-server` con un token de conductor reportó
+`OK: 7 operación(es) probadas, sin fallos`, y el 201 del endpoint nuevo **no se
+ejecutó ni una vez** — `POST /auth/logout` va antes en el orden del spec y dejó el
+token en la blacklist, así que `/me/vehicle` respondió el 401 que también está
+documentado. Se detectó porque la tabla `vehicles` quedó vacía después de la corrida.
+
+**Por qué pasó:** misma causa que en #10 — un único token compartido entre operaciones,
+una de las cuales lo invalida. Con esto deja de ser un caso aislado: le pasa a **toda**
+feature autenticada cuyo path ordene después de `/auth/logout`, que son casi todas.
+
+**Cómo evitarlo:** hasta que el script se arregle, seguir validando el camino de éxito
+aparte (como en #10 y acá). La corrección de fondo ya no es opcional y es contenida:
+que `dynamic_conformance.py` ordene las operaciones dejando para el final las que
+invalidan el token (hoy `POST /auth/logout`), o que pida un token nuevo por operación.
+No se hizo dentro del PR de #12 para no mezclar un cambio de tooling que corre en CI
+con una feature — merece su propio issue.
