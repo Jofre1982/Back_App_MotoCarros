@@ -36,6 +36,23 @@ final class LoginAction
      */
     public function handle(#[\SensitiveParameter] LoginCredentials $credentials): AuthenticatedUser
     {
+        // Antes de mirar la base, y por lo tanto igual para cualquier email:
+        // `Hash::make()` no acepta un byte nulo —`password_hash()` lanza un
+        // `ValueError` que `BcryptHasher::make()` re-lanza como
+        // `RuntimeException`—, así que el hash de descarte de más abajo salía
+        // por una excepción ajena al dominio en vez de por el 401. Un byte nulo
+        // no puede ser la contraseña de ninguna cuenta: el alta habría fallado
+        // igual al hashearla. Se comprueba en vez de capturar la
+        // `RuntimeException` para no confundir esta entrada con un bcrypt
+        // realmente inutilizable, que sí tiene que romper fuerte.
+        //
+        // El Form Request ya lo rechaza con un 422 antes de llegar acá; esto es
+        // lo que sostiene el `@throws` para quien invoque el caso de uso sin
+        // pasar por HTTP, desde un comando o un job.
+        if (str_contains($credentials->password, "\0")) {
+            throw new InvalidCredentialsException;
+        }
+
         $user = User::firstWhere('email', $credentials->email);
 
         if ($user === null) {

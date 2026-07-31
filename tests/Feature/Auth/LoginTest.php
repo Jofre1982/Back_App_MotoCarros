@@ -235,6 +235,71 @@ class LoginTest extends TestCase
         ];
     }
 
+    public function test_rechaza_una_contrasena_con_un_byte_nulo(): void
+    {
+        // `password_hash()` no acepta un byte nulo: lanza un `ValueError` que
+        // `BcryptHasher::make()` re-lanza como `RuntimeException`, que no es una
+        // `InvalidCredentialsException` y por lo tanto salía como 500.
+        //
+        // El 422 acá no delata nada, por el mismo argumento que el del email mal
+        // formado: una contraseña con un byte nulo no puede ser la de ninguna
+        // cuenta —el alta tampoco pudo guardarla, el cast `hashed` habría
+        // fallado igual—, así que la respuesta no depende de qué haya en la base.
+        $this->cuentaRegistrada();
+
+        $this->postJson(self::LOGIN_URI, [
+            ...$this->credencialesValidas(),
+            'password' => "a\x00b",
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('password');
+    }
+
+    public function test_los_dos_fallos_responden_igual_con_una_contrasena_que_no_se_puede_hashear(): void
+    {
+        // La misma afirmación que `test_los_dos_fallos_responden_exactamente_lo_mismo`,
+        // con la contraseña que el resto de los tests no cubría: las tres del
+        // provider `contrasenasQueNoCumplenLaPoliticaDelRegistro` son todas
+        // hasheables, así que ninguna llegaba a la rama que rompía.
+        //
+        // Sin la regla, esta misma contraseña daba 500 con el email inexistente
+        // y 401 con el registrado: el código de estado pasaba a depender de si
+        // el email tenía cuenta, que es exactamente el oráculo que el mensaje
+        // genérico, la excepción sin motivo y el hash de descarte evitan.
+        $this->cuentaRegistrada();
+
+        $emailRegistrado = $this->postJson(self::LOGIN_URI, [
+            'email' => 'ana@example.com',
+            'password' => "a\x00b",
+        ]);
+
+        $emailInexistente = $this->postJson(self::LOGIN_URI, [
+            'email' => 'nadie@example.com',
+            'password' => "a\x00b",
+        ]);
+
+        $this->assertSame($emailRegistrado->getStatusCode(), $emailInexistente->getStatusCode());
+        $this->assertSame($emailRegistrado->json(), $emailInexistente->json());
+        $this->assertLessThan(500, $emailInexistente->getStatusCode());
+    }
+
+    public function test_acepta_una_contrasena_larga_que_el_registro_pudo_guardar(): void
+    {
+        // Contracara de la regla de arriba: acota la forma, nunca el largo.
+        // `Password::defaults()` no le pone techo a la contraseña del registro,
+        // así que un `max` solo en el login dejaría a esa cuenta sin poder
+        // entrar —un 422 sobre una contraseña que es la correcta—. Y no hace
+        // falta para el 500: bcrypt trunca a 72 bytes sin lanzar nada.
+        $larga = str_repeat('motoya2026', 40);
+
+        $this->cuentaRegistrada(['password' => $larga]);
+
+        $this->postJson(self::LOGIN_URI, [
+            'email' => 'ana@example.com',
+            'password' => $larga,
+        ])->assertOk();
+    }
+
     public function test_no_expone_la_contrasena_en_la_respuesta(): void
     {
         $this->cuentaRegistrada();

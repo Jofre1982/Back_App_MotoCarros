@@ -502,6 +502,14 @@ components:
             esa diferencia de código de estado delataría cuál de los dos campos
             falló. Una contraseña que no cumple la política simplemente no
             coincide con ninguna cuenta.
+
+
+            La única forma que sí se rechaza con 422 es el byte nulo
+            (`U+0000`), que bcrypt no puede hashear y que por lo tanto tampoco
+            puede ser la contraseña de ninguna cuenta: ese 422 no depende de qué
+            haya en la base. Tampoco hay `maxLength`, para no dejar afuera a una
+            cuenta registrada con una contraseña más larga que el tope.
+          pattern: "^[^\\u0000]*$"
           example: motoya2026
     DriverRegistrationRequest:
       type: object

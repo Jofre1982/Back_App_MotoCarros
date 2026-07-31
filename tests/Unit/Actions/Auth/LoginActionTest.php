@@ -100,6 +100,34 @@ class LoginActionTest extends TestCase
         ));
     }
 
+    public function test_una_contrasena_que_no_se_puede_hashear_falla_como_credencial_invalida(): void
+    {
+        // El hash de descarte del email inexistente es la única línea de la
+        // Action que puede lanzar algo que no sea del dominio: `Hash::make()`
+        // con un byte nulo sale por `RuntimeException`. Que acá siga siendo una
+        // `InvalidCredentialsException` es lo que sostiene el `@throws` del
+        // método para quien llame al caso de uso sin pasar por HTTP —un comando
+        // o un job—, donde no hay Form Request que filtre la entrada.
+        $this->expectException(InvalidCredentialsException::class);
+
+        $this->action()->handle(new LoginCredentials(
+            email: 'nadie@example.com',
+            password: "a\x00b",
+        ));
+    }
+
+    public function test_no_distingue_el_motivo_del_fallo_con_una_contrasena_que_no_se_puede_hashear(): void
+    {
+        // Y el motivo tampoco se filtra por esta rama: el mensaje es el mismo
+        // que el de la contraseña incorrecta contra una cuenta que sí existe.
+        $this->cuentaRegistrada();
+
+        $porContrasena = $this->motivoDelFallo('ana@example.com', "a\x00b");
+        $porEmail = $this->motivoDelFallo('nadie@example.com', "a\x00b");
+
+        $this->assertSame($porContrasena, $porEmail);
+    }
+
     public function test_no_distingue_el_motivo_del_fallo_en_el_mensaje(): void
     {
         // Si la excepción llevara el motivo, tarde o temprano alguien lo
