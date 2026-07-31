@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
+use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
@@ -76,4 +77,12 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('me/vehicle', RegisterVehicleController::class)
         ->name('vehicles.store');
+
+    // PATCH y no PUT, igual que el perfil: solo se aceptan los campos
+    // presentes en el body, el resto del vehículo no se toca (historia #13).
+    // Tampoco lleva id acá: es el mismo sub-recurso de `me`, así que la moto
+    // que se edita es siempre la de la cuenta del token.
+    Route::middleware('auth:api')
+        ->patch('me/vehicle', UpdateVehicleController::class)
+        ->name('vehicles.update');
 });

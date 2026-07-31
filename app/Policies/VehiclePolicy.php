@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Policies;
 
 use App\Models\User;
+use App\Models\Vehicle;
 
 /**
  * Quién puede operar sobre un vehículo.
@@ -27,5 +28,25 @@ class VehiclePolicy
     public function create(User $user): bool
     {
         return $user->isDriver();
+    }
+
+    /**
+     * Corregir los datos de una moto es del conductor **dueño** de esa moto.
+     *
+     * `PATCH /me/vehicle` no lleva id en la ruta —se llega al vehículo por la
+     * cuenta que manda el token—, así que hoy no existe una request capaz de
+     * traer acá la moto de otra persona. La comprobación de propiedad se
+     * escribe igual: la garantía tiene que vivir en la regla y no en la forma
+     * de la ruta de hoy, para que siga en pie si el vehículo llega a
+     * direccionarse de otra manera. Se verifica en `VehiclePolicyTest`, que es
+     * el único lugar desde donde ese caso es alcanzable.
+     *
+     * El rol se comprueba además de la propiedad: nada impide que una fila
+     * apunte a una cuenta que dejó de ser conductor, y ahí la propiedad sola
+     * autorizaría a alguien que ya no opera vehículos.
+     */
+    public function update(User $user, Vehicle $vehicle): bool
+    {
+        return $user->isDriver() && $vehicle->user_id === $user->getKey();
     }
 }

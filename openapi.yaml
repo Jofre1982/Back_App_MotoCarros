@@ -689,6 +689,120 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+    patch:
+      tags:
+        - Vehicles
+      operationId: updateVehicle
+      summary: Actualizar los datos de mi vehículo
+      description: >-
+        Actualiza la moto ya registrada del conductor que envía el token: sirve
+        para corregir un dato mal cargado o para reflejar un cambio (una placa
+        que se rehizo, por ejemplo).
+
+        Es un PATCH parcial, igual que `PATCH /me`: solo los campos presentes
+        en el body se cambian, el resto conserva su valor. Un campo presente no
+        puede venir vacío — `{"model": ""}` responde 422, no borra el modelo;
+        las tres columnas son NOT NULL. La forma de no tocar un dato es no
+        mandarlo.
+
+        **No reemplaza el vehículo por otro.** Cambiar de moto —dar de baja la
+        actual y registrar una distinta— es otra operación y hoy no existe:
+        este endpoint asume que la fila que edita sigue siendo la misma moto.
+
+        Como el alta, cuelga de `/me` porque el vehículo es un sub-recurso de
+        la cuenta: se llega a él por el token, nunca por un id propio. Que no
+        haya id en la ruta es lo que hace estructuralmente imposible pedir el
+        de otro conductor; la propiedad se comprueba igual con `VehiclePolicy`,
+        que es donde vive la autorización de negocio y lo que mantiene la
+        garantía si algún día el vehículo se direcciona de otra forma.
+
+        La `plate` se normaliza a mayúsculas y sigue siendo única entre todos
+        los conductores; reenviar la propia sin cambiarla no responde 422.
+
+        Requiere un token vigente y rol `driver`. Un conductor que todavía no
+        registró su moto recibe 404: no hay nada que actualizar, y lo que le
+        corresponde es el alta (`POST /me/vehicle`).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleUpdateRequest"
+            example:
+              model: Bajaj Boxer CT 100 ES
+              year: 2023
+      responses:
+        "200":
+          description: Vehículo actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Vehicle"
+              example:
+                data:
+                  plate: ABC12D
+                  model: Bajaj Boxer CT 100 ES
+                  year: 2023
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no puede operar sobre este vehículo: o no es
+            de conductor, o el vehículo no le pertenece. Lo decide
+            `VehiclePolicy`, no la ruta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: >-
+            La cuenta es de conductor pero todavía no tiene vehículo
+            registrado, así que no hay recurso que actualizar. Se responde
+            antes que cualquier 422: que el recurso no exista pesa más que la
+            forma de la entrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No tienes un vehículo registrado; regístralo antes de actualizarlo.
+        "422":
+          description: >-
+            La entrada no pasó la validación: un campo presente vino vacío,
+            tiene un formato inválido, o la placa ya está registrada por otro
+            conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The plate has already been taken.
+                errors:
+                  plate:
+                    - The plate has already been taken.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -1062,6 +1176,52 @@ components:
             declarar una antigüedad máxima de la flota; si el negocio quiere esa
             política, es otra decisión y su lugar es la configuración.
           example: 2022
+    VehicleUpdateRequest:
+      type: object
+      description: >-
+        Datos de la moto que el conductor puede corregir. Todos los campos son
+        opcionales: solo los que vienen en la request se cambian, el resto
+        queda como estaba. No lleva a quién pertenece, igual que el alta — el
+        dueño es siempre la cuenta que envía el token y no algo que la entrada
+        pueda elegir.
+
+        **Opcional no es vaciable.** Un campo que viene tiene que traer un
+        valor: las tres columnas son NOT NULL, y una moto sin placa ni modelo
+        no le sirve al pasajero que tiene que reconocerla. La forma de no
+        cambiar un dato es no mandarlo.
+
+        Las reglas de cada campo son las mismas del alta (`plate` normalizada y
+        única, `model` texto libre, `year` de cuatro dígitos hasta el que viene)
+        — un dato corregido no puede quedar en un estado que el alta habría
+        rechazado.
+      properties:
+        plate:
+          type: string
+          minLength: 5
+          maxLength: 10
+          description: >-
+            Placa del vehículo, única entre todos los conductores. Se normaliza
+            igual que en el alta (mayúsculas, sin espacios al borde). Reenviar
+            la placa que la moto ya tiene **no** responde 422: la unicidad se
+            comprueba ignorando la propia fila, así que un cliente que manda el
+            formulario completo sin haber tocado la placa no choca consigo
+            mismo.
+          pattern: "^[A-Z0-9-]{5,10}$"
+          example: ABC12D
+        model:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Modelo de la moto, texto libre. Mismo criterio que el alta.
+          example: Bajaj Boxer CT 100 ES
+        year:
+          type: integer
+          minimum: 1970
+          description: >-
+            Año del modelo, de cuatro dígitos. Mismo rango que el alta: el
+            máximo es el año en curso más uno, por eso no se fija acá como
+            número.
+          example: 2023
     BroadcastAuthRequest:
       type: object
       description: >-
