@@ -445,6 +445,69 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /me:
+    get:
+      tags:
+        - Profile
+      operationId: showProfile
+      summary: Consultar el perfil de la cuenta autenticada
+      description: >-
+        Devuelve los datos de la cuenta que envió el token. Es lo primero que
+        consultan las apps móviles al arrancar, para saber quién es el usuario
+        y con qué rol está operando.
+
+        Los datos salen de la base, **no de los claims del token**: el `role`
+        del JWT existe solo para que el cliente decida qué UI mostrar sin una
+        request extra, y quedó fijado al emitirse. Este endpoint es el que
+        responde con el estado actual de la cuenta.
+
+        Para las cuentas de conductor incluye además `driver_profile` con el
+        número de licencia. Es el único endpoint que lo devuelve: los registros
+        y el login responden el schema `User`, que a propósito no lo tiene
+        porque en las cuentas de pasajero estaría siempre vacío (ver la
+        decisión de la historia #7 en .claude/STANDARDS.md). En una cuenta de
+        pasajero la clave no viene vacía: **no viene**.
+
+        Devuelve siempre el perfil propio. Consultar el de otra persona (los
+        datos del conductor asignado, por ejemplo) se resuelve dentro de la
+        historia del viaje correspondiente, con lo que ahí corresponda mostrar.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Perfil de la cuenta autenticada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Profile"
+              example:
+                data:
+                  id: 1
+                  name: Ana García
+                  email: ana@example.com
+                  phone: "+573001234567"
+                  role: passenger
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -526,6 +589,41 @@ components:
           $ref: "#/components/schemas/User"
         token:
           $ref: "#/components/schemas/AuthToken"
+    DriverProfile:
+      type: object
+      description: >-
+        Datos que solo existen para una cuenta de conductor. Hoy es únicamente
+        la licencia; los documentos del vehículo son otra entidad y se registran
+        aparte (historia #12).
+      required:
+        - license_number
+      properties:
+        license_number:
+          type: string
+          description: >-
+            Número de la licencia tal como quedó guardado en el registro, en su
+            forma canónica (mayúsculas, sin espacios al borde). La API no
+            verifica contra ninguna entidad externa que exista ni que esté
+            vigente: devuelve lo que el conductor declaró.
+          example: LIC-445566
+    Profile:
+      description: >-
+        Cuenta autenticada vista por su dueño. Es el schema `User` más lo que
+        depende del rol, y por eso está separado de él: `User` es lo que
+        devuelven el login y los registros, donde un `driver_profile` no tendría
+        sentido.
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            driver_profile:
+              allOf:
+                - $ref: "#/components/schemas/DriverProfile"
+              description: >-
+                Presente solo en cuentas con rol `driver` que ya tienen su
+                perfil creado. En una cuenta de pasajero la clave se omite
+                entera, en vez de venir como `null`: no es un dato que falte,
+                es un dato que no aplica.
     LoginRequest:
       type: object
       description: >-

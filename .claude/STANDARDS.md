@@ -298,6 +298,43 @@ de la sección "Envelope de las respuestas", no una omisión.
   red móvil— se quedaría sin poder cerrar sesión porque otros estuvieron intentando
   entrar.
 
+### Perfil propio (decidido en #10)
+
+`GET /api/v1/me` devuelve la cuenta que envió el token. Responde **200** con el schema
+`Profile`, que es `User` más lo que depende del rol.
+
+- **Los datos salen de la base, no de los claims del token.** El `role` del JWT quedó
+  congelado al emitirse y viaja solo para que el cliente elija qué UI mostrar (ver
+  "Autenticación"); este endpoint existe justo para responder el estado *actual* de la
+  cuenta, así que leerlo del token respondería el del pasado. Un test lo fija:
+  cambiando el rol en la base, la respuesta refleja el nuevo y no el del token.
+- **Es el único endpoint que devuelve el `license_number`**, dentro de un objeto
+  `driver_profile`. Lo prometió la #7 al dejarlo fuera de `AuthenticatedUser`, y sin
+  esto el dato no volvería al cliente desde ningún lado. Por eso `Profile` es un schema
+  aparte y no un campo nuevo en `User`: `User` es lo que responden el login y los dos
+  registros, donde un `driver_profile` no aplica.
+- **La clave se omite entera cuando no aplica, en vez de viajar en `null`.** En una
+  cuenta de pasajero no es un dato que falte; un `null` no dejaría distinguirla de un
+  conductor que todavía no tiene perfil creado.
+- **No hay Action detrás, y es deliberado.** Leer la cuenta que el guard ya resolvió no
+  decide ni cambia nada: una Action acá sería un pasamanos. La regla de este documento
+  existe para que la lógica no se esconda en los controllers, no para envolver lo que no
+  la tiene — la #11 (actualizar el perfil) sí la va a necesitar, porque ahí sí se escribe.
+- **Tampoco hay Policy**: el recurso *es* el usuario autenticado, así que no existe la
+  pregunta "¿puede este usuario ver este perfil?". Ver el perfil ajeno (el del conductor
+  asignado a un viaje) es otro endpoint y ahí la autorización sí tendrá qué decidir.
+- **La ruta es `/me`, no `/auth/me`.** Bajo `auth/` viven las operaciones sobre la sesión
+  (entrar, salir, renovar); esto es el recurso de la cuenta, y de él cuelgan sus
+  sub-recursos — el vehículo del conductor es `POST /me/vehicle` (#12). Queda con el
+  limitador general `api`, no con `throttle:auth`, por lo mismo que el logout: exige token
+  vigente, así que no es un endpoint anónimo.
+- **`DriverProfileResource` no publica el `id` de la fila ni el `user_id`**: son claves
+  internas de una relación 1:1 a la que se llega por la cuenta, nunca por su id.
+
+Queda **fuera** de #10: consultar el perfil de otra persona (se resuelve dentro de la
+historia del viaje correspondiente, con lo que ahí corresponda mostrar) y actualizar el
+propio (#11).
+
 ### Política de contraseñas (decidida en #6)
 
 Mínimo **8 caracteres, con al menos una letra y al menos un número**, declarada una
