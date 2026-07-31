@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
+use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +30,7 @@ Route::prefix('v1')->group(function () {
         ->name('auth.')
         ->group(function () {
             Route::post('refresh', RefreshTokenController::class)->name('refresh');
+            Route::post('register/driver', RegisterDriverController::class)->name('register.driver');
             Route::post('register/passenger', RegisterPassengerController::class)->name('register.passenger');
         });
 });
