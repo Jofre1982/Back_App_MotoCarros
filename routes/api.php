@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Auth\LoginController;
+use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
@@ -22,18 +23,27 @@ Route::prefix('v1')->group(function () {
         ->post('broadcasting/auth', [BroadcastController::class, 'authenticate'])
         ->name('broadcasting.auth');
 
-    // Endpoints de autenticación: van sin `auth:api` a propósito, así que
-    // cualquiera puede golpearlos sin credenciales. Por eso el grupo lleva un
-    // límite de tasa más estricto que el general de la API (ver
-    // AppServiceProvider); para el login es, además, la contención principal
-    // contra la fuerza bruta sobre contraseñas.
-    Route::middleware('throttle:auth')
-        ->prefix('auth')
-        ->name('auth.')
-        ->group(function () {
+    Route::prefix('auth')->name('auth.')->group(function () {
+        // Estos van sin `auth:api` a propósito, así que cualquiera puede
+        // golpearlos sin credenciales. Por eso llevan un límite de tasa más
+        // estricto que el general de la API (ver AppServiceProvider); para el
+        // login es, además, la contención principal contra la fuerza bruta
+        // sobre contraseñas.
+        Route::middleware('throttle:auth')->group(function () {
             Route::post('login', LoginController::class)->name('login');
             Route::post('refresh', RefreshTokenController::class)->name('refresh');
             Route::post('register/driver', RegisterDriverController::class)->name('register.driver');
             Route::post('register/passenger', RegisterPassengerController::class)->name('register.passenger');
         });
+
+        // El cierre de sesión, en cambio, exige un token vigente, así que se
+        // queda con el limitador general de la API (60/min por usuario). Bajo
+        // `throttle:auth` compartiría la cuota por IP con los endpoints
+        // anónimos, y una IP con muchos usuarios detrás —el NAT de una oficina,
+        // una red móvil— se quedaría sin poder cerrar sesión porque otros
+        // estuvieron intentando entrar.
+        Route::middleware('auth:api')
+            ->post('logout', LogoutController::class)
+            ->name('logout');
+    });
 });
