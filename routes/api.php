@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
+use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
@@ -60,6 +61,12 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->get('me', ShowProfileController::class)
         ->name('profile.show');
+
+    // PATCH y no PUT: solo se aceptan los campos de contacto presentes en el
+    // body, el resto de la cuenta no se toca (historia #11).
+    Route::middleware('auth:api')
+        ->patch('me', UpdateProfileController::class)
+        ->name('profile.update');
 
     // El vehículo del conductor cuelga de `me` porque es un sub-recurso de la
     // cuenta: se llega a él por el token, nunca por un id propio. Que solo los

@@ -508,6 +508,81 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+    patch:
+      tags:
+        - Profile
+      operationId: updateProfile
+      summary: Actualizar mis datos de contacto
+      description: >-
+        Actualiza nombre, email y/o teléfono de la cuenta autenticada. Es un
+        PATCH parcial: solo los campos presentes en el body se cambian, el
+        resto conserva su valor actual.
+
+        No acepta `role` ni ningún otro campo que no sea de contacto — si
+        viaja en el body, se ignora: la Action solo lee `name`, `email` y
+        `phone` del DTO de entrada, así que no hay ningún camino por el que un
+        `role` (o un `id`) mandado por el cliente llegue a aplicarse. Cambio
+        de contraseña y de email verificado son historias aparte (ver el
+        issue #11).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+            example:
+              name: Ana García Pérez
+              phone: "+573007654321"
+      responses:
+        "200":
+          description: Perfil actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Profile"
+              example:
+                data:
+                  id: 1
+                  name: Ana García Pérez
+                  email: ana@example.com
+                  phone: "+573007654321"
+                  role: passenger
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "422":
+          description: >-
+            La entrada no pasó la validación: un campo tiene un formato
+            inválido, o el email/teléfono ya están en uso por otra cuenta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The email has already been taken.
+                errors:
+                  email:
+                    - The email has already been taken.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /me/vehicle:
     post:
       tags:
@@ -726,6 +801,35 @@ components:
                 perfil creado. En una cuenta de pasajero la clave se omite
                 entera, en vez de venir como `null`: no es un dato que falte,
                 es un dato que no aplica.
+    UpdateProfileRequest:
+      type: object
+      description: >-
+        Datos de contacto que el dueño de la cuenta puede actualizar. Todos
+        los campos son opcionales: solo los que vienen en la request se
+        cambian, el resto queda como estaba. No lleva `role` ni `id` a
+        propósito — el rol no se acepta como entrada acá tampoco, así que no
+        hay forma de escalar de pasajero a conductor (u otro usuario) por
+        esta vía.
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: Ana García Pérez
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: >-
+            Se normaliza a minúsculas antes de validar, igual que en el
+            registro. Cambiarlo a uno ya usado por otra cuenta responde 422.
+          example: ana.garcia@example.com
+        phone:
+          type: string
+          description: >-
+            Mismo formato y normalización que en el registro (`+` opcional en
+            la entrada, se guarda siempre con él). Cambiarlo a uno ya usado
+            por otra cuenta responde 422.
+          example: "+573007654321"
     Vehicle:
       type: object
       description: >-
