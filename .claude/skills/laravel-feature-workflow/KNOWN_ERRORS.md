@@ -58,3 +58,29 @@ warning para mantener el script más simple en esta v1.
 avisar), migrar `dynamic_conformance.py` a `referencing.Registry` +
 `jsonschema.validators.validator_for(schema)(schema, registry=registry)` en vez de
 `RefResolver.from_schema`.
+
+### 2026-07-31 — `dynamic_conformance.py` da OK sin haber probado ningún 200 autenticado
+
+**Qué pasó:** implementando `GET /me` (#10), correr
+`dynamic_conformance.py --start-server --auth-token <jwt>` reportó
+`7 operación(es) probadas, sin fallos`, pero el 200 de `/me` **nunca se ejecutó**: el
+script recorre las operaciones en el orden del spec, `POST /auth/logout` va antes que
+`/me` y usa el mismo token, así que lo deja en la blacklist. `/me` recibió 401, que
+también está documentado y valida contra el schema `Error` — y el resultado global fue
+verde igual.
+
+**Por qué pasó:** el script comparte un único token entre todas las operaciones y no
+sabe que una de ellas lo invalida. El OK es real (la respuesta cumplió *un* schema
+documentado), pero no dice nada del camino de éxito, que es justo lo que la feature
+necesitaba verificar. Es un falso "verde por omisión", no un falso positivo.
+
+**Cómo evitarlo:** el `OK: N operación(es)` no alcanza para dar por validada una
+feature autenticada — hay que confirmar **qué código de estado** respondió cada
+operación propia, no solo que no hubo fallos. Mientras el script no lo reporte por
+operación, validar el cuerpo de éxito aparte: cargar `openapi.yaml`, sacar el schema de
+la respuesta 200 y correr `jsonschema.validate` sobre la forma real (una por rama del
+contrato: conductor con perfil y pasajero sin él), incluyendo una contra-prueba que el
+schema **rechace** un cuerpo inválido — sin ella no se distingue un schema correcto de
+uno vacuamente permisivo. Alternativa de fondo, si el patrón se repite: que
+`dynamic_conformance.py` pida un token nuevo por operación, o que deje `/auth/logout`
+para el final.

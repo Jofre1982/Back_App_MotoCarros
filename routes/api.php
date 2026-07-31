@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
+use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
@@ -46,4 +47,16 @@ Route::prefix('v1')->group(function () {
             ->post('logout', LogoutController::class)
             ->name('logout');
     });
+
+    // El perfil propio no cuelga de `auth/`: ahí viven las operaciones sobre la
+    // sesión (entrar, salir, renovar), y esto es el recurso de la cuenta. De
+    // `me` cuelgan además sus sub-recursos, como el vehículo del conductor
+    // (historia #12, `POST /me/vehicle`).
+    //
+    // Se queda con el limitador general de la API (60/min por usuario) y no con
+    // `throttle:auth`: exige token vigente, así que no es un endpoint anónimo, y
+    // es la primera request que hace la app móvil al arrancar.
+    Route::middleware('auth:api')
+        ->get('me', ShowProfileController::class)
+        ->name('profile.show');
 });
