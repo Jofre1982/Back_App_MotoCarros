@@ -104,6 +104,56 @@ class RegisterPassengerTest extends TestCase
             ->assertJsonValidationErrors('phone');
     }
 
+    public function test_rechaza_un_email_ya_registrado_en_otra_capitalizacion(): void
+    {
+        // `unique` es un `where email = ?` y la colación de SQLite es BINARY:
+        // sin normalizar, mandar una mayúscula alcanza para tener dos cuentas
+        // de la misma persona y para incumplir el criterio "email ya registrado
+        // → 422".
+        User::factory()->create(['email' => 'ana@example.com']);
+
+        $this->postJson(self::REGISTER_URI, [...$this->datosValidos(), 'email' => 'Ana@Example.COM'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('email');
+
+        $this->assertSame(1, User::whereRaw('lower(email) = ?', ['ana@example.com'])->count());
+    }
+
+    public function test_rechaza_un_telefono_ya_registrado_sin_el_prefijo_internacional(): void
+    {
+        // El `+` es opcional en la entrada, así que estas dos formas son el
+        // mismo número: si no colisionaran, el teléfono —canal de contacto
+        // durante el viaje y candidato natural para OTP— dejaría de identificar
+        // una sola cuenta.
+        User::factory()->create(['phone' => '+573001234567']);
+
+        $this->postJson(self::REGISTER_URI, [...$this->datosValidos(), 'phone' => '573001234567'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('phone');
+
+        $this->assertSame(1, User::where('phone', '+573001234567')->count());
+    }
+
+    public function test_guarda_email_y_telefono_en_su_forma_canonica(): void
+    {
+        // La otra mitad de la normalización: lo que se guarda tiene que ser el
+        // mismo valor que se validó, o el duplicado entraría por la puerta de
+        // atrás en el registro siguiente.
+        $this->postJson(self::REGISTER_URI, [
+            ...$this->datosValidos(),
+            'email' => 'Ana@Example.COM',
+            'phone' => '573001234567',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.user.email', 'ana@example.com')
+            ->assertJsonPath('data.user.phone', '+573001234567');
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'ana@example.com',
+            'phone' => '+573001234567',
+        ]);
+    }
+
     /**
      * @param  list<string>  $camposEsperados
      */
@@ -171,11 +221,26 @@ class RegisterPassengerTest extends TestCase
             ->assertJsonValidationErrors('email');
     }
 
-    public function test_rechaza_un_telefono_con_formato_invalido(): void
+    #[DataProvider('telefonosInvalidos')]
+    public function test_rechaza_un_telefono_con_formato_invalido(string $phone): void
     {
-        $this->postJson(self::REGISTER_URI, [...$this->datosValidos(), 'phone' => 'tres-cero-cero'])
+        $this->postJson(self::REGISTER_URI, [...$this->datosValidos(), 'phone' => $phone])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('phone');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function telefonosInvalidos(): array
+    {
+        return [
+            'no son dígitos' => ['tres-cero-cero'],
+            // Normalizar no puede convertirse en una vía para colar entradas
+            // malformadas: al `+` de más lo sigue atajando el regex.
+            'prefijo duplicado' => ['++573001234567'],
+            'demasiado corto' => ['+57300'],
+        ];
     }
 
     public function test_ignora_el_rol_que_venga_en_la_entrada(): void

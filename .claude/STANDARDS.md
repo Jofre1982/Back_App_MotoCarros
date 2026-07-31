@@ -134,6 +134,19 @@ cuando lleguen.
 - `email` y `phone` son únicos en `users`; ambos se validan con `unique` en el Form
   Request, no solo con el índice de la tabla — sin la regla, un duplicado escala a un
   500 por violación de constraint en vez del 422 que el cliente puede mostrar.
+- **Forma canónica de `email` y `phone`** (email en minúsculas; teléfono siempre con
+  `+`, aunque el cliente pueda omitirlo). Se normaliza en `prepareForValidation()` del
+  Form Request, es decir **antes** de `unique` y del DTO, así que lo que se valida y lo
+  que se guarda son el mismo valor. Sin esto la unicidad de la cuenta depende de la
+  colación del motor —SQLite (dev y tests) compara BINARY, MySQL con colación `_ci` no—
+  y basta una mayúscula, o pegar el número desde la agenda en vez de teclearlo, para
+  terminar con dos cuentas de la misma persona. Importa más allá del alta: sobre esa
+  unicidad se apoyan el login (#8), la recuperación de cuenta y el teléfono como canal
+  de contacto durante el viaje. Los endpoints de registro que vengan (conductor, #7)
+  normalizan igual.
+  Queda **fuera** normalizar a E.164 de verdad (deducir el código de país de un número
+  local con libphonenumber): eso es una decisión de negocio con migración de los datos
+  ya guardados, y el lugar para tomarla es cuando llegue el OTP por SMS.
 
 ### Política de contraseñas (decidida en #6)
 

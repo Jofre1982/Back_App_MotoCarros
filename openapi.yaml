@@ -312,14 +312,21 @@ components:
           type: string
           format: email
           maxLength: 255
-          description: Único entre todas las cuentas.
+          description: >-
+            Único entre todas las cuentas. Se normaliza a minúsculas antes de
+            validarlo y de guardarlo, así que `Ana@example.com` y
+            `ana@example.com` son la misma cuenta (la segunda alta responde
+            422).
           example: ana@example.com
         phone:
           type: string
           maxLength: 20
           description: >-
             Único entre todas las cuentas. Se acepta en formato E.164 (`+` y
-            de 7 a 15 dígitos); el `+` es opcional.
+            de 7 a 15 dígitos); el `+` es opcional en la entrada, pero el
+            número se guarda y se devuelve siempre con él. Es decir,
+            `573001234567` y `+573001234567` son el mismo número y el segundo
+            registro responde 422.
           example: "+573001234567"
         password:
           type: string
