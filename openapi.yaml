@@ -508,6 +508,108 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /me/vehicle:
+    post:
+      tags:
+        - Vehicles
+      operationId: registerVehicle
+      summary: Registrar la moto del conductor autenticado
+      description: >-
+        Da de alta el vehículo del conductor que envía el token. Un conductor no
+        puede recibir solicitudes de viaje hasta tener uno registrado, así que
+        este endpoint es el último paso del alta antes de poder trabajar.
+
+        Cuelga de `/me` y no de `/vehicles` porque el vehículo es un
+        sub-recurso de la cuenta: se llega a él por el token, nunca por un id
+        propio. Por eso tampoco lleva un id en la respuesta (mismo criterio que
+        `driver_profile` en `GET /me`).
+
+        **La relación es uno a uno.** Un segundo registro no crea otra moto:
+        responde 422 pidiendo que se actualice la existente (historia #13). El
+        endpoint es de alta, no de alta-o-reemplazo, para que un cliente que
+        reintenta una request que ya había llegado no pise en silencio los datos
+        del vehículo con el que el conductor está trabajando.
+
+        La `plate` es única entre todos los conductores y se normaliza a
+        mayúsculas antes de validarla y de guardarla, igual que el
+        `license_number` del registro de conductor. La API **no** verifica
+        contra ninguna entidad externa que la placa exista, que esté vigente ni
+        que corresponda a quien la declara.
+
+        Requiere un token vigente y rol `driver`: una cuenta de pasajero recibe
+        403, no 422 — no es una entrada malformada, es una operación que su rol
+        no tiene.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleRegistrationRequest"
+            example:
+              plate: ABC12D
+              model: Bajaj Boxer CT 100
+              year: 2022
+      responses:
+        "201":
+          description: Vehículo registrado y asociado a la cuenta del conductor.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Vehicle"
+              example:
+                data:
+                  plate: ABC12D
+                  model: Bajaj Boxer CT 100
+                  year: 2022
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no es de conductor. Registrar un vehículo no
+            es algo que un pasajero pueda hacer con otros datos, así que no es
+            un 422.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: >-
+            La entrada no pasó la validación: falta un campo, la placa ya está
+            registrada por otro conductor, o esta cuenta ya tiene un vehículo
+            —en cuyo caso el error viaja bajo la clave `vehicle`, que no es un
+            campo de la entrada sino el estado de la cuenta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The plate has already been taken.
+                errors:
+                  plate:
+                    - The plate has already been taken.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -624,6 +726,35 @@ components:
                 perfil creado. En una cuenta de pasajero la clave se omite
                 entera, en vez de venir como `null`: no es un dato que falte,
                 es un dato que no aplica.
+    Vehicle:
+      type: object
+      description: >-
+        La moto con la que trabaja un conductor. Relación uno a uno con la
+        cuenta.
+
+        No lleva `id` ni `user_id`, por el mismo criterio que `DriverProfile`:
+        se llega al vehículo por la cuenta que envía el token, nunca por un id
+        propio, así que publicarlos solo invitaría a intentar direccionarlo por
+        ahí.
+      required:
+        - plate
+        - model
+        - year
+      properties:
+        plate:
+          type: string
+          description: >-
+            Placa tal como quedó guardada, en su forma canónica (mayúsculas,
+            sin espacios al borde).
+          example: ABC12D
+        model:
+          type: string
+          description: Modelo declarado por el conductor, texto libre.
+          example: Bajaj Boxer CT 100
+        year:
+          type: integer
+          description: Año del modelo.
+          example: 2022
     LoginRequest:
       type: object
       description: >-
@@ -765,6 +896,55 @@ components:
             Mínimo 8 caracteres, con al menos una letra y al menos un número
             (ver la política en .claude/STANDARDS.md).
           example: motoya2026
+    VehicleRegistrationRequest:
+      type: object
+      description: >-
+        Datos con los que un conductor da de alta su moto. No lleva a quién
+        pertenece: el dueño es siempre la cuenta que envía el token.
+      required:
+        - plate
+        - model
+        - year
+      properties:
+        plate:
+          type: string
+          minLength: 5
+          maxLength: 10
+          description: >-
+            Placa del vehículo, única entre todos los conductores. Se normaliza
+            a mayúsculas y sin espacios al borde antes de validarla y de
+            guardarla, así que `abc12d` y `ABC12D` son la misma placa y la
+            segunda alta responde 422. Solo se admiten letras, dígitos y
+            guiones; los espacios interiores **no** se limpian, porque
+            `ABC 12D` es una placa mal escrita y corresponde un 422 explicable
+            en vez de que el servidor adivine cómo debería haberse escrito.
+
+            La API no verifica contra ninguna entidad externa que la placa
+            exista, que esté vigente ni que corresponda a quien la declara:
+            registra lo que el conductor dice, igual que con el número de
+            licencia.
+          pattern: "^[A-Z0-9-]{5,10}$"
+          example: ABC12D
+        model:
+          type: string
+          maxLength: 100
+          description: >-
+            Modelo de la moto, texto libre: no hay catálogo de marcas ni
+            modelos, y fabricar uno para un dato que hoy solo sirve para que el
+            pasajero reconozca la moto que lo recoge sería inventar un problema.
+          example: Bajaj Boxer CT 100
+        year:
+          type: integer
+          minimum: 1970
+          description: >-
+            Año del modelo, de cuatro dígitos. El máximo es el año en curso más
+            uno —los modelos se venden adelantados al calendario— y por eso no
+            se fija acá como número: quedaría desactualizado cada enero.
+
+            Los límites existen para atajar el dedazo (`2205`, `19999`), no para
+            declarar una antigüedad máxima de la flota; si el negocio quiere esa
+            política, es otra decisión y su lugar es la configuración.
+          example: 2022
     BroadcastAuthRequest:
       type: object
       description: >-
