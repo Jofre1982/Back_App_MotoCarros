@@ -183,6 +183,16 @@ cliente renueva y vuelve a suscribirse.
   en el entorno **antes** de que arranque la aplicación — los canales se registran
   contra el broadcaster configurado al bootear, así que cambiarla después con
   `Config::set` deja al nuevo broadcaster sin canales.
+- Toda variable de entorno que un test necesite se declara en `phpunit.xml`, **no** en
+  un `setUp()`. El repositorio de phpdotenv es inmutable y se llena en el primer boot
+  del proceso: una variable que no esté definida antes de ese boot queda registrada como
+  cargada desde `.env`, y en cada boot posterior el writer la repisa con el valor del
+  archivo, pisando lo que haya puesto el `setUp()`. El síntoma es un test que pasa
+  aislado (primer boot) y falla dentro de la suite, con un resultado que además depende
+  del `.env` de cada máquina — en CI, `.env` sale de `.env.example`. Fijar una variable
+  desde `setUp()` solo funciona si ya está declarada en `phpunit.xml` (ese es el caso de
+  `BROADCAST_CONNECTION`): al no entrar nunca en el conjunto *loaded*, nadie la repisa.
+  Las credenciales `REVERB_APP_*` de prueba están en `phpunit.xml` por esta razón.
 - Prueba de concepto: con `php artisan reverb:start` corriendo y un cliente suscrito a
   `private-driver.{id}`, `php artisan realtime:ping <id> "<mensaje>"` recorre la cadena
   completa (autorización del canal, publicación y entrega). El evento
