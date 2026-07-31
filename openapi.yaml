@@ -69,6 +69,73 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /broadcasting/auth:
+    post:
+      tags:
+        - Realtime
+      operationId: authorizeBroadcastChannel
+      summary: Autorizar la suscripción a un canal privado
+      description: >-
+        Firma la suscripción del cliente a un canal privado de Reverb. El SDK
+        del cliente (Laravel Echo / pusher-js) llama a este endpoint por su
+        cuenta cada vez que se suscribe a un canal `private-*`, mandando el
+        `socket_id` de su conexión con el servidor de WebSockets y el nombre
+        del canal.
+
+        La autorización de cada canal está en `routes/channels.php`
+        (`ride.{rideId}` y `driver.{driverId}`): responde 403 si el usuario
+        autenticado no participa de esa entidad. Requiere un access token
+        vigente — a diferencia del refresh, acá el token expirado no sirve.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastAuthRequest"
+            example:
+              socket_id: "123456.789012"
+              channel_name: private-driver.1
+      responses:
+        "200":
+          description: >-
+            Suscripción autorizada. La firma se devuelve tal cual la espera el
+            cliente (formato del protocolo Pusher que habla Reverb), sin el
+            envelope `data` del resto de la API.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastAuthResponse"
+              example:
+                auth: "motoya-local:8f3c1a2b4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7081920a1b2c3d4e5f"
+        "401":
+          description: Falta el access token o ya no es válido.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            El usuario autenticado no tiene permiso sobre la entidad del canal
+            (no es el conductor de `driver.{id}`, o no participa del viaje de
+            `ride.{id}`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -101,6 +168,37 @@ components:
             sobre el claim `exp` del token emitido. Es `null` cuando el token
             no expira (`JWT_TTL` sin valor).
           example: 900
+    BroadcastAuthRequest:
+      type: object
+      description: >-
+        Cuerpo que manda el SDK del cliente al suscribirse a un canal privado.
+        Los nombres de los campos los fija el protocolo Pusher que habla
+        Reverb, no esta API.
+      required:
+        - socket_id
+        - channel_name
+      properties:
+        socket_id:
+          type: string
+          description: Identificador de la conexión WebSocket que asignó Reverb.
+          example: "123456.789012"
+        channel_name:
+          type: string
+          description: >-
+            Nombre del canal en el cable, con el prefijo `private-` que agrega
+            el cliente. Canales definidos hoy: `private-ride.{rideId}` y
+            `private-driver.{driverId}`.
+          example: private-driver.1
+    BroadcastAuthResponse:
+      type: object
+      description: >-
+        Firma que el cliente reenvía a Reverb para completar la suscripción.
+      required:
+        - auth
+      properties:
+        auth:
+          type: string
+          description: "Firma HMAC del par `socket_id:channel_name`, en formato `<app_key>:<hmac>`."
     Error:
       type: object
       description: Formato de error de la API (exception handler de Laravel).
