@@ -37,6 +37,11 @@ class RefreshTokenTest extends TestCase
 
     public function test_devuelve_un_token_nuevo_con_la_forma_del_contrato(): void
     {
+        // `expires_in` sale de restarle "ahora" al claim `exp` del token
+        // emitido; sin congelar el reloj, cruzar un segundo entre ambas
+        // lecturas daría 899 y haría el test intermitente.
+        $this->freezeSecond();
+
         $token = JWTAuth::fromUser($this->crearPasajero());
 
         $response = $this->withToken($token)->postJson(self::REFRESH_URI);
@@ -73,6 +78,62 @@ class RefreshTokenTest extends TestCase
             ->getJson(self::PROBE_URI)
             ->assertOk()
             ->assertJson(['user_id' => $user->id]);
+    }
+
+    public function test_el_token_viejo_sigue_sirviendo_durante_el_periodo_de_gracia(): void
+    {
+        $token = JWTAuth::fromUser($this->crearPasajero());
+
+        $this->withToken($token)->postJson(self::REFRESH_URI)->assertOk();
+
+        // Renovar invalida el token usado, pero con 30 s de gracia
+        // (`jwt.blacklist_grace_period`) para que las requests que ya iban en
+        // vuelo cuando el cliente renovó no se caigan.
+        $this->travel(20)->seconds();
+
+        $this->withToken($token)->postJson(self::REFRESH_URI)->assertOk();
+    }
+
+    public function test_el_token_viejo_queda_invalidado_pasada_la_gracia(): void
+    {
+        $token = JWTAuth::fromUser($this->crearPasajero());
+
+        $this->withToken($token)->postJson(self::REFRESH_URI)->assertOk();
+
+        $this->travel(31)->seconds();
+
+        // En producción cada request estrena aplicación; acá los requests
+        // comparten instancia, así que el guard `api` todavía tiene cacheado el
+        // usuario que resolvió durante el refresh anterior. Sin esto, la
+        // siguiente request pasaría sin volver a validar el token.
+        $this->app['auth']->forgetGuards();
+
+        // Ya en la blacklist: no sirve ni para consumir la API ni para renovar,
+        // aunque su propio `exp` (15 min) todavía no haya llegado.
+        $this->withToken($token)->getJson(self::PROBE_URI)->assertUnauthorized();
+
+        $this->withToken($token)
+            ->postJson(self::REFRESH_URI)
+            ->assertUnauthorized()
+            ->assertJsonStructure(['message']);
+    }
+
+    public function test_limita_la_cantidad_de_renovaciones_por_minuto(): void
+    {
+        // El endpoint es anónimo: sin límite, es un blanco de fuerza bruta y
+        // cada acierto escribe además una entrada de blacklist en el cache.
+        // El límite se aplica al request, no al resultado, así que un token
+        // basura sirve para verificarlo sin ensuciar la blacklist.
+        for ($i = 0; $i < 10; $i++) {
+            $this->withToken('no-es-un-jwt')
+                ->postJson(self::REFRESH_URI)
+                ->assertUnauthorized();
+        }
+
+        $this->withToken('no-es-un-jwt')
+            ->postJson(self::REFRESH_URI)
+            ->assertStatus(429)
+            ->assertJsonStructure(['message']);
     }
 
     public function test_no_se_puede_renovar_pasada_la_ventana_de_refresh(): void

@@ -13,9 +13,13 @@ namespace App\DTOs;
  */
 final readonly class AuthToken
 {
+    /**
+     * @param  int|null  $expiresInSeconds  `null` cuando el token no expira
+     *                                      (`jwt.ttl` configurado en `null`).
+     */
     public function __construct(
         public string $accessToken,
-        public int $expiresInSeconds,
+        public ?int $expiresInSeconds,
         public string $tokenType = 'bearer',
     ) {}
 }

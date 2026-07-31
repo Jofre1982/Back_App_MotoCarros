@@ -42,10 +42,15 @@ jobs:
       - name: Instalar dependencias PHP
         run: composer install --no-interaction --prefer-dist
 
-      - name: Preparar entorno (.env, key, sqlite, migraciones)
+      - name: Preparar entorno (.env, keys, sqlite, migraciones)
         run: |
           cp .env.example .env
           php artisan key:generate
+          # .env.example deja JWT_SECRET vacío a propósito (cada entorno genera
+          # el suyo). Sin este paso la app arranca sin secreto de firma y todo
+          # endpoint que toque JWT responde 500, que es justo lo que verifica la
+          # conformidad dinámica más abajo.
+          php artisan jwt:secret --force
           mkdir -p database
           touch database/database.sqlite
           php artisan migrate --force

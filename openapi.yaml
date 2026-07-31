@@ -24,7 +24,13 @@ paths:
         `Authorization: Bearer`. A diferencia del resto de endpoints protegidos,
         acepta un token **ya expirado**, siempre que siga dentro de la ventana
         de refresh (`JWT_REFRESH_TTL`, 14 días desde la emisión original). El
-        token usado queda invalidado al renovarlo.
+        token usado queda invalidado al renovarlo, pero con un periodo de
+        gracia de 30 s (`JWT_BLACKLIST_GRACE_PERIOD`) durante el cual sigue
+        siendo aceptado, para que las requests que ya iban en vuelo cuando el
+        cliente renovó no se caigan (ver .claude/STANDARDS.md).
+
+        El endpoint está limitado a 10 requests por minuto e IP: no lleva
+        `auth:api`, así que cualquiera puede invocarlo sin credenciales.
       security:
         - bearerAuth: []
       responses:
@@ -54,6 +60,15 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Token inválido o expirado. Inicia sesión de nuevo.
+        "429":
+          description: >-
+            Se superó el límite de renovaciones por minuto para esta IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -80,7 +95,11 @@ components:
             - bearer
         expires_in:
           type: integer
-          description: Segundos que faltan para que el access token expire.
+          nullable: true
+          description: >-
+            Segundos que faltan para que el access token expire, calculados
+            sobre el claim `exp` del token emitido. Es `null` cuando el token
+            no expira (`JWT_TTL` sin valor).
           example: 900
     Error:
       type: object

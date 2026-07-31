@@ -83,11 +83,33 @@ routes/
 - La gracia de blacklist de 30 s existe porque las apps móviles disparan requests en
   paralelo: sin ella, la primera que refresca invalidaría el token que las otras ya
   tenían en vuelo.
-- Cualquier `JWTException` se traduce a un 401 con el formato de error estándar en
-  `bootstrap/app.php`, no en cada controller.
+- Los fallos del token que manda el cliente (`TokenExpiredException`,
+  `TokenInvalidException` —de la que hereda `TokenBlacklistedException`— y
+  `UserNotDefinedException`) se traducen a un 401 con el formato de error estándar en
+  `bootstrap/app.php`, no en cada controller. La clase base `JWTException` **no** se
+  captura a propósito: jwt-auth también la lanza ante errores de configuración del
+  servidor (secreto sin generar, algoritmo inexistente, blacklist deshabilitada), y
+  esos tienen que escalar a 500 para que se vean en el monitoreo en vez de disfrazarse
+  de "tu sesión venció".
 - `JWT_SECRET` no tiene default: se genera por entorno con `php artisan jwt:secret`.
   La suite de tests usa un secreto propio fijado en `phpunit.xml`, que no es un
-  secreto real ni se usa en ningún entorno desplegado.
+  secreto real ni se usa en ningún entorno desplegado. El CI lo genera en el paso de
+  preparación del entorno.
+
+### Límites de tasa
+
+Definidos en `AppServiceProvider::configureRateLimiting()` y aplicados desde
+`bootstrap/app.php` (`throttleApi()`) y `routes/api.php`:
+
+| Limitador | Límite | Alcance |
+|---|---|---|
+| `api` | 60/min por usuario autenticado, o por IP si no lo hay | todo el grupo `api` |
+| `auth` | 10/min por IP | endpoints de auth, que van sin `auth:api` |
+
+Los endpoints de autenticación se consumen sin credenciales por definición, así que son
+el blanco natural de la fuerza bruta; en el caso del refresh, además, cada acierto
+escribe una entrada de blacklist en el cache. Login y registro heredan este mismo grupo
+cuando lleguen.
 
 ### Envelope de las respuestas
 
