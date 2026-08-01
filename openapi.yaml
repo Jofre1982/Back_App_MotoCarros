@@ -999,6 +999,106 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/{id}/cancel:
+    post:
+      tags:
+        - Rides
+      operationId: cancelRide
+      summary: Cancelar una solicitud de viaje antes de que un conductor la acepte
+      description: >-
+        Cancela el viaje del pasajero autenticado mientras sigue en
+        `requested`, sin que se genere ningún cargo (historia #16). Es la
+        ventana entre pedir el viaje y que algún conductor lo acepte; una vez
+        que el viaje pasa a `accepted` o más adelante, este endpoint ya no
+        aplica — esa cancelación tiene sus propias reglas (penalización,
+        liberar al conductor) y es una historia aparte (#22, #23).
+
+        Solo el pasajero dueño del viaje puede cancelarlo: cualquier otra
+        cuenta recibe **403**. Que el viaje ya no esté en `requested` es en
+        cambio **422**, porque no es un problema de permisos sino de en qué
+        punto del ciclo de vida está el viaje.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje a cancelar.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El viaje quedó cancelado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ride"
+              example:
+                data:
+                  id: 1
+                  status: cancelled
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    latitude: 4.698
+                    longitude: -74.061
+                  distance_meters: 7421
+                  duration_seconds: 842
+                  currency: COP
+                  estimated_fare: 8850
+                  requested_at: "2026-07-31T14:03:21+00:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: El viaje no pertenece al pasajero autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "422":
+          description: >-
+            El viaje ya no está en `requested` (fue aceptado, está en curso,
+            ya se completó o ya se había cancelado antes).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: El viaje ya fue aceptado; usa el flujo de cancelación de viaje aceptado.
+                errors:
+                  ride:
+                    - El viaje ya fue aceptado; usa el flujo de cancelación de viaje aceptado.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -1536,7 +1636,7 @@ components:
           description: >-
             Estado del viaje. Nace en `requested`; el resto de los valores los
             producen las historias de aceptar (#18), iniciar (#19), completar
-            (#24) y cancelar (#22, #23).
+            (#24) y cancelar (#16 antes de aceptar, #22/#23 después).
           enum:
             - requested
             - accepted

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Policies;
 
+use App\Models\Ride;
 use App\Models\User;
 
 /**
@@ -31,5 +32,22 @@ class RidePolicy
     public function create(User $user): bool
     {
         return $user->isPassenger();
+    }
+
+    /**
+     * Cancelar un viaje es del pasajero **dueño** de ese viaje (historia #16).
+     *
+     * Que el viaje ya no esté en `requested` **no** se decide acá: eso
+     * responde 422, porque el permiso de cancelar lo tiene y lo que cambia es
+     * el flujo a seguir (ver `CancelRideRequest`). Un 403 le diría que el
+     * permiso le falta, que es otra cosa.
+     *
+     * El rol se comprueba además de la propiedad, mismo criterio que
+     * `VehiclePolicy::update()`: nada impide que una fila apunte a una cuenta
+     * que dejó de ser pasajero.
+     */
+    public function cancel(User $user, Ride $ride): bool
+    {
+        return $user->isPassenger() && $ride->passenger_id === $user->getKey();
     }
 }
