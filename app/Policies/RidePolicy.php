@@ -55,6 +55,24 @@ class RidePolicy
     }
 
     /**
+     * Ver el recibo de un viaje es del pasajero **dueño** de ese viaje
+     * (historia #26): es él quien pagó y quien necesita el desglose para
+     * verificar el cobro, no el conductor que lo llevó.
+     *
+     * A diferencia de `view()`, acá el conductor asignado queda afuera a
+     * propósito: el recibo es un documento de lo que se le cobró al
+     * pasajero, no del viaje en sí, y el conductor ya conoce lo que le
+     * corresponde por otra vía. Mismo criterio que `view()` en cuanto a no
+     * comprobar además el rol: esto solo lee lo que esa misma persona ya
+     * pagó, y quitarle el acceso porque después se registró como conductor
+     * sería un efecto secundario que nadie pidió.
+     */
+    public function viewReceipt(User $user, Ride $ride): bool
+    {
+        return $ride->passenger_id === $user->getKey();
+    }
+
+    /**
      * Cancelar un viaje es del pasajero **dueño** de ese viaje (historia #16),
      * o del conductor **asignado** a ese viaje (historia #23) — mismo
      * endpoint, dos operaciones distintas: `CancelRideAction` decide si

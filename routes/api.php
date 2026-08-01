@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Rides\ShareRideLocationController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideController;
+use App\Http\Controllers\Api\V1\Rides\ShowRideReceiptController;
 use App\Http\Controllers\Api\V1\Rides\StartRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
@@ -183,4 +184,15 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('rides/{ride}/location', ShareRideLocationController::class)
         ->name('rides.location');
+
+    // Recibo del viaje completado (historia #26). Cuelga de `{ride}` como
+    // `show` y `cancel`, y no de `me`: se direcciona por el viaje concreto,
+    // no por la cuenta. A diferencia de `show`, es exclusivo del pasajero
+    // dueño —el conductor no lo ve—, y lo decide `RidePolicy::viewReceipt()`
+    // desde `ShowRideReceiptRequest`. Que el viaje no esté `completed` o
+    // todavía no tenga pago procesado es 422, resuelto en el mismo Form
+    // Request.
+    Route::middleware('auth:api')
+        ->get('rides/{ride}/receipt', ShowRideReceiptController::class)
+        ->name('rides.receipt');
 });

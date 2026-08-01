@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Actions\Payments;
 
 use App\Actions\Payments\ChargeRideAction;
+use App\DTOs\FareBreakdown;
 use App\Enums\PaymentStatus;
 use App\Enums\RideStatus;
 use App\Exceptions\PaymentProcessingFailed;
@@ -21,15 +22,22 @@ class ChargeRideActionTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_crea_un_pago_pagado_con_el_monto_y_la_moneda_del_viaje(): void
+    public function test_crea_un_pago_pagado_con_el_monto_el_desglose_y_la_moneda_del_viaje(): void
     {
         $viaje = $this->viajeCompletado(montoFinal: 8450, moneda: 'COP');
+        $desglose = $this->desglose(moneda: 'COP', total: 8450);
 
-        $pago = $this->action()->handle($viaje);
+        $pago = $this->action()->handle($viaje, $desglose);
 
         $this->assertSame($viaje->id, $pago->ride_id);
         $this->assertSame(8450, $pago->amount);
         $this->assertSame('COP', $pago->currency);
+        $this->assertSame($desglose->base, $pago->base_fare);
+        $this->assertSame($desglose->distance, $pago->distance_fare);
+        $this->assertSame($desglose->time, $pago->time_fare);
+        $this->assertSame($desglose->waiting, $pago->waiting_fee);
+        $this->assertSame($desglose->subtotal, $pago->subtotal);
+        $this->assertSame($desglose->minimumApplied, $pago->minimum_applied);
         $this->assertSame(PaymentStatus::Paid, $pago->status);
         $this->assertNotNull($pago->processed_at);
         $this->assertDatabaseCount('payments', 1);
@@ -48,7 +56,7 @@ class ChargeRideActionTest extends TestCase
         };
         $this->app->instance(PaymentGateway::class, $gateway);
 
-        $pago = $this->app->make(ChargeRideAction::class)->handle($viaje);
+        $pago = $this->app->make(ChargeRideAction::class)->handle($viaje, $this->desglose());
 
         $this->assertSame(PaymentStatus::Failed, $pago->status);
         $this->assertNull($pago->processed_at);
@@ -70,7 +78,7 @@ class ChargeRideActionTest extends TestCase
         };
         $this->app->instance(PaymentGateway::class, $gateway);
 
-        $pago = $this->app->make(ChargeRideAction::class)->handle($viaje);
+        $pago = $this->app->make(ChargeRideAction::class)->handle($viaje, $this->desglose());
 
         $this->assertInstanceOf(Payment::class, $pago);
     }
@@ -91,7 +99,7 @@ class ChargeRideActionTest extends TestCase
         };
         $this->app->instance(PaymentGateway::class, $gateway);
 
-        $pago = $this->app->make(ChargeRideAction::class)->handle($viaje->refresh());
+        $pago = $this->app->make(ChargeRideAction::class)->handle($viaje->refresh(), $this->desglose());
 
         $this->assertFalse($gateway->llamado);
         $this->assertSame($pagoExistente->id, $pago->id);
@@ -117,5 +125,19 @@ class ChargeRideActionTest extends TestCase
             'started_at' => now(),
             'completed_at' => now(),
         ]);
+    }
+
+    private function desglose(string $moneda = 'COP', int $total = 8450): FareBreakdown
+    {
+        return new FareBreakdown(
+            currency: $moneda,
+            base: 1500,
+            distance: 5937,
+            time: 1000,
+            waiting: 0,
+            subtotal: 8437,
+            total: $total,
+            minimumApplied: false,
+        );
     }
 }
