@@ -868,7 +868,10 @@ no `float`/`double`.
   redondeo en 0 revientan al resolver el servicio, no al cobrarle a un pasajero real.
 - `App\DTOs\FareBreakdown` — el resultado: total **y desglose**. El desglose no es
   decorativo; cuando el cobro final no coincide con lo estimado (trayecto distinto,
-  espera) hay que poder explicar la diferencia sin recalcular a mano.
+  espera) hay que poder explicar la diferencia sin recalcular a mano. Por eso
+  `ChargeRideAction` lo persiste tal cual en `payments` (historia #26) en vez de
+  descartarlo después de sumarlo: recalcularlo al leer el recibo mostraría un desglose
+  distinto si `config/fares.php` cambió después del cobro.
 - La Action recibe `RouteEstimate` y los segundos de espera. **No conoce HTTP ni el
   modelo `Ride`**, así que sirve igual desde un controller, un job o un test.
 

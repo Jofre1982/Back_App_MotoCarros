@@ -52,10 +52,13 @@ final readonly class CompleteRideAction
         ]);
 
         // El cobro se procesa acá, ya con `final_fare` persistido (historia
-        // #25). Un fallo del proveedor de pago no interrumpe esta Action ni
-        // deja el viaje sin completar: `ChargeRideAction` lo atrapa y
-        // devuelve un `Payment` en `failed`.
-        $this->chargeRide->handle($ride);
+        // #25), pasándole el mismo `$fare` que lo produjo: es el desglose que
+        // `ChargeRideAction` persiste en el pago para el recibo (historia
+        // #26), y recalcularlo ahí duplicaría la fórmula sin necesidad. Un
+        // fallo del proveedor de pago no interrumpe esta Action ni deja el
+        // viaje sin completar: `ChargeRideAction` lo atrapa y devuelve un
+        // `Payment` en `failed`.
+        $this->chargeRide->handle($ride, $fare);
 
         // Cierra el ciclo de vida para el pasajero que sigue el viaje por el
         // canal privado (historia #21).

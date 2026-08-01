@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Payments;
 
+use App\DTOs\FareBreakdown;
 use App\Enums\PaymentStatus;
 use App\Exceptions\PaymentProcessingFailed;
 use App\Models\Payment;
@@ -16,8 +17,9 @@ use Illuminate\Support\Facades\Log;
  * Procesa el cobro de un viaje recién completado (historia #25).
  *
  * La invoca `CompleteRideAction` justo después de persistir `final_fare`: el
- * monto a cobrar sale de ahí, no se recalcula acá. No conoce HTTP ni cómo se
- * llegó al viaje, mismo criterio que el resto de las Actions.
+ * monto a cobrar y su desglose salen de la misma `FareBreakdown` que produjo
+ * ese `final_fare`, no se recalculan acá. No conoce HTTP ni cómo se llegó al
+ * viaje, mismo criterio que el resto de las Actions.
  *
  * Un fallo del proveedor de pago (`PaymentProcessingFailed`) no se deja
  * propagar: se atrapa acá y el pago queda `failed`. Que el cobro no se pueda
@@ -34,7 +36,7 @@ final readonly class ChargeRideAction
      * de `ride_id` en la tabla `payments` respalda esto mismo si dos
      * llamadas llegaran a la vez.
      */
-    public function handle(Ride $ride): Payment
+    public function handle(Ride $ride, FareBreakdown $fare): Payment
     {
         $existing = $ride->payment;
 
@@ -46,8 +48,14 @@ final readonly class ChargeRideAction
 
         $payment = Payment::create([
             'ride_id' => $ride->id,
-            'amount' => $ride->final_fare,
-            'currency' => $ride->currency,
+            'amount' => $fare->total,
+            'currency' => $fare->currency,
+            'base_fare' => $fare->base,
+            'distance_fare' => $fare->distance,
+            'time_fare' => $fare->time,
+            'waiting_fee' => $fare->waiting,
+            'subtotal' => $fare->subtotal,
+            'minimum_applied' => $fare->minimumApplied,
             'status' => $status,
             'processed_at' => $processedAt,
         ]);

@@ -23,10 +23,22 @@ class PaymentFactory extends Factory
      */
     public function definition(): array
     {
+        $base = 1500;
+        $distance = fake()->numberBetween(10, 200) * 50;
+        $time = fake()->numberBetween(5, 100) * 10;
+        $waiting = 0;
+        $subtotal = $base + $distance + $time + $waiting;
+
         return [
             'ride_id' => Ride::factory(),
-            'amount' => fake()->numberBetween(60, 600) * 50,
+            'amount' => $subtotal,
             'currency' => 'COP',
+            'base_fare' => $base,
+            'distance_fare' => $distance,
+            'time_fare' => $time,
+            'waiting_fee' => $waiting,
+            'subtotal' => $subtotal,
+            'minimum_applied' => false,
             'status' => PaymentStatus::Paid,
             'processed_at' => now(),
         ];

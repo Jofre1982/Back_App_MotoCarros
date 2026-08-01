@@ -1805,6 +1805,106 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/{id}/receipt:
+    get:
+      tags:
+        - Rides
+      operationId: showRideReceipt
+      summary: Ver el recibo de un viaje completado
+      description: >-
+        Devuelve el desglose del cobro de un viaje completado (historia
+        #26): tarifa base, distancia, tiempo, espera y el monto total, para
+        que el pasajero pueda verificar cuánto se le cobró y por qué
+        concepto.
+
+        Solo el pasajero **dueño** del viaje puede verlo: a diferencia de
+        `GET /rides/{id}`, el conductor asignado también recibe **403** —el
+        recibo es lo que se le cobró al pasajero, no un dato del viaje en
+        sí. Que el viaje no esté `completed`, o que todavía no tenga un
+        pago procesado, es en cambio **422**: el permiso lo tiene, lo que
+        falta es que el ciclo de vida llegue a ese punto.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje completado.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El recibo del viaje.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RideReceipt"
+              example:
+                data:
+                  ride_id: 1
+                  currency: COP
+                  base_fare: 1500
+                  distance_fare: 5937
+                  time_fare: 1000
+                  waiting_fee: 0
+                  subtotal: 8437
+                  minimum_applied: false
+                  total: 8450
+                  payment_status: paid
+                  completed_at: "2026-07-31T14:19:05+00:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            El viaje no le pertenece a la cuenta autenticada (incluye al
+            conductor asignado).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "422":
+          description: >-
+            El viaje no está `completed`, o todavía no tiene un pago
+            procesado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: El recibo todavía no está disponible para este viaje.
+                errors:
+                  ride:
+                    - El recibo todavía no está disponible para este viaje.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -2556,6 +2656,90 @@ components:
             - paid
             - failed
           example: paid
+    RideReceipt:
+      type: object
+      description: >-
+        El recibo de un viaje completado (historia #26): el desglose que
+        produjo el cobro publicado en `Ride.payment` / `Ride.final_fare`.
+
+        A diferencia de `Payment` embebido en `Ride`, acá sí repite
+        `currency` y `total`: este objeto es el recurso principal de la
+        respuesta y tiene que bastarse solo, sin depender de que el cliente
+        ya tenga el viaje cargado.
+      required:
+        - ride_id
+        - currency
+        - base_fare
+        - distance_fare
+        - time_fare
+        - waiting_fee
+        - subtotal
+        - minimum_applied
+        - total
+        - payment_status
+        - completed_at
+      properties:
+        ride_id:
+          type: integer
+          description: Identificador del viaje al que pertenece este recibo.
+          example: 1
+        currency:
+          type: string
+          description: Código ISO 4217 de tres letras de la moneda de los montos.
+          example: COP
+        base_fare:
+          type: integer
+          description: >-
+            Lo que cuesta el viaje antes de moverse, entero en la unidad
+            mínima de `currency` (ver config/fares.php).
+          example: 1500
+        distance_fare:
+          type: integer
+          description: Cargo por la distancia realmente recorrida.
+          example: 5937
+        time_fare:
+          type: integer
+          description: Cargo por el tiempo en ruta realmente transcurrido.
+          example: 1000
+        waiting_fee:
+          type: integer
+          description: >-
+            Cargo por espera solicitada por el pasajero con el viaje ya
+            aceptado, fuera de la duración del trayecto. Hoy siempre vale 0:
+            ninguna historia implementada todavía registra tiempo de espera.
+          example: 0
+        subtotal:
+          type: integer
+          description: >-
+            Suma de `base_fare`, `distance_fare`, `time_fare` y
+            `waiting_fee`, antes de aplicar el piso mínimo y el redondeo.
+          example: 8437
+        minimum_applied:
+          type: boolean
+          description: >-
+            `true` cuando `subtotal` no llegaba al mínimo configurado y
+            `total` quedó determinado por ese piso en vez de la suma de
+            conceptos.
+          example: false
+        total:
+          type: integer
+          description: >-
+            Monto cobrado, entero en la unidad mínima de `currency`. Es el
+            mismo valor que `Ride.final_fare` para este viaje.
+          example: 8450
+        payment_status:
+          type: string
+          description: Resultado del cobro, mismo significado que `Payment.status`.
+          enum:
+            - pending
+            - paid
+            - failed
+          example: paid
+        completed_at:
+          type: string
+          format: date-time
+          description: Momento en que el conductor marcó el viaje como completado.
+          example: "2026-07-31T14:19:05+00:00"
     BroadcastAuthRequest:
       type: object
       description: >-
