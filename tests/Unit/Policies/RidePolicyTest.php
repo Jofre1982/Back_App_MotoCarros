@@ -120,6 +120,36 @@ class RidePolicyTest extends TestCase
         $this->assertFalse($pasajero->can('start', $viaje));
     }
 
+    public function test_el_conductor_asignado_puede_completar_su_viaje(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->create(['driver_id' => $conductor->id]);
+
+        $this->assertTrue($conductor->can('complete', $viaje));
+    }
+
+    public function test_otro_conductor_no_puede_completar_un_viaje_ajeno(): void
+    {
+        $viaje = Ride::factory()->create(['driver_id' => User::factory()->driver()]);
+
+        $this->assertFalse(User::factory()->driver()->create()->can('complete', $viaje));
+    }
+
+    public function test_nadie_puede_completar_un_viaje_sin_conductor_asignado(): void
+    {
+        $viaje = Ride::factory()->create(['driver_id' => null]);
+
+        $this->assertFalse(User::factory()->driver()->create()->can('complete', $viaje));
+    }
+
+    public function test_el_pasajero_no_puede_completar_su_propio_viaje(): void
+    {
+        $pasajero = User::factory()->create();
+        $viaje = Ride::factory()->for($pasajero, 'passenger')->create(['driver_id' => User::factory()->driver()]);
+
+        $this->assertFalse($pasajero->can('complete', $viaje));
+    }
+
     public function test_el_pasajero_dueno_puede_ver_su_viaje(): void
     {
         $pasajero = User::factory()->create();

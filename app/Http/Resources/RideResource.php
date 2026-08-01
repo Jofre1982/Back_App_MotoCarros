@@ -63,6 +63,14 @@ class RideResource extends JsonResource
             // que distinguir "el viaje todavía no empezó" de "esta respuesta
             // no trae el campo" (historia #19).
             'started_at' => $this->resource->started_at?->toIso8601String(),
+            // Mismo criterio que `started_at`, para "el viaje todavía no
+            // terminó" (historia #24).
+            'completed_at' => $this->resource->completed_at?->toIso8601String(),
+            // El cobro final recalculado al completar el viaje, distinto de
+            // `estimated_fare`. `null` hasta que el viaje se completa; mismo
+            // criterio de siempre presente que el resto de los campos que
+            // nacen a mitad del ciclo de vida.
+            'final_fare' => $this->resource->final_fare,
         ];
     }
 }
