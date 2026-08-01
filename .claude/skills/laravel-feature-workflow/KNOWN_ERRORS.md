@@ -182,3 +182,27 @@ que diga el resumen. Acá se verificó con `curl` contra un servidor propio y un
 del script (dejar `/auth/logout` para el final, o un token por operación) lleva cuatro
 historias pendiente y sigue mereciendo su propio issue en vez de colarse en el PR de
 una feature.
+
+### 2026-08-01 — `dynamic_conformance.py` daba por incumplido cualquier campo `nullable`
+
+**Qué pasó:** implementando `GET /rides/{id}` (#21), validar a mano el 200 real contra
+el schema `Ride` del spec falló con `None is not of type 'string'` en `started_at`, y
+lo mismo habría pasado con el `driver: null` de un viaje sin aceptar. La respuesta era
+correcta: los dos campos están documentados `nullable: true` a propósito, justamente
+para que el cliente los reciba siempre presentes.
+
+**Por qué pasó:** OpenAPI 3.0 **no es** JSON Schema. Expresa "puede venir en null" con
+su palabra clave propia `nullable: true`, que `jsonschema` no conoce y descarta en
+silencio, quedándose con `type: string` a secas. El script pasaba el schema del spec
+directo a `validate()` sin traducirlo. No se había notado antes porque —por el problema
+del token compartido de las cuatro entradas anteriores— ninguna corrida había llegado
+nunca a validar un cuerpo de éxito con un campo nullable poblado en null.
+
+**Cómo evitarlo:** corregido en el script, que era el arreglo de fondo: `as_json_schema()`
+traduce `nullable: true` a `type: [..., 'null']` (o a un `anyOf` con `{"type": "null"}`
+cuando acompaña a un `allOf`, que es la única forma de anotar un `$ref` en 3.0), se
+aplica al schema de la respuesta y también al spec con el que se construye el
+`RefResolver` —si no, lo que entra por un `$ref` volvería a llegar sin traducir—. Al
+corregirlo se comprobó que el validador sigue detectando incumplimientos reales (un
+`driver` ausente y un `started_at` numérico se reportan igual), que es lo que
+distingue arreglar el validador de apagarlo.

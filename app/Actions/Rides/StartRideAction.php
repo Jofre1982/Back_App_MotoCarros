@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Rides;
 
 use App\Enums\RideStatus;
+use App\Events\Realtime\RideStatusChanged;
 use App\Models\Ride;
 
 /**
@@ -36,6 +37,12 @@ final readonly class StartRideAction
             'status' => RideStatus::InProgress,
             'started_at' => now(),
         ]);
+
+        // El pasajero está esperando en el canal del viaje desde que lo
+        // aceptaron: que arrancó es justo lo que cambia su pantalla, y desde
+        // acá empieza además a llegarle la ubicación del conductor
+        // (historias #20 y #21).
+        RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id);
 
         return $ride;
     }

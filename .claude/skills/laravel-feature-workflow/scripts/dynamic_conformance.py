@@ -94,6 +94,47 @@ def response_schema_for(operation: dict[str, Any], status_code: str) -> dict[str
     return content.get("schema")
 
 
+def as_json_schema(node: Any) -> Any:
+    """Traduce `nullable: true` de OpenAPI 3.0 a JSON Schema.
+
+    OpenAPI 3.0 no es JSON Schema: expresa "este campo puede venir en null"
+    con la palabra clave propia `nullable: true`, que `jsonschema` no conoce e
+    ignora — con lo cual un `started_at: null` documentado como nullable
+    fallaba con "None is not of type 'string'". El fallo es del validador, no
+    de la API: sin esta traducción el script reporta como incumplimiento
+    exactamente el patrón que el spec de este proyecto usa a propósito para
+    los campos que el cliente siempre recibe presentes (`started_at`,
+    `driver`).
+
+    Se recorre el nodo entero porque el `nullable` puede estar a cualquier
+    profundidad. Los `$ref` se dejan como están —traducirlos es imposible sin
+    resolverlos—, y por eso el RefResolver se construye sobre el spec ya
+    pasado por esta función: así lo apuntado por un `$ref` también llega
+    traducido al validador.
+    """
+    if isinstance(node, list):
+        return [as_json_schema(item) for item in node]
+
+    if not isinstance(node, dict):
+        return node
+
+    traducido = {clave: as_json_schema(valor) for clave, valor in node.items()}
+
+    if traducido.pop("nullable", False):
+        tipo = traducido.get("type")
+        if isinstance(tipo, str):
+            traducido["type"] = [tipo, "null"]
+        elif isinstance(tipo, list) and "null" not in tipo:
+            traducido["type"] = [*tipo, "null"]
+        elif tipo is None and "allOf" in traducido:
+            # `nullable` junto a un `allOf` (la única forma de anotar un $ref
+            # en 3.0): sin tipo propio que ampliar, se admite el null al lado
+            # de lo que exija el $ref.
+            traducido = {"anyOf": [{"type": "null"}, traducido]}
+
+    return traducido
+
+
 def fill_path(path: str, params: dict[str, Any]) -> str:
     filled = path
     for name, value in params.items():
@@ -134,7 +175,11 @@ def main() -> int:
     tested = 0
     skipped = 0
     failures: list[str] = []
-    resolver = RefResolver.from_schema(spec)
+    # El resolver apunta a una copia ya traducida a JSON Schema, no al spec
+    # crudo: lo que se valida contra un `$ref` sale de acá, así que un
+    # `nullable` dentro de `components.schemas` tiene que estar traducido
+    # antes de que el $ref lo alcance.
+    resolver = RefResolver.from_schema(as_json_schema(spec))
 
     try:
         for path, method, operation in iter_operations(spec):
@@ -176,7 +221,7 @@ def main() -> int:
                 continue
 
             try:
-                validate(instance=body_json, schema=schema, resolver=resolver)
+                validate(instance=body_json, schema=as_json_schema(schema), resolver=resolver)
             except ValidationError as exc:
                 failures.append(
                     f"{method.upper()} {path} ({resp.status_code}): respuesta no cumple el schema — {exc.message}"

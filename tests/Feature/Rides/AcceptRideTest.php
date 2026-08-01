@@ -8,11 +8,9 @@ use App\Enums\RideStatus;
 use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
-use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Broadcast;
-use Illuminate\Support\Facades\Config;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\RecordsBroadcasts;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -25,7 +23,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  */
 class AcceptRideTest extends TestCase
 {
-    use RefreshDatabase;
+    use RecordsBroadcasts, RefreshDatabase;
 
     public function test_el_conductor_acepta_un_viaje_disponible(): void
     {
@@ -136,11 +134,15 @@ class AcceptRideTest extends TestCase
             ->postJson($this->uri($viaje))
             ->assertOk();
 
-        $this->assertCount(1, $grabador->emitidos);
-        [$canales, $evento, $payload] = $grabador->emitidos[0];
+        // Se filtra por evento y no se mira `emitidos` entero porque aceptar
+        // publica además el cambio de estado hacia el pasajero (historia #21),
+        // que a este test no le incumbe.
+        $avisos = $grabador->porEvento('ride.unavailable');
+
+        $this->assertCount(1, $avisos);
+        [$canales, , $payload] = $avisos[0];
 
         $this->assertSame(["private-driver.{$otroCercano->id}"], $canales);
-        $this->assertSame('ride.unavailable', $evento);
         $this->assertSame($viaje->id, $payload['ride_id']);
     }
 
@@ -156,7 +158,7 @@ class AcceptRideTest extends TestCase
             ->postJson($this->uri($viaje))
             ->assertOk();
 
-        $this->assertSame([], $grabador->emitidos);
+        $this->assertSame([], $grabador->porEvento('ride.unavailable'));
     }
 
     public function test_no_avisa_a_conductores_disponibles_fuera_del_radio(): void
@@ -173,10 +175,10 @@ class AcceptRideTest extends TestCase
             ->postJson($this->uri($viaje))
             ->assertOk();
 
-        $this->assertSame([], $grabador->emitidos);
+        $this->assertSame([], $grabador->porEvento('ride.unavailable'));
     }
 
-    public function test_no_dispara_ningun_evento_si_no_queda_ningun_otro_conductor_cerca(): void
+    public function test_no_retira_la_solicitud_si_no_queda_ningun_otro_conductor_cerca(): void
     {
         $grabador = $this->grabarBroadcasts();
         $viaje = $this->viajeDisponibleEnElOrigen();
@@ -185,7 +187,7 @@ class AcceptRideTest extends TestCase
             ->postJson($this->uri($viaje))
             ->assertOk();
 
-        $this->assertSame([], $grabador->emitidos);
+        $this->assertSame([], $grabador->porEvento('ride.unavailable'));
     }
 
     /**
@@ -200,35 +202,6 @@ class AcceptRideTest extends TestCase
             'origin_latitude' => 4.710989,
             'origin_longitude' => -74.072092,
         ]);
-    }
-
-    /**
-     * Registra una conexión de broadcasting que, en vez de hablar con Reverb,
-     * anota lo que se le pidió publicar (mismo patrón que
-     * ShareRideLocationTest).
-     */
-    private function grabarBroadcasts(): object
-    {
-        $grabador = new class implements Broadcaster
-        {
-            /** @var list<array{0: list<string>, 1: string, 2: array<string, mixed>}> */
-            public array $emitidos = [];
-
-            public function auth($request) {}
-
-            public function validAuthenticationResponse($request, $result) {}
-
-            public function broadcast(array $channels, $event, array $payload = []): void
-            {
-                $this->emitidos[] = [array_map(strval(...), $channels), $event, $payload];
-            }
-        };
-
-        Broadcast::extend('recording', fn (): Broadcaster => $grabador);
-        Config::set('broadcasting.connections.recording', ['driver' => 'recording']);
-        Config::set('broadcasting.default', 'recording');
-
-        return $grabador;
     }
 
     private function uri(Ride $viaje): string

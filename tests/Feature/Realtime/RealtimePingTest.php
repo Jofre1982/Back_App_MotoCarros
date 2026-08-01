@@ -7,11 +7,9 @@ namespace Tests\Feature\Realtime;
 use App\Actions\Realtime\SendRealtimePingAction;
 use App\Events\Realtime\RealtimePingSent;
 use App\Models\User;
-use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Broadcast;
-use Illuminate\Support\Facades\Config;
 use InvalidArgumentException;
+use Tests\Concerns\RecordsBroadcasts;
 use Tests\TestCase;
 
 /**
@@ -26,7 +24,7 @@ use Tests\TestCase;
  */
 class RealtimePingTest extends TestCase
 {
-    use RefreshDatabase;
+    use RecordsBroadcasts, RefreshDatabase;
 
     public function test_el_ping_llega_al_broadcaster_en_el_canal_privado_del_conductor(): void
     {
@@ -85,33 +83,5 @@ class RealtimePingTest extends TestCase
         $pasajero = User::factory()->create();
 
         $this->artisan('realtime:ping', ['driver' => $pasajero->getKey()])->assertFailed();
-    }
-
-    /**
-     * Registra una conexión de broadcasting que, en vez de hablar con Reverb,
-     * anota lo que se le pidió publicar.
-     */
-    private function grabarBroadcasts(): object
-    {
-        $grabador = new class implements Broadcaster
-        {
-            /** @var list<array{0: list<string>, 1: string, 2: array<string, mixed>}> */
-            public array $emitidos = [];
-
-            public function auth($request) {}
-
-            public function validAuthenticationResponse($request, $result) {}
-
-            public function broadcast(array $channels, $event, array $payload = []): void
-            {
-                $this->emitidos[] = [array_map(strval(...), $channels), $event, $payload];
-            }
-        };
-
-        Broadcast::extend('recording', fn (): Broadcaster => $grabador);
-        Config::set('broadcasting.connections.recording', ['driver' => 'recording']);
-        Config::set('broadcasting.default', 'recording');
-
-        return $grabador;
     }
 }

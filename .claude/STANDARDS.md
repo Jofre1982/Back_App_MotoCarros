@@ -399,6 +399,29 @@ personas concretas.
   fallar cerrado mientras el binding solo tenía sentido con la tabla `rides` ya creada
   (#15) pero sin ninguna historia que emitiera nada por el canal todavía.
 
+### Qué sale hoy por `ride.{id}` (decidido en #20 y #21)
+
+| Evento | `broadcastAs()` | Payload | Lo dispara |
+|---|---|---|---|
+| `DriverLocationUpdated` | `location.updated` | `driver_id`, `latitude`, `longitude` | `ShareDriverLocationAction` (#20) |
+| `RideStatusChanged` | `status.changed` | `status`, `driver_id` (nullable) | `AcceptRideAction`, `StartRideAction` (#21) |
+
+- El nombre del evento es siempre **explícito** con `broadcastAs()`: la app móvil
+  escucha `status.changed`, no el FQCN de una clase de PHP, que es un detalle interno
+  que se puede renombrar.
+- El evento de estado lleva el estado **nuevo**, no el anterior: el cliente ya sabe en
+  cuál estaba, y lo que necesita para repintar es a dónde pasó.
+- Se dispara solo cuando el estado **efectivamente cambió**. El conductor que pierde la
+  carrera por un viaje ya aceptado sale por la excepción sin publicar nada, así que el
+  pasajero recibe un único "te aceptaron" por el único conductor que quedó asignado.
+- `GET /api/v1/rides/{id}` es el **fallback no realtime** del canal (#21) y lo autoriza
+  la misma regla —`RidePolicy::view()` admite a los mismos dos que entran al canal—.
+  Un desacuerdo entre ambas sería un agujero: lo que no se puede leer por HTTP tampoco
+  debería llegar por el socket, y al revés.
+- La ubicación **no se persiste** ni viaja por HTTP: existe solo mientras el evento pasa
+  por el canal. Que `driver` sea `null` en la respuesta del viaje es lo que le dice al
+  cliente que todavía no hay nadie publicándola.
+
 ### La ruta de autorización es una ruta de la API
 
 `POST /api/v1/broadcasting/auth` (con `auth:api`), declarada en `routes/api.php` y
