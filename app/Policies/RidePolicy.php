@@ -66,4 +66,27 @@ class RidePolicy
     {
         return $user->isDriver();
     }
+
+    /**
+     * Iniciar un viaje es del conductor **asignado a ese viaje** (historia
+     * #19), y por eso sí depende de la fila, al revés que `accept()`: acá el
+     * viaje ya tiene dueño del lado del conductor, y que otro cualquiera
+     * pudiera marcarlo en curso sería marcar el viaje de otra persona.
+     *
+     * Es la contraparte de `cancel()` en el lado del conductor: mismo criterio
+     * de comprobar además el rol, porque nada impide que una fila apunte a una
+     * cuenta que dejó de ser conductor.
+     *
+     * Un viaje sin conductor asignado (`requested`) no lo puede iniciar nadie,
+     * y sale de acá como 403: no es que falte un paso del ciclo de vida que el
+     * conductor pueda dar, es que ese viaje no es suyo. Que el viaje sí sea
+     * suyo pero esté en otro estado (`in_progress`, `completed`, `cancelled`)
+     * es en cambio 422, y lo decide `StartRideRequest`.
+     */
+    public function start(User $user, Ride $ride): bool
+    {
+        return $user->isDriver()
+            && $ride->driver_id !== null
+            && $ride->driver_id === $user->getKey();
+    }
 }

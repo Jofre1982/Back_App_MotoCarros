@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Un viaje solicitado por un pasajero.
@@ -36,11 +37,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $estimated_distance_meters
  * @property int $estimated_duration_seconds
  * @property int $estimated_fare
+ * @property Carbon|null $started_at
  */
 #[Fillable([
     'passenger_id',
     'driver_id',
     'status',
+    'started_at',
     'origin_latitude',
     'origin_longitude',
     'destination_latitude',
@@ -66,6 +69,7 @@ class Ride extends Model
             'estimated_distance_meters' => 'integer',
             'estimated_duration_seconds' => 'integer',
             'estimated_fare' => 'integer',
+            'started_at' => 'datetime',
         ];
     }
 

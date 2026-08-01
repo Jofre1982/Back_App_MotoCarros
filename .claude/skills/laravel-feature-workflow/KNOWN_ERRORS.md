@@ -156,3 +156,29 @@ base de desarrollo dejaría un viaje activo que después bloquea al mismo pasaje
 La corrección de fondo del script sigue siendo la ya anotada (no compartir un token que
 una operación invalida); esta entrada agrega que, además, el reporte debería decir **qué
 código de estado** respondió cada operación.
+
+### 2026-07-31 — Cuarta repetición del token compartido (#19), y por qué el conteo engaña
+
+**Qué pasó:** implementando `POST /rides/{id}/start` (#19), el chequeo dinámico reportó
+`OK: 15 operación(es) probadas contra el spec, 0 omitida(s), sin fallos` con la base
+sembrada a propósito (un viaje `accepted` con id 1 asignado al conductor del token).
+El 200 del endpoint nuevo **no se ejecutó**: al terminar la corrida el viaje seguía en
+`accepted` con `started_at` en NULL. Misma causa de siempre — `POST /auth/logout` va
+antes en el orden del spec y deja el token en la blacklist, así que `/rides/1/start`
+respondió el 401 que el contrato también documenta.
+
+**Por qué pasó:** idéntica a las tres entradas anteriores. Lo que agrega este caso es
+que el **conteo de operaciones tampoco sirve como señal**: entre dos corridas seguidas
+pasó de `14 probadas, 1 omitida` a `15 probadas, 0 omitidas` sin que ninguna hubiera
+ejecutado su camino de éxito. Lo único que delató la omisión fue mirar el estado de la
+fila en la base después de correr el script.
+
+**Cómo evitarlo:** lo ya anotado —validar el camino de éxito aparte— y, como control
+barato para cualquier feature que **escriba** algo, comprobar el estado de la fila
+después de la corrida: si el recurso no cambió, el 200/201 no se ejecutó por más verde
+que diga el resumen. Acá se verificó con `curl` contra un servidor propio y una
+`DB_DATABASE` de scratch: 200 con el cuerpo del schema `Ride` (`status: in_progress`,
+`started_at` poblado) y 422 documentado al repetir la llamada. La corrección de fondo
+del script (dejar `/auth/logout` para el final, o un token por operación) lleva cuatro
+historias pendiente y sigue mereciendo su propio issue en vez de colarse en el PR de
+una feature.

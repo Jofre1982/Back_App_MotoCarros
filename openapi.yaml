@@ -869,6 +869,7 @@ paths:
                   currency: COP
                   estimated_fare: 8850
                   requested_at: "2026-07-31T14:03:21+00:00"
+                  started_at: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1054,6 +1055,7 @@ paths:
                   currency: COP
                   estimated_fare: 8850
                   requested_at: "2026-07-31T14:03:21+00:00"
+                  started_at: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1153,6 +1155,7 @@ paths:
                   currency: COP
                   estimated_fare: 8850
                   requested_at: "2026-07-31T14:03:21+00:00"
+                  started_at: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1198,6 +1201,113 @@ paths:
                 errors:
                   ride:
                     - Ya tienes un viaje activo; termínalo o cancélalo antes de aceptar otro.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /rides/{id}/start:
+    post:
+      tags:
+        - Rides
+      operationId: startRide
+      summary: Iniciar un viaje aceptado
+      description: >-
+        Marca como iniciado el viaje que el conductor autenticado ya había
+        aceptado (historia #19): el viaje pasa de `accepted` a `in_progress` y
+        queda registrada la hora de inicio en `started_at`. Es la transición
+        entre "el conductor va en camino" y "el viaje está en curso", y es lo
+        que habilita el seguimiento de la ubicación para el pasajero.
+
+        Solo el conductor **asignado a ese viaje** puede iniciarlo: cualquier
+        otra cuenta —otro conductor, o el pasajero— recibe **403**. Que el
+        viaje no esté en `accepted` (ya está en curso, se completó o se
+        canceló) es en cambio **422**, porque el permiso lo tiene y lo que no
+        corresponde es la transición.
+
+        La API **no verifica por geolocalización** que el conductor esté
+        realmente en el punto de recogida; queda explícitamente fuera de esta
+        historia.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje a iniciar.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El viaje quedó en curso.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ride"
+              example:
+                data:
+                  id: 1
+                  status: in_progress
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    latitude: 4.698
+                    longitude: -74.061
+                  distance_meters: 7421
+                  duration_seconds: 842
+                  currency: COP
+                  estimated_fare: 8850
+                  requested_at: "2026-07-31T14:03:21+00:00"
+                  started_at: "2026-07-31T14:09:05+00:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            El viaje no está asignado a la cuenta autenticada (o la cuenta no
+            es de un conductor).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "422":
+          description: >-
+            El viaje no está en `accepted`: ya está en curso, se completó o se
+            canceló.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Solo se puede iniciar un viaje que esté aceptado.
+                errors:
+                  ride:
+                    - Solo se puede iniciar un viaje que esté aceptado.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -1731,6 +1841,7 @@ components:
         - currency
         - estimated_fare
         - requested_at
+        - started_at
       properties:
         id:
           type: integer
@@ -1780,6 +1891,16 @@ components:
           format: date-time
           description: Momento en que se creó la solicitud.
           example: "2026-07-31T14:03:21+00:00"
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Momento en que el conductor marcó el viaje como iniciado
+            (historia #19). Es `null` mientras el viaje no haya empezado, y
+            el campo está siempre presente para que el cliente no tenga que
+            distinguir "todavía no empezó" de "esta respuesta no lo trae".
+          example: null
     BroadcastAuthRequest:
       type: object
       description: >-

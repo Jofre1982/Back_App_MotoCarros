@@ -66,6 +66,10 @@ class RequestRideTest extends TestCase
                 'currency' => 'COP',
                 'estimated_fare' => 8850,
                 'requested_at' => $viaje->created_at?->toIso8601String(),
+                // El viaje nace sin empezar, pero el campo viaja igual: el
+                // schema `Ride` lo declara obligatorio y nullable (historia
+                // #19), así que el cliente lo encuentra siempre.
+                'started_at' => null,
             ],
         ]);
 

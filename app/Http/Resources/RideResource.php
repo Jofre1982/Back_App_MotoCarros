@@ -45,6 +45,11 @@ class RideResource extends JsonResource
             // el contrato publica `format: date-time` y el default trae
             // microsegundos que nadie usa acá.
             'requested_at' => $this->resource->created_at?->toIso8601String(),
+            // Presente siempre, aunque valga `null`: el contrato lo declara
+            // obligatorio y nullable justamente para que el cliente no tenga
+            // que distinguir "el viaje todavía no empezó" de "esta respuesta
+            // no trae el campo" (historia #19).
+            'started_at' => $this->resource->started_at?->toIso8601String(),
         ];
     }
 }
