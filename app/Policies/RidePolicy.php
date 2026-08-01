@@ -55,20 +55,25 @@ class RidePolicy
     }
 
     /**
-     * Cancelar un viaje es del pasajero **dueño** de ese viaje (historia #16).
+     * Cancelar un viaje es del pasajero **dueño** de ese viaje (historia #16),
+     * o del conductor **asignado** a ese viaje (historia #23) — mismo
+     * endpoint, dos operaciones distintas: `CancelRideAction` decide si
+     * cancela el viaje o lo devuelve al pool según cuál de los dos sea quien
+     * llama.
      *
-     * Que el viaje ya no esté en `requested` **no** se decide acá: eso
-     * responde 422, porque el permiso de cancelar lo tiene y lo que cambia es
-     * el flujo a seguir (ver `CancelRideRequest`). Un 403 le diría que el
-     * permiso le falta, que es otra cosa.
+     * Que el viaje ya no esté en un estado cancelable para ese actor **no**
+     * se decide acá: eso responde 422, porque el permiso de cancelar lo tiene
+     * y lo que cambia es el flujo a seguir (ver `CancelRideRequest`). Un 403
+     * le diría que el permiso le falta, que es otra cosa.
      *
-     * El rol se comprueba además de la propiedad, mismo criterio que
-     * `VehiclePolicy::update()`: nada impide que una fila apunte a una cuenta
-     * que dejó de ser pasajero.
+     * El rol se comprueba además de la propiedad en ambas ramas, mismo
+     * criterio que `VehiclePolicy::update()`: nada impide que una fila apunte
+     * a una cuenta que dejó de tener ese rol.
      */
     public function cancel(User $user, Ride $ride): bool
     {
-        return $user->isPassenger() && $ride->passenger_id === $user->getKey();
+        return ($user->isPassenger() && $ride->passenger_id === $user->getKey())
+            || ($user->isDriver() && $ride->driver_id === $user->getKey());
     }
 
     /**

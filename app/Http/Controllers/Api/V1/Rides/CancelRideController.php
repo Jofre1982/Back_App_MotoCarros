@@ -14,10 +14,12 @@ use Illuminate\Http\JsonResponse;
 /**
  * POST /api/v1/rides/{ride}/cancel
  *
- * Cancela el viaje del pasajero autenticado, ya sea que siga en `requested`
- * (historia #16) o que un conductor ya lo haya aceptado (historia #22). El
- * viaje ya llega validado desde `CancelRideRequest`, así que acá no queda
- * ninguna decisión.
+ * Cancela el viaje, ya sea a pedido del pasajero dueño —siga en `requested`
+ * (historia #16) o ya lo haya aceptado un conductor (historia #22)— o del
+ * conductor asignado, que en cambio lo devuelve al pool (historia #23). Cuál
+ * de los dos es y si corresponde ya lo resolvió `CancelRideRequest`; acá no
+ * queda ninguna decisión, solo pasarle el actor a la Action para que elija la
+ * rama.
  *
  * El parámetro `Ride $ride` es lo que hace que Laravel resuelva el binding
  * implícito de la ruta (`{ride}`): la reflexión de esta firma es lo que usa
@@ -32,7 +34,7 @@ class CancelRideController extends Controller
         CancelRideAction $cancelRide,
         Ride $ride,
     ): JsonResponse {
-        $cancellation = $cancelRide->handle($ride);
+        $cancellation = $cancelRide->handle($ride, $request->user());
 
         return (new RideCancellationResource($cancellation))->response();
     }

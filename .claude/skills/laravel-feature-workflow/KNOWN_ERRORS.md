@@ -206,3 +206,26 @@ aplica al schema de la respuesta y también al spec con el que se construye el
 corregirlo se comprobó que el validador sigue detectando incumplimientos reales (un
 `driver` ausente y un `started_at` numérico se reportan igual), que es lo que
 distingue arreglar el validador de apagarlo.
+
+### 2026-08-01 — Sin intérprete Python real en el entorno del agente
+
+**Qué pasó:** implementando `POST /rides/{id}/cancel` para el conductor (#23), tanto
+`static_conformance.py` como `dynamic_conformance.py` fallaron antes de correr una
+sola línea: `python`/`python3`/`py` resuelven al stub de Microsoft Store de Windows
+("Python was not found; run without arguments to install from the Microsoft Store"),
+no a un intérprete real. No es un fallo del spec ni del código de la feature.
+
+**Por qué pasó:** el entorno de esa corrida del agente no tenía Python instalado, solo
+el alias de ejecución de Windows que apunta a la Store.
+
+**Cómo evitarlo:** si `python --version` (o `python3`/`py`) no devuelve una versión
+real, no asumir que los scripts corrieron — verificarlo primero. Sin Python, la
+alternativa que se usó acá: revisar el YAML del spec a mano (releerlo completo tras
+editar) y validar la conformidad dinámica manualmente con un servidor real
+(`php artisan serve`) contra una `DB_DATABASE` de scratch, sembrando con `tinker` los
+estados necesarios para cada rama del contrato (pasajero cancela, conductor devuelve
+al pool, 403 de un tercero, 422 de un viaje `in_progress`) y comparando el cuerpo real
+con el schema del spec a ojo. Esto no reemplaza los scripts —no hay contraprueba
+automática de que el schema rechace un cuerpo inválido—, así que en un entorno con
+Python disponible, seguir corriendo `static_conformance.py`/`dynamic_conformance.py`
+como primera opción.
