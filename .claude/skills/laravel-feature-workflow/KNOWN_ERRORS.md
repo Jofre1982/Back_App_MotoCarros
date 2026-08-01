@@ -129,3 +129,30 @@ es del backend, no del script (que `shouldRenderJsonWhen` aplique también a la 
 protegidos a la vez: merece su propio issue en vez de colarse en el PR de una historia.
 Si se arregla, agregar al script una request de control sin `Accept` para que no
 vuelva a pasar inadvertido.
+
+### 2026-07-31 — Un segundo camino de "verde por omisión": el proveedor de mapas sin configurar
+
+**Qué pasó:** implementando `POST /rides` (#15), el chequeo dinámico habría dado verde
+sin ejecutar nunca el 201, por dos causas independientes que se suman. La conocida (el
+token compartido que `POST /auth/logout` invalida antes) y una nueva: los endpoints que
+llaman al proveedor de mapas responden **422 documentado** cuando no hay
+`GOOGLE_MAPS_API_KEY` en el entorno, porque `RouteEstimationFailed` está mapeada a 422.
+Ese 422 valida contra el schema `Error` y el resultado global es verde — aunque el
+endpoint no haya creado ni un solo viaje. Le pasa igual a `POST /rides/estimate` (#14).
+
+**Por qué pasó:** el spec documenta a propósito el 422 de "zona sin cobertura", así que
+cualquier fallo del proveedor —incluida su ausencia de configuración— cae en una
+respuesta que el contrato permite. No es un bug del script: es que "no hubo fallos" y
+"se probó el camino de éxito" son cosas distintas, y el script solo reporta la primera.
+
+**Cómo evitarlo:** para una feature que dependa del proveedor de mapas, apuntar
+`GOOGLE_MAPS_ROUTES_ENDPOINT` a un stub local (config/maps.php lo permite
+explícitamente para esto) y fijar cualquier `GOOGLE_MAPS_API_KEY` antes de correr el
+servidor; así el 201 se ejecuta de verdad. Después validar ese cuerpo real contra el
+schema del spec con `jsonschema`, **incluyendo la contra-prueba** de que el schema
+rechaza cuerpos inválidos, como ya indican las dos entradas anteriores. Conviene además
+usar una `DB_DATABASE` aparte: el chequeo dinámico escribe filas reales, y contra la
+base de desarrollo dejaría un viaje activo que después bloquea al mismo pasajero.
+La corrección de fondo del script sigue siendo la ya anotada (no compartir un token que
+una operación invalida); esta entrada agrega que, además, el reporte debería decir **qué
+código de estado** respondió cada operación.
