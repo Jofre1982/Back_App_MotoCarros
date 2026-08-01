@@ -83,6 +83,56 @@ class RideSchemaTest extends TestCase
         $this->assertDatabaseCount('rides', 2);
     }
 
+    /**
+     * Mismo mecanismo que `active_passenger_id`, para el conductor (historia
+     * #18): un conductor no puede quedar asignado a dos viajes activos a la
+     * vez, aunque dos aceptaciones lleguen casi al mismo tiempo.
+     */
+    #[DataProvider('estadosActivos')]
+    public function test_el_conductor_no_puede_tener_dos_viajes_activos(RideStatus $estado): void
+    {
+        $conductor = User::factory()->driver()->create();
+        Ride::factory()->create(['status' => $estado, 'driver_id' => $conductor->id]);
+
+        $this->expectException(QueryException::class);
+
+        try {
+            Ride::factory()->create(['status' => $estado, 'driver_id' => $conductor->id]);
+        } finally {
+            $this->assertDatabaseCount('rides', 1);
+        }
+    }
+
+    public function test_liberar_el_viaje_activo_habilita_al_conductor_de_nuevo(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->create(['status' => RideStatus::Accepted, 'driver_id' => $conductor->id]);
+
+        $viaje->update(['status' => RideStatus::Completed]);
+        Ride::factory()->create(['status' => RideStatus::Accepted, 'driver_id' => $conductor->id]);
+
+        $this->assertDatabaseCount('rides', 2);
+    }
+
+    public function test_el_viaje_activo_de_otro_conductor_no_choca(): void
+    {
+        Ride::factory()->create(['status' => RideStatus::Accepted, 'driver_id' => User::factory()->driver()->create()->id]);
+        Ride::factory()->create(['status' => RideStatus::Accepted, 'driver_id' => User::factory()->driver()->create()->id]);
+
+        $this->assertDatabaseCount('rides', 2);
+    }
+
+    public function test_un_viaje_sin_conductor_asignado_no_choca_con_ningun_conductor(): void
+    {
+        // `driver_id` es NULL mientras nadie aceptó el viaje: los índices
+        // únicos ignoran los NULL, así que muchos viajes `requested` conviven
+        // sin conductor asignado.
+        Ride::factory()->create(['status' => RideStatus::Requested]);
+        Ride::factory()->create(['status' => RideStatus::Requested]);
+
+        $this->assertDatabaseCount('rides', 2);
+    }
+
     public function test_borrar_al_pasajero_se_lleva_sus_viajes(): void
     {
         $pasajero = User::factory()->create();

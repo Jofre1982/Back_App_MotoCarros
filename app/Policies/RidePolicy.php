@@ -50,4 +50,20 @@ class RidePolicy
     {
         return $user->isPassenger() && $ride->passenger_id === $user->getKey();
     }
+
+    /**
+     * Aceptar un viaje es del rol conductor (historia #18): el pasajero
+     * consigue el suyo solicitándolo, no aceptando el de otro.
+     *
+     * No depende de un viaje concreto, mismo criterio que `create()`: cualquier
+     * conductor puede intentar aceptar cualquier viaje `requested`, así que el
+     * permiso no se resuelve contra una fila. Que el viaje ya no esté
+     * disponible, o que el conductor ya tenga uno propio activo, no se decide
+     * acá: son 409 y 422 respectivamente, porque el permiso lo tiene y lo que
+     * falla es el estado del viaje o el de su propia cuenta.
+     */
+    public function accept(User $user): bool
+    {
+        return $user->isDriver();
+    }
 }

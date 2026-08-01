@@ -19,9 +19,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * aceptó esos números, así que son parte del viaje y no algo que se recalcule
  * al consultarlo. El cobro final se resuelve al completarlo (historia #24).
  *
- * `active_passenger_id` no aparece acá a propósito: es una columna generada por
- * la base (ver la migración) y escribirla desde la aplicación no tendría efecto
- * más que romper el INSERT.
+ * `active_passenger_id` y `active_driver_id` no aparecen acá a propósito: son
+ * columnas generadas por la base (ver las migraciones) y escribirlas desde la
+ * aplicación no tendría efecto más que romper el INSERT/UPDATE.
  *
  * Los atributos con cast se declaran en el docblock porque su tipo real no es
  * el de la columna (ver .claude/STANDARDS.md).

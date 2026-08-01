@@ -51,4 +51,14 @@ class RidePolicyTest extends TestCase
 
         $this->assertFalse($conductor->can('cancel', $viaje));
     }
+
+    public function test_el_conductor_puede_aceptar_un_viaje(): void
+    {
+        $this->assertTrue(User::factory()->driver()->create()->can('accept', Ride::class));
+    }
+
+    public function test_el_pasajero_no_puede_aceptar_un_viaje(): void
+    {
+        $this->assertFalse(User::factory()->create()->can('accept', Ride::class));
+    }
 }

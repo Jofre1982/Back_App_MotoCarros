@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\Auth\InvalidCredentialsException;
+use App\Exceptions\Rides\RideNoLongerAvailableException;
 use App\Exceptions\RouteEstimationFailed;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -82,6 +83,19 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (RouteEstimationFailed $e) => new JsonResponse(
                 ['message' => 'No fue posible calcular una ruta entre esas coordenadas. Puede que la zona no esté cubierta por el servicio.'],
                 JsonResponse::HTTP_UNPROCESSABLE_ENTITY,
+            ),
+        );
+
+        // El viaje que un conductor intentó aceptar ya no está `requested`
+        // (historia #18): otro conductor lo aceptó primero, o cambió de estado
+        // por otro motivo. Es 409 y no 422: no es un problema de forma de la
+        // entrada ni del estado de la cuenta del conductor —eso ya lo filtró
+        // `AcceptRideRequest`— sino de que el recurso cambió entre que se vio
+        // disponible y que la petición llegó al servidor.
+        $exceptions->render(
+            fn (RideNoLongerAvailableException $e) => new JsonResponse(
+                ['message' => $e->getMessage()],
+                JsonResponse::HTTP_CONFLICT,
             ),
         );
     })->create();
