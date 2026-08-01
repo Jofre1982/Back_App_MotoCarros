@@ -1316,6 +1316,98 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/{id}/location:
+    post:
+      tags:
+        - Rides
+      operationId: shareRideLocation
+      summary: Publicar la ubicación del conductor durante el viaje
+      description: >-
+        Publica la posición actual del conductor en el canal privado
+        `ride.{rideId}` (historia #20), para que el pasajero pueda seguir el
+        progreso del viaje en tiempo real (historia #21).
+
+        Solo el conductor **asignado a ese viaje** puede publicar su
+        ubicación: cualquier otra cuenta —otro conductor, o el pasajero—
+        recibe **403**. Que el viaje no esté en `in_progress` es en cambio
+        **422**, porque el permiso lo tiene y lo que no corresponde es la
+        transmisión en ese punto del ciclo de vida.
+
+        No persiste un historial de coordenadas: solo transmite la posición
+        en vivo a quien esté suscrito al canal en ese momento. Responde
+        **204** y no un API Resource porque no hay ningún recurso que
+        devolver (ver .claude/STANDARDS.md, "Envelope de las respuestas").
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje en curso.
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Coordinates"
+            example:
+              latitude: 4.706
+              longitude: -74.068
+      responses:
+        "204":
+          description: >-
+            La ubicación se publicó en el canal `ride.{rideId}`. Sin cuerpo:
+            no hay ningún recurso que devolver.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            El viaje no está asignado a la cuenta autenticada (o la cuenta no
+            es de un conductor).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "422":
+          description: >-
+            La latitud/longitud está fuera de rango, o el viaje no está
+            `in_progress`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Solo se puede compartir ubicación en un viaje en curso.
+                errors:
+                  ride:
+                    - Solo se puede compartir ubicación en un viaje en curso.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:

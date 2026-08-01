@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Rides\AcceptRideController;
 use App\Http\Controllers\Api\V1\Rides\CancelRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
+use App\Http\Controllers\Api\V1\Rides\ShareRideLocationController;
 use App\Http\Controllers\Api\V1\Rides\StartRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
@@ -140,4 +141,14 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('rides/{ride}/start', StartRideController::class)
         ->name('rides.start');
+
+    // Publicar la ubicación del conductor durante el viaje (historia #20).
+    // Mismo criterio de autorización que iniciar: `{ride}` resuelve el
+    // binding implícito antes de `ShareRideLocationRequest`, y quién puede
+    // publicar depende de la fila (RidePolicy::shareLocation()), no del rol
+    // solo. No persiste nada: solo dispara el evento que consume el pasajero
+    // suscrito al canal `ride.{id}` (historia #21).
+    Route::middleware('auth:api')
+        ->post('rides/{ride}/location', ShareRideLocationController::class)
+        ->name('rides.location');
 });

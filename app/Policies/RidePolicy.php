@@ -89,4 +89,20 @@ class RidePolicy
             && $ride->driver_id !== null
             && $ride->driver_id === $user->getKey();
     }
+
+    /**
+     * Publicar la ubicación es del conductor **asignado a ese viaje**
+     * (historia #20), mismo criterio que `start()`: depende de la fila
+     * porque el viaje ya tiene dueño del lado del conductor.
+     *
+     * Que el viaje no esté `in_progress` no se decide acá: eso es 422 y lo
+     * resuelve `ShareRideLocationRequest`, porque el permiso de publicar lo
+     * tiene y lo que falla es en qué punto del ciclo de vida está.
+     */
+    public function shareLocation(User $user, Ride $ride): bool
+    {
+        return $user->isDriver()
+            && $ride->driver_id !== null
+            && $ride->driver_id === $user->getKey();
+    }
 }

@@ -392,16 +392,12 @@ personas concretas.
 - Todos los canales declaran `['guards' => ['api']]` de forma explícita: la API es
   stateless con JWT y no existe el guard `web`.
 - El canal `ride.{id}` ya tiene su regla definitiva y resuelve los participantes contra
-  `App\Services\Realtime\RideParticipants`, cuya implementación registrada
-  (`PendingRideParticipants`) no conoce ningún viaje y por lo tanto **deniega todo**.
-  Fallar cerrado es la única opción aceptable acá: un canal abierto "provisionalmente"
-  expone posiciones en vivo a cualquier usuario autenticado que adivine un id.
-  La tabla `rides` ya existe (#15), así que lo único que falta es cambiar el binding en
-  `AppServiceProvider` por una implementación con Eloquent — ni el canal ni
-  `routes/channels.php` se tocan. Ese cambio **no** se hizo en #15: abrir el canal es
-  lo que consumen las historias de tracking (#20, #21), y son ellas las que tienen los
-  criterios de aceptación de qué se emite y quién lo escucha. Mientras tanto el canal
-  sigue denegando todo, que es el estado seguro.
+  `App\Services\Realtime\RideParticipants`, cuya implementación registrada desde la
+  historia #20 (`EloquentRideParticipants`) consulta el pasajero y el conductor
+  asignado del viaje. Antes de #20 la implementación registrada
+  (`PendingRideParticipants`) no conocía ningún viaje y denegaba todo a propósito —
+  fallar cerrado mientras el binding solo tenía sentido con la tabla `rides` ya creada
+  (#15) pero sin ninguna historia que emitiera nada por el canal todavía.
 
 ### La ruta de autorización es una ruta de la API
 

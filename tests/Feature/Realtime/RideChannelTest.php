@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Realtime;
 
 use App\Broadcasting\RideChannel;
+use App\Enums\RideStatus;
+use App\Models\Ride;
 use App\Models\User;
-use App\Services\Realtime\PendingRideParticipants;
+use App\Services\Realtime\EloquentRideParticipants;
 use App\Services\Realtime\RideParticipants;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -83,15 +85,30 @@ class RideChannelTest extends TestCase
     }
 
     /**
-     * Mientras no exista el modelo `Ride` (historia #15) el canal tiene que
-     * fallar cerrado: sin esto, un canal "provisionalmente abierto" expondría
-     * la ubicación en vivo de conductores y pasajeros.
+     * Desde la historia #20 la implementación registrada ya resuelve
+     * participantes reales contra la base, no solo la de prueba que usan los
+     * demás tests de esta clase.
      */
-    public function test_la_implementacion_registrada_hoy_deniega_todo(): void
+    public function test_la_implementacion_registrada_autoriza_al_pasajero_y_al_conductor_reales(): void
+    {
+        $pasajero = User::factory()->create();
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->for($pasajero, 'passenger')->create([
+            'status' => RideStatus::InProgress,
+            'driver_id' => $conductor->id,
+        ]);
+
+        $this->assertInstanceOf(EloquentRideParticipants::class, app(RideParticipants::class));
+
+        $channel = app(RideChannel::class);
+        $this->assertTrue($channel->join($pasajero, (string) $viaje->id));
+        $this->assertTrue($channel->join($conductor, (string) $viaje->id));
+        $this->assertFalse($channel->join(User::factory()->create(), (string) $viaje->id));
+    }
+
+    public function test_la_implementacion_registrada_deniega_un_viaje_que_no_existe(): void
     {
         $usuario = User::factory()->create();
-
-        $this->assertInstanceOf(PendingRideParticipants::class, app(RideParticipants::class));
 
         $this->assertFalse(
             app(RideChannel::class)->join($usuario, (string) self::RIDE_ID),
