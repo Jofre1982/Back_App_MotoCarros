@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Tests\Unit\Actions\Rides;
 
 use App\Actions\Rides\CompleteRideAction;
+use App\Enums\PaymentStatus;
 use App\Enums\RideStatus;
+use App\Exceptions\PaymentProcessingFailed;
+use App\Models\Payment;
 use App\Models\Ride;
 use App\Models\User;
+use App\Services\Payments\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
@@ -97,6 +101,43 @@ class CompleteRideActionTest extends TestCase
         $this->app->make(CompleteRideAction::class)->handle($viaje);
 
         $this->assertSame($conductor->getKey(), $viaje->refresh()->driver_id);
+    }
+
+    public function test_registra_el_cobro_del_viaje_al_completarlo(): void
+    {
+        // Sin bindear un fake, resuelve `NullPaymentGateway` (ver
+        // AppServiceProvider), que da el cobro por exitoso.
+        $viaje = $this->viajeEnCurso(distanciaMetros: 1000);
+
+        $this->app->make(CompleteRideAction::class)->handle($viaje);
+
+        $pago = Payment::query()->where('ride_id', $viaje->id)->firstOrFail();
+        $this->assertSame(PaymentStatus::Paid, $pago->status);
+        $this->assertSame($viaje->refresh()->final_fare, $pago->amount);
+    }
+
+    public function test_un_cobro_rechazado_no_impide_completar_el_viaje(): void
+    {
+        // Historia #25, criterio de aceptación: un fallo en el procesamiento
+        // del cobro deja el viaje `completed` con el pago en `failed`, sin
+        // bloquear la finalización.
+        $viaje = $this->viajeEnCurso(distanciaMetros: 1000);
+
+        $this->app->instance(PaymentGateway::class, new class implements PaymentGateway
+        {
+            public function charge(Ride $ride): void
+            {
+                throw PaymentProcessingFailed::rejectedByProvider('fake', 'fondos insuficientes');
+            }
+        });
+
+        $resultado = $this->app->make(CompleteRideAction::class)->handle($viaje);
+
+        $this->assertSame(RideStatus::Completed, $resultado->status);
+        $this->assertSame(RideStatus::Completed, $viaje->refresh()->status);
+
+        $pago = Payment::query()->where('ride_id', $viaje->id)->firstOrFail();
+        $this->assertSame(PaymentStatus::Failed, $pago->status);
     }
 
     private function viajeEnCurso(int $distanciaMetros = 7421): Ride

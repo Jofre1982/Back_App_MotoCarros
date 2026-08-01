@@ -71,6 +71,16 @@ class RideResource extends JsonResource
             // criterio de siempre presente que el resto de los campos que
             // nacen a mitad del ciclo de vida.
             'final_fare' => $this->resource->final_fare,
+            // El procesamiento del cobro (historia #25), distinto de
+            // `final_fare`: ese es el monto a cobrar, esto es si el cobro se
+            // hizo. `null` hasta que `CompleteRideAction` dispara
+            // `ChargeRideAction`, mismo criterio que el resto de los campos
+            // que nacen a mitad del ciclo de vida. No repite `amount` ni
+            // `currency`: ya están en `final_fare` y `currency` arriba, y el
+            // pago no puede valer algo distinto.
+            'payment' => $this->resource->payment === null
+                ? null
+                : ['status' => $this->resource->payment->status->value],
         ];
     }
 }

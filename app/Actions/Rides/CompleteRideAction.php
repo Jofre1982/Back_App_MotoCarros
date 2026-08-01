@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Rides;
 
 use App\Actions\Payments\CalculateFareAction;
+use App\Actions\Payments\ChargeRideAction;
 use App\DTOs\RouteEstimate;
 use App\Enums\RideStatus;
 use App\Events\Realtime\RideStatusChanged;
@@ -12,7 +13,7 @@ use App\Models\Ride;
 
 /**
  * Marca como completado un viaje que el conductor asignado tiene en curso
- * (historia #24) y recalcula la tarifa final.
+ * (historia #24), recalcula la tarifa final y dispara su cobro.
  *
  * El viaje llega resuelto y validado: que sea del conductor autenticado lo
  * garantiza `RidePolicy::complete()` y que siga en `in_progress` lo
@@ -30,7 +31,10 @@ use App\Models\Ride;
  */
 final readonly class CompleteRideAction
 {
-    public function __construct(private CalculateFareAction $calculateFare) {}
+    public function __construct(
+        private CalculateFareAction $calculateFare,
+        private ChargeRideAction $chargeRide,
+    ) {}
 
     public function handle(Ride $ride): Ride
     {
@@ -47,9 +51,14 @@ final readonly class CompleteRideAction
             'final_fare' => $fare->total,
         ]);
 
+        // El cobro se procesa acá, ya con `final_fare` persistido (historia
+        // #25). Un fallo del proveedor de pago no interrumpe esta Action ni
+        // deja el viaje sin completar: `ChargeRideAction` lo atrapa y
+        // devuelve un `Payment` en `failed`.
+        $this->chargeRide->handle($ride);
+
         // Cierra el ciclo de vida para el pasajero que sigue el viaje por el
-        // canal privado (historia #21); el cobro en sí queda fuera de esta
-        // historia (lo resuelve "Pagar el viaje al finalizar").
+        // canal privado (historia #21).
         RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id);
 
         return $ride;

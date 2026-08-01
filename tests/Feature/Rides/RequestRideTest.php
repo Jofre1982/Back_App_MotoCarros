@@ -80,6 +80,9 @@ class RequestRideTest extends TestCase
                 // viaje recién nace, todavía muy lejos de completarse.
                 'completed_at' => null,
                 'final_fare' => null,
+                // Ídem para el cobro (historia #25): no hay nada que cobrar
+                // hasta que el viaje se completa.
+                'payment' => null,
             ],
         ]);
 

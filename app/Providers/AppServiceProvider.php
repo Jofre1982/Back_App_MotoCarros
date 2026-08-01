@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\DTOs\FareSchedule;
 use App\Services\Maps\GoogleRoutesEstimator;
 use App\Services\Maps\RouteEstimator;
+use App\Services\Payments\NullPaymentGateway;
+use App\Services\Payments\PaymentGateway;
 use App\Services\Realtime\EloquentNearbyDriverFinder;
 use App\Services\Realtime\EloquentRideParticipants;
 use App\Services\Realtime\NearbyDriverFinder;
@@ -25,9 +27,22 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->registerRouteEstimator();
+        $this->registerPaymentGateway();
         $this->registerFareSchedule();
         $this->registerRideParticipants();
         $this->registerNearbyDriverFinder();
+    }
+
+    /**
+     * Proveedor de pago que procesa el cobro de un viaje completado (historia
+     * #25). Todavía no hay un proveedor real decidido —ver "Fuera de
+     * alcance" en el issue—, así que apunta a `NullPaymentGateway`, que da
+     * todo cobro por exitoso. Cambiar de proveedor real es reemplazar este
+     * binding, mismo criterio que `registerRouteEstimator()`.
+     */
+    private function registerPaymentGateway(): void
+    {
+        $this->app->singleton(PaymentGateway::class, NullPaymentGateway::class);
     }
 
     /**

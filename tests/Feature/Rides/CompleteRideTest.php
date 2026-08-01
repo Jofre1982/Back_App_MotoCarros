@@ -19,8 +19,9 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  *
  * Historia #24: el conductor que ya inició el viaje lo marca como
  * completado al llegar al destino. Cierra el ciclo de vida del viaje y
- * recalcula la tarifa final con el trayecto realmente recorrido; el cobro en
- * sí (historia "Pagar el viaje al finalizar") queda fuera de alcance.
+ * recalcula la tarifa final con el trayecto realmente recorrido. También
+ * dispara su cobro (historia #25, `ChargeRideAction`), publicado en
+ * `data.payment`.
  *
  * Completar publica el cambio de estado hacia el pasajero (historia #21); lo
  * que sale por el canal se prueba en `RideStatusChangedTest`. Acá el trait
@@ -47,6 +48,25 @@ class CompleteRideTest extends TestCase
             'id' => $viaje->id,
             'status' => RideStatus::Completed->value,
             'driver_id' => $conductor->id,
+        ]);
+    }
+
+    public function test_publica_el_cobro_del_viaje_al_completarlo(): void
+    {
+        // Sin un proveedor de pago real configurado (historia #25, "fuera de
+        // alcance"), el cobro resuelto por `NullPaymentGateway` siempre se
+        // confirma.
+        $conductor = User::factory()->driver()->create();
+        $viaje = $this->viajeEnCursoPor($conductor);
+
+        $respuesta = $this->withToken(JWTAuth::fromUser($conductor))
+            ->postJson($this->uri($viaje))
+            ->assertOk();
+
+        $respuesta->assertJsonPath('data.payment.status', 'paid');
+        $this->assertDatabaseHas('payments', [
+            'ride_id' => $viaje->id,
+            'status' => 'paid',
         ]);
     }
 
@@ -106,9 +126,10 @@ class CompleteRideTest extends TestCase
             ->postJson("/api/v1/rides/{$viaje->id}/start")
             ->assertOk();
 
-        $respuesta->assertJsonStructure(['data' => ['completed_at', 'final_fare']]);
+        $respuesta->assertJsonStructure(['data' => ['completed_at', 'final_fare', 'payment']]);
         $respuesta->assertJsonPath('data.completed_at', null);
         $respuesta->assertJsonPath('data.final_fare', null);
+        $respuesta->assertJsonPath('data.payment', null);
     }
 
     public function test_rechaza_a_un_conductor_que_no_es_el_asignado(): void
