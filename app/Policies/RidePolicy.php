@@ -183,4 +183,16 @@ class RidePolicy
     {
         return $user->isPassenger() && $ride->passenger_id === $user->getKey();
     }
+
+    /**
+     * Ver el propio historial de viajes es del rol pasajero (historia #29),
+     * mismo criterio que `create()`: no depende de una fila concreta porque
+     * la consulta ya viene acotada a la cuenta autenticada, así que no existe
+     * la pregunta "¿de quién es este viaje?" que sí resuelven `view()` o
+     * `cancel()`.
+     */
+    public function viewHistory(User $user): bool
+    {
+        return $user->isPassenger();
+    }
 }
