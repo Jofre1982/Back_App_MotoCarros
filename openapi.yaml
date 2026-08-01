@@ -1099,6 +1099,113 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/{id}/accept:
+    post:
+      tags:
+        - Rides
+      operationId: acceptRide
+      summary: Aceptar una solicitud de viaje disponible
+      description: >-
+        Asigna el viaje al conductor autenticado mientras sigue en
+        `requested` (historia #18). Dos conductores pueden intentar aceptar
+        el mismo viaje casi al mismo tiempo: solo el primero en llegar lo
+        consigue, y el resto recibe **409** porque el viaje ya no está
+        disponible.
+
+        Solo un conductor puede aceptar viajes: un pasajero recibe **403**.
+        Que el conductor ya tenga un viaje propio activo (`accepted` o
+        `in_progress`) es en cambio **422**, porque el permiso lo tiene y lo
+        que le falta es terminar o cancelar el que ya tiene.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje a aceptar.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El viaje quedó asignado al conductor autenticado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ride"
+              example:
+                data:
+                  id: 1
+                  status: accepted
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    latitude: 4.698
+                    longitude: -74.061
+                  distance_meters: 7421
+                  duration_seconds: 842
+                  currency: COP
+                  estimated_fare: 8850
+                  requested_at: "2026-07-31T14:03:21+00:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es de un conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "409":
+          description: >-
+            El viaje ya no está disponible: otro conductor lo aceptó
+            primero, o cambió de estado por otro motivo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este viaje ya no está disponible.
+        "422":
+          description: El conductor autenticado ya tiene un viaje propio activo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Ya tienes un viaje activo; termínalo o cancélalo antes de aceptar otro.
+                errors:
+                  ride:
+                    - Ya tienes un viaje activo; termínalo o cancélalo antes de aceptar otro.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:

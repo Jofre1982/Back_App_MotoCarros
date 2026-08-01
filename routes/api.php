@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
+use App\Http\Controllers\Api\V1\Rides\AcceptRideController;
 use App\Http\Controllers\Api\V1\Rides\CancelRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
@@ -118,4 +119,14 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('rides/{ride}/cancel', CancelRideController::class)
         ->name('rides.cancel');
+
+    // Aceptar una solicitud disponible (historia #18). Mismo binding implícito
+    // que cancelar: `{ride}` resuelve el modelo antes de que se evalúe
+    // `AcceptRideRequest`, así que un id inexistente responde 404 antes de la
+    // autorización. Que dos conductores compitan por el mismo viaje no lo
+    // decide la ruta ni el Form Request: lo resuelve `AcceptRideAction` bajo
+    // lock.
+    Route::middleware('auth:api')
+        ->post('rides/{ride}/accept', AcceptRideController::class)
+        ->name('rides.accept');
 });
