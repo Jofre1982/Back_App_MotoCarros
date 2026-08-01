@@ -38,12 +38,16 @@ use Illuminate\Support\Carbon;
  * @property int $estimated_duration_seconds
  * @property int $estimated_fare
  * @property Carbon|null $started_at
+ * @property Carbon|null $completed_at
+ * @property int|null $final_fare
  */
 #[Fillable([
     'passenger_id',
     'driver_id',
     'status',
     'started_at',
+    'completed_at',
+    'final_fare',
     'origin_latitude',
     'origin_longitude',
     'destination_latitude',
@@ -70,6 +74,8 @@ class Ride extends Model
             'estimated_duration_seconds' => 'integer',
             'estimated_fare' => 'integer',
             'started_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'final_fare' => 'integer',
         ];
     }
 

@@ -116,6 +116,24 @@ class RidePolicy
     }
 
     /**
+     * Completar un viaje es del conductor **asignado a ese viaje** (historia
+     * #24), mismo criterio que `start()`: depende de la fila porque el viaje
+     * ya tiene dueño del lado del conductor.
+     *
+     * Un viaje sin conductor asignado (`requested`) no lo puede completar
+     * nadie, y sale de acá como 403: no es que falte un paso del ciclo de
+     * vida que el conductor pueda dar, es que ese viaje no es suyo. Que el
+     * viaje sí sea suyo pero esté en otro estado (`accepted`, `completed`,
+     * `cancelled`) es en cambio 422, y lo decide `CompleteRideRequest`.
+     */
+    public function complete(User $user, Ride $ride): bool
+    {
+        return $user->isDriver()
+            && $ride->driver_id !== null
+            && $ride->driver_id === $user->getKey();
+    }
+
+    /**
      * Publicar la ubicación es del conductor **asignado a ese viaje**
      * (historia #20), mismo criterio que `start()`: depende de la fila
      * porque el viaje ya tiene dueño del lado del conductor.

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
 use App\Http\Controllers\Api\V1\Rides\AcceptRideController;
 use App\Http\Controllers\Api\V1\Rides\CancelRideController;
+use App\Http\Controllers\Api\V1\Rides\CompleteRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Rides\ShareRideLocationController;
@@ -162,6 +163,16 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('rides/{ride}/start', StartRideController::class)
         ->name('rides.start');
+
+    // Completar el viaje ya iniciado (historia #24). Mismo criterio de
+    // autorización que iniciar: `{ride}` resuelve el binding implícito antes
+    // de `CompleteRideRequest`, y quién puede completarlo depende de la fila
+    // (RidePolicy::complete()), no solo del rol. Que el viaje no esté en
+    // `in_progress` es 422 y lo resuelve el propio Form Request; no hace
+    // falta lock por el mismo motivo que iniciar (ver `CompleteRideAction`).
+    Route::middleware('auth:api')
+        ->post('rides/{ride}/complete', CompleteRideController::class)
+        ->name('rides.complete');
 
     // Publicar la ubicación del conductor durante el viaje (historia #20).
     // Mismo criterio de autorización que iniciar: `{ride}` resuelve el

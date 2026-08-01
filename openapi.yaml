@@ -982,6 +982,8 @@ paths:
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
+                  completed_at: null
+                  final_fare: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1175,6 +1177,8 @@ paths:
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
+                  completed_at: null
+                  final_fare: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1307,6 +1311,8 @@ paths:
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
+                  completed_at: null
+                  final_fare: null
                   cancellation_fee_applies: true
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -1415,6 +1421,8 @@ paths:
                     name: Carlos Pérez
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
+                  completed_at: null
+                  final_fare: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1531,6 +1539,8 @@ paths:
                     name: Carlos Pérez
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: "2026-07-31T14:09:05+00:00"
+                  completed_at: null
+                  final_fare: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1570,6 +1580,121 @@ paths:
                 errors:
                   ride:
                     - Solo se puede iniciar un viaje que esté aceptado.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /rides/{id}/complete:
+    post:
+      tags:
+        - Rides
+      operationId: completeRide
+      summary: Completar un viaje en curso
+      description: >-
+        Marca como completado el viaje que el conductor autenticado tiene en
+        curso (historia #24): el viaje pasa de `in_progress` a `completed`,
+        queda registrada la hora de finalización en `completed_at`, y se
+        recalcula la tarifa final en `final_fare` a partir del trayecto
+        realmente recorrido —la distancia cotizada al pedir el viaje y la
+        duración real transcurrida desde `started_at`— usando la misma
+        fórmula que la tarifa estimada (ver "Cálculo de tarifas" en
+        .claude/STANDARDS.md).
+
+        Solo el conductor **asignado a ese viaje** puede completarlo:
+        cualquier otra cuenta —otro conductor, o el pasajero— recibe
+        **403**. Que el viaje no esté en `in_progress` (todavía no arrancó,
+        ya se completó o se canceló) es en cambio **422**, porque el permiso
+        lo tiene y lo que no corresponde es la transición.
+
+        El procesamiento del cobro en sí queda fuera de esta historia: acá
+        solo se calcula y persiste el monto a cobrar (la historia "Pagar el
+        viaje al finalizar" es quien lo procesa).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje a completar.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El viaje quedó completado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ride"
+              example:
+                data:
+                  id: 1
+                  status: completed
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    latitude: 4.698
+                    longitude: -74.061
+                  distance_meters: 7421
+                  duration_seconds: 842
+                  currency: COP
+                  estimated_fare: 8850
+                  driver:
+                    id: 42
+                    name: Carlos Pérez
+                  requested_at: "2026-07-31T14:03:21+00:00"
+                  started_at: "2026-07-31T14:09:05+00:00"
+                  completed_at: "2026-07-31T14:19:05+00:00"
+                  final_fare: 8450
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            El viaje no está asignado a la cuenta autenticada (o la cuenta no
+            es de un conductor).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "422":
+          description: >-
+            El viaje no está en `in_progress`: todavía no arrancó, ya se
+            completó o se canceló.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Solo se puede completar un viaje que esté en curso.
+                errors:
+                  ride:
+                    - Solo se puede completar un viaje que esté en curso.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -2262,6 +2387,8 @@ components:
         - driver
         - requested_at
         - started_at
+        - completed_at
+        - final_fare
       properties:
         id:
           type: integer
@@ -2335,6 +2462,28 @@ components:
             (historia #19). Es `null` mientras el viaje no haya empezado, y
             el campo está siempre presente para que el cliente no tenga que
             distinguir "todavía no empezó" de "esta respuesta no lo trae".
+          example: null
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Momento en que el conductor marcó el viaje como completado
+            (historia #24). Es `null` mientras el viaje no haya terminado, y
+            el campo está siempre presente por el mismo motivo que
+            `started_at`.
+          example: null
+        final_fare:
+          type: integer
+          nullable: true
+          description: >-
+            Monto final del viaje, entero en la unidad mínima de `currency`,
+            recalculado al completarlo (historia #24) con el trayecto
+            realmente recorrido en vez del estimado al solicitarlo. Es
+            `null` mientras el viaje no esté `completed`; no es en sí mismo
+            un cobro procesado, solo el monto que corresponde cobrar (eso lo
+            resuelve la historia "Pagar el viaje al finalizar", fuera de
+            alcance de #24).
           example: null
     RideDriver:
       type: object

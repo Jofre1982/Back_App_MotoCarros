@@ -76,6 +76,10 @@ class RequestRideTest extends TestCase
                 // schema `Ride` lo declara obligatorio y nullable (historia
                 // #19), así que el cliente lo encuentra siempre.
                 'started_at' => null,
+                // Mismo criterio para completar el viaje (historia #24): el
+                // viaje recién nace, todavía muy lejos de completarse.
+                'completed_at' => null,
+                'final_fare' => null,
             ],
         ]);
 
