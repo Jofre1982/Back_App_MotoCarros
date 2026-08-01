@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
+use App\Http\Controllers\Api\V1\Rides\CancelRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
@@ -106,4 +107,15 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('rides/estimate', EstimateRideController::class)
         ->name('rides.estimate');
+
+    // Cancelar antes de que un conductor acepte (historia #16). Es el primer
+    // endpoint del proyecto que direcciona por id de ruta: `{ride}` se
+    // resuelve por binding implícito de Eloquent, así que un id inexistente
+    // responde 404 antes de que `CancelRideRequest` se evalúe. Que el viaje
+    // ya no esté en `requested` no es este endpoint: esa cancelación tiene
+    // sus propias reglas (penalización, liberar al conductor) y es la
+    // historia #22/#23.
+    Route::middleware('auth:api')
+        ->post('rides/{ride}/cancel', CancelRideController::class)
+        ->name('rides.cancel');
 });

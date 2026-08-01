@@ -28,4 +28,27 @@ class RidePolicyTest extends TestCase
     {
         $this->assertFalse(User::factory()->driver()->create()->can('create', Ride::class));
     }
+
+    public function test_el_pasajero_dueno_puede_cancelar_su_viaje(): void
+    {
+        $pasajero = User::factory()->create();
+        $viaje = Ride::factory()->for($pasajero, 'passenger')->create();
+
+        $this->assertTrue($pasajero->can('cancel', $viaje));
+    }
+
+    public function test_otro_pasajero_no_puede_cancelar_un_viaje_ajeno(): void
+    {
+        $viaje = Ride::factory()->create();
+
+        $this->assertFalse(User::factory()->create()->can('cancel', $viaje));
+    }
+
+    public function test_un_conductor_no_puede_cancelar_un_viaje_aunque_la_fila_apunte_a_su_cuenta(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->for($conductor, 'passenger')->create();
+
+        $this->assertFalse($conductor->can('cancel', $viaje));
+    }
 }
