@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature\Rides;
 
 use App\Enums\RideStatus;
+use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
+use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Config;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -112,6 +116,119 @@ class AcceptRideTest extends TestCase
             ->assertJsonStructure(['message']);
 
         $this->assertDatabaseHas('rides', ['id' => $viaje->id, 'status' => RideStatus::Requested->value]);
+    }
+
+    /**
+     * Historia #17: al aceptarse, el viaje deja de estar disponible para los
+     * demás conductores cercanos que lo habían recibido.
+     */
+    public function test_avisa_a_los_demas_conductores_cercanos_que_el_viaje_ya_no_esta_disponible(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $viaje = $this->viajeDisponibleEnElOrigen();
+
+        $aceptante = User::factory()->driver()->create();
+        DriverProfile::factory()->available()->create(['user_id' => $aceptante->id]);
+        $otroCercano = User::factory()->driver()->create();
+        DriverProfile::factory()->available()->create(['user_id' => $otroCercano->id]);
+
+        $this->withToken(JWTAuth::fromUser($aceptante))
+            ->postJson($this->uri($viaje))
+            ->assertOk();
+
+        $this->assertCount(1, $grabador->emitidos);
+        [$canales, $evento, $payload] = $grabador->emitidos[0];
+
+        $this->assertSame(["private-driver.{$otroCercano->id}"], $canales);
+        $this->assertSame('ride.unavailable', $evento);
+        $this->assertSame($viaje->id, $payload['ride_id']);
+    }
+
+    public function test_no_avisa_al_conductor_que_acepto_el_viaje(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $viaje = $this->viajeDisponibleEnElOrigen();
+
+        $aceptante = User::factory()->driver()->create();
+        DriverProfile::factory()->available()->create(['user_id' => $aceptante->id]);
+
+        $this->withToken(JWTAuth::fromUser($aceptante))
+            ->postJson($this->uri($viaje))
+            ->assertOk();
+
+        $this->assertSame([], $grabador->emitidos);
+    }
+
+    public function test_no_avisa_a_conductores_disponibles_fuera_del_radio(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $viaje = $this->viajeDisponibleEnElOrigen();
+
+        $aceptante = User::factory()->driver()->create();
+        DriverProfile::factory()->available()->create(['user_id' => $aceptante->id]);
+        $lejano = User::factory()->driver()->create();
+        DriverProfile::factory()->available(latitude: 4.9, longitude: -74.3)->create(['user_id' => $lejano->id]);
+
+        $this->withToken(JWTAuth::fromUser($aceptante))
+            ->postJson($this->uri($viaje))
+            ->assertOk();
+
+        $this->assertSame([], $grabador->emitidos);
+    }
+
+    public function test_no_dispara_ningun_evento_si_no_queda_ningun_otro_conductor_cerca(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $viaje = $this->viajeDisponibleEnElOrigen();
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->driver()->create()))
+            ->postJson($this->uri($viaje))
+            ->assertOk();
+
+        $this->assertSame([], $grabador->emitidos);
+    }
+
+    /**
+     * Viaje `requested` con un origen fijo, para poder ubicar conductores
+     * cerca o lejos de forma determinística (`Ride::factory()` por defecto
+     * sortea coordenadas al azar dentro de Bogotá).
+     */
+    private function viajeDisponibleEnElOrigen(): Ride
+    {
+        return Ride::factory()->create([
+            'status' => RideStatus::Requested,
+            'origin_latitude' => 4.710989,
+            'origin_longitude' => -74.072092,
+        ]);
+    }
+
+    /**
+     * Registra una conexión de broadcasting que, en vez de hablar con Reverb,
+     * anota lo que se le pidió publicar (mismo patrón que
+     * ShareRideLocationTest).
+     */
+    private function grabarBroadcasts(): object
+    {
+        $grabador = new class implements Broadcaster
+        {
+            /** @var list<array{0: list<string>, 1: string, 2: array<string, mixed>}> */
+            public array $emitidos = [];
+
+            public function auth($request) {}
+
+            public function validAuthenticationResponse($request, $result) {}
+
+            public function broadcast(array $channels, $event, array $payload = []): void
+            {
+                $this->emitidos[] = [array_map(strval(...), $channels), $event, $payload];
+            }
+        };
+
+        Broadcast::extend('recording', fn (): Broadcaster => $grabador);
+        Config::set('broadcasting.connections.recording', ['driver' => 'recording']);
+        Config::set('broadcasting.default', 'recording');
+
+        return $grabador;
     }
 
     private function uri(Ride $viaje): string

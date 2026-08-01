@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace App\Actions\Rides;
 
 use App\Actions\Payments\CalculateFareAction;
+use App\DTOs\Coordinates;
 use App\DTOs\RideRequest;
 use App\Enums\RideStatus;
+use App\Events\Realtime\RideRequested;
 use App\Exceptions\RouteEstimationFailed;
 use App\Models\Ride;
 use App\Models\User;
 use App\Services\Maps\RouteEstimator;
+use App\Services\Realtime\NearbyDriverFinder;
 
 /**
  * Crea la solicitud de viaje de un pasajero.
@@ -30,14 +33,17 @@ use App\Services\Maps\RouteEstimator;
  * ruta, la excepción sale antes del INSERT, así que tampoco queda un viaje sin
  * tarifa —que además dejaría al pasajero con un activo que no llegó a pedir.
  *
- * El aviso a los conductores cercanos es de la historia #17; acá el viaje solo
- * queda disponible.
+ * Al final avisa a los conductores cercanos disponibles (historia #17): quién
+ * es "cercano" lo resuelve `NearbyDriverFinder`, y si no hay ninguno no se
+ * dispara ningún evento —un `RideRequested` sin conductores a quién llegarle
+ * no le sirve a nadie.
  */
 final readonly class CreateRideAction
 {
     public function __construct(
         private RouteEstimator $routeEstimator,
         private CalculateFareAction $calculateFare,
+        private NearbyDriverFinder $nearbyDrivers,
     ) {}
 
     /**
@@ -49,7 +55,7 @@ final readonly class CreateRideAction
         $route = $this->routeEstimator->estimate($request->origin, $request->destination);
         $fare = $this->calculateFare->handle($route);
 
-        return Ride::create([
+        $ride = Ride::create([
             'passenger_id' => $passenger->getKey(),
             'status' => RideStatus::Requested,
             'origin_latitude' => $request->origin->latitude,
@@ -61,5 +67,29 @@ final readonly class CreateRideAction
             'currency' => $fare->currency,
             'estimated_fare' => $fare->total,
         ]);
+
+        $this->notifyNearbyDrivers($ride, $request->origin);
+
+        return $ride;
+    }
+
+    private function notifyNearbyDrivers(Ride $ride, Coordinates $origin): void
+    {
+        $driverIds = $this->nearbyDrivers->near($origin);
+
+        if ($driverIds === []) {
+            return;
+        }
+
+        RideRequested::dispatch(
+            rideId: $ride->id,
+            originLatitude: $ride->origin_latitude,
+            originLongitude: $ride->origin_longitude,
+            destinationLatitude: $ride->destination_latitude,
+            destinationLongitude: $ride->destination_longitude,
+            currency: $ride->currency,
+            estimatedFare: $ride->estimated_fare,
+            nearbyDriverIds: $driverIds,
+        );
     }
 }

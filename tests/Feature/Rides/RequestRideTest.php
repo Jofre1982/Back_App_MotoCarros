@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\Rides;
 
 use App\Enums\RideStatus;
+use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
+use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -349,6 +352,128 @@ class RequestRideTest extends TestCase
             ->assertJsonStructure(['message']);
 
         $this->assertDatabaseCount('rides', 0);
+    }
+
+    /**
+     * Historia #17: el viaje nuevo avisa a los conductores disponibles
+     * dentro del radio configurado por el canal `driver.{id}`.
+     */
+    public function test_avisa_por_el_canal_del_conductor_disponible_dentro_del_radio(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $this->fakeRuta(distanciaMetros: 7421, duracionSegundos: 842);
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->available()->create(['user_id' => $conductor->id]);
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->create()))
+            ->postJson(self::URI, $this->datosValidos())
+            ->assertCreated();
+
+        $viaje = Ride::sole();
+
+        $this->assertCount(1, $grabador->emitidos);
+        [$canales, $evento, $payload] = $grabador->emitidos[0];
+
+        $this->assertSame(["private-driver.{$conductor->id}"], $canales);
+        $this->assertSame('ride.requested', $evento);
+        $this->assertSame($viaje->id, $payload['ride_id']);
+        $this->assertSame(4.710989, $payload['origin']['latitude']);
+        $this->assertSame(-74.061, $payload['destination']['longitude']);
+        $this->assertSame('COP', $payload['currency']);
+        $this->assertSame(8850, $payload['estimated_fare']);
+    }
+
+    public function test_avisa_a_varios_conductores_disponibles_cercanos_a_la_vez(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $this->fakeRuta();
+        $primero = User::factory()->driver()->create();
+        $segundo = User::factory()->driver()->create();
+        DriverProfile::factory()->available()->create(['user_id' => $primero->id]);
+        DriverProfile::factory()->available(latitude: 4.711, longitude: -74.0715)->create(['user_id' => $segundo->id]);
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->create()))
+            ->postJson(self::URI, $this->datosValidos())
+            ->assertCreated();
+
+        $this->assertCount(1, $grabador->emitidos);
+        [$canales] = $grabador->emitidos[0];
+        $this->assertEqualsCanonicalizing(
+            ["private-driver.{$primero->id}", "private-driver.{$segundo->id}"],
+            $canales,
+        );
+    }
+
+    public function test_no_avisa_a_un_conductor_marcado_no_disponible(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $this->fakeRuta();
+        $conductor = User::factory()->driver()->create();
+        // `is_available` en falso por defecto (ver la migración).
+        DriverProfile::factory()->create(['user_id' => $conductor->id]);
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->create()))
+            ->postJson(self::URI, $this->datosValidos())
+            ->assertCreated();
+
+        $this->assertSame([], $grabador->emitidos);
+    }
+
+    public function test_no_avisa_a_un_conductor_disponible_fuera_del_radio_configurado(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $this->fakeRuta();
+        $conductor = User::factory()->driver()->create();
+        // A varios kilómetros del origen de `datosValidos()` (4.710989,
+        // -74.072092): muy lejos del radio por defecto (3000 m).
+        DriverProfile::factory()->available(latitude: 4.9, longitude: -74.3)->create(['user_id' => $conductor->id]);
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->create()))
+            ->postJson(self::URI, $this->datosValidos())
+            ->assertCreated();
+
+        $this->assertSame([], $grabador->emitidos);
+    }
+
+    public function test_no_dispara_ningun_evento_si_no_hay_conductores_disponibles_cerca(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $this->fakeRuta();
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->create()))
+            ->postJson(self::URI, $this->datosValidos())
+            ->assertCreated();
+
+        $this->assertSame([], $grabador->emitidos);
+    }
+
+    /**
+     * Registra una conexión de broadcasting que, en vez de hablar con Reverb,
+     * anota lo que se le pidió publicar (mismo patrón que
+     * ShareRideLocationTest).
+     */
+    private function grabarBroadcasts(): object
+    {
+        $grabador = new class implements Broadcaster
+        {
+            /** @var list<array{0: list<string>, 1: string, 2: array<string, mixed>}> */
+            public array $emitidos = [];
+
+            public function auth($request) {}
+
+            public function validAuthenticationResponse($request, $result) {}
+
+            public function broadcast(array $channels, $event, array $payload = []): void
+            {
+                $this->emitidos[] = [array_map(strval(...), $channels), $event, $payload];
+            }
+        };
+
+        Broadcast::extend('recording', fn (): Broadcaster => $grabador);
+        Config::set('broadcasting.connections.recording', ['driver' => 'recording']);
+        Config::set('broadcasting.default', 'recording');
+
+        return $grabador;
     }
 
     private function fakeRuta(int $distanciaMetros = 7421, int $duracionSegundos = 842): void
