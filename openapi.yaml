@@ -914,6 +914,152 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /me/rides:
+    get:
+      tags:
+        - Rides
+      operationId: listMyRides
+      summary: Ver el historial de viajes propios
+      description: >-
+        Devuelve los viajes del pasajero autenticado, ordenados del más
+        reciente al más antiguo (historia #29). Es la vista con la que el
+        pasajero consulta y audita sus viajes pasados; no trae filtros por
+        fecha o estado ni exportación — se evalúan como historias aparte.
+
+        Una cuenta sin viajes previos recibe **200** con `data` en una lista
+        vacía, no un error.
+
+        `page` y `per_page` son opcionales y aceptan cualquier entero
+        positivo; superar el límite razonable de `per_page` que define el
+        backend no responde 422, la respuesta simplemente se acota a ese
+        límite.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Página a consultar. Por defecto, la primera.
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+        - name: per_page
+          in: query
+          required: false
+          description: >-
+            Cantidad de viajes por página. Por defecto 15; el backend acota
+            cualquier valor mayor a un límite razonable en vez de rechazarlo.
+          schema:
+            type: integer
+            minimum: 1
+          example: 15
+      responses:
+        "200":
+          description: Página del historial de viajes del pasajero.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Ride"
+                  meta:
+                    type: object
+                    description: >-
+                      Metadatos de paginación (formato estándar del
+                      paginador de Laravel).
+                    required:
+                      - current_page
+                      - per_page
+                      - total
+                      - last_page
+                    properties:
+                      current_page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 15
+                      total:
+                        type: integer
+                        example: 1
+                      last_page:
+                        type: integer
+                        example: 1
+              example:
+                data:
+                  - id: 1
+                    status: completed
+                    origin:
+                      latitude: 4.710989
+                      longitude: -74.072092
+                    destination:
+                      latitude: 4.698
+                      longitude: -74.061
+                    distance_meters: 7421
+                    duration_seconds: 842
+                    currency: COP
+                    estimated_fare: 8850
+                    driver:
+                      id: 5
+                      name: Carlos Pérez
+                    requested_at: "2026-07-31T14:03:21+00:00"
+                    started_at: "2026-07-31T14:05:00+00:00"
+                    completed_at: "2026-07-31T14:22:00+00:00"
+                    final_fare: 9100
+                    payment:
+                      status: paid
+                meta:
+                  current_page: 1
+                  per_page: 15
+                  total: 1
+                  last_page: 1
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no es de pasajero. El historial de
+            ganancias del conductor es la historia #30, con su propio
+            endpoint.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: >-
+            `page` o `per_page` no son enteros positivos (por ejemplo, texto
+            o un número negativo).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The per page field must be an integer.
+                errors:
+                  per_page:
+                    - The per page field must be an integer.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /rides:
     post:
       tags:

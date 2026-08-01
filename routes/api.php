@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Rides\RateDriverController;
 use App\Http\Controllers\Api\V1\Rides\ShareRideLocationController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideController;
+use App\Http\Controllers\Api\V1\Rides\ShowRideHistoryController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideReceiptController;
 use App\Http\Controllers\Api\V1\Rides\StartRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
@@ -106,6 +107,17 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me/availability', UpdateDriverAvailabilityController::class)
         ->name('drivers.availability');
+
+    // Historial de viajes del pasajero autenticado (historia #29). Cuelga de
+    // `me` como el vehículo y la disponibilidad: se llega por el token, nunca
+    // por un id propio, así que estructuralmente no existe forma de leer el
+    // historial de otra cuenta. Que solo los pasajeros lo consulten hoy no lo
+    // decide un middleware de rol acá, sino `RidePolicy::viewHistory()` desde
+    // `ShowRideHistoryRequest`; el mismo path servirá el historial de
+    // ganancias del conductor (historia #30).
+    Route::middleware('auth:api')
+        ->get('me/rides', ShowRideHistoryController::class)
+        ->name('rides.history');
 
     // La solicitud de viaje (historia #15). Es un recurso propio y no un
     // sub-recurso de `me`: se direcciona por su id —es el `{rideId}` del canal

@@ -225,4 +225,14 @@ class RidePolicyTest extends TestCase
 
         $this->assertFalse($conductor->can('rateDriver', $viaje));
     }
+
+    public function test_el_pasajero_puede_ver_su_historial_de_viajes(): void
+    {
+        $this->assertTrue(User::factory()->create()->can('viewHistory', Ride::class));
+    }
+
+    public function test_el_conductor_no_puede_ver_el_historial_por_este_metodo(): void
+    {
+        $this->assertFalse(User::factory()->driver()->create()->can('viewHistory', Ride::class));
+    }
 }

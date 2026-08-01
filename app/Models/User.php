@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -52,6 +53,19 @@ class User extends Authenticatable implements JWTSubject
     public function vehicle(): HasOne
     {
         return $this->hasOne(Vehicle::class);
+    }
+
+    /**
+     * Los viajes pedidos por esta cuenta como pasajero (historia #29). No
+     * se llama `passengerRides` a propósito: del lado del conductor asignado
+     * ningún endpoint necesita hoy la relación inversa por `driver_id`, así
+     * que un solo nombre corto alcanza sin volverse ambiguo.
+     *
+     * @return HasMany<Ride, $this>
+     */
+    public function rides(): HasMany
+    {
+        return $this->hasMany(Ride::class, 'passenger_id');
     }
 
     public function isDriver(): bool
