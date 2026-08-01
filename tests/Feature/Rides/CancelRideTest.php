@@ -15,11 +15,13 @@ use Tymon\JWTAuth\Facades\JWTAuth;
 /**
  * Contrato de POST /api/v1/rides/{id}/cancel — ver openapi.yaml.
  *
- * Cubre la ventana entre pedir el viaje y que algún conductor lo acepte
- * (historia #16): no genera cargo porque hoy no existe nada que cobrar en
- * `requested` (el motor de tarifa solo entra al completar el viaje, historia
- * #24), así que basta con que el viaje quede `cancelled` sin dejar rastro
- * adicional.
+ * Cubre dos ventanas del ciclo de vida del viaje: antes de que un conductor
+ * lo acepte (`requested`, historia #16), donde no genera cargo porque hoy no
+ * existe nada que cobrar en ese estado (el motor de tarifa solo entra al
+ * completar el viaje, historia #24); y después de que un conductor ya lo
+ * aceptó (`accepted`, historia #22), donde sí indica que aplica una
+ * penalización por cancelación tardía, aunque el cobro efectivo quede fuera
+ * de esta historia.
  */
 class CancelRideTest extends TestCase
 {
@@ -36,6 +38,7 @@ class CancelRideTest extends TestCase
 
         $respuesta->assertJsonPath('data.id', $viaje->id);
         $respuesta->assertJsonPath('data.status', 'cancelled');
+        $respuesta->assertJsonPath('data.cancellation_fee_applies', false);
 
         $this->assertDatabaseHas('rides', [
             'id' => $viaje->id,
@@ -55,12 +58,57 @@ class CancelRideTest extends TestCase
         $this->assertDatabaseCount('rides', 1);
     }
 
-    #[DataProvider('estadosYaNoRequested')]
-    public function test_rechaza_cancelar_un_viaje_que_ya_no_esta_requested(RideStatus $estado): void
+    public function test_el_pasajero_cancela_su_viaje_ya_aceptado(): void
+    {
+        $pasajero = User::factory()->create();
+        $conductor = User::factory()->create();
+        $viaje = Ride::factory()->for($pasajero, 'passenger')->create([
+            'status' => RideStatus::Accepted,
+            'driver_id' => $conductor->id,
+        ]);
+
+        $respuesta = $this->withToken(JWTAuth::fromUser($pasajero))
+            ->postJson($this->uri($viaje))
+            ->assertOk();
+
+        $respuesta->assertJsonPath('data.id', $viaje->id);
+        $respuesta->assertJsonPath('data.status', 'cancelled');
+        $respuesta->assertJsonPath('data.cancellation_fee_applies', true);
+
+        $this->assertDatabaseHas('rides', [
+            'id' => $viaje->id,
+            'status' => RideStatus::Cancelled->value,
+        ]);
+    }
+
+    public function test_cancelar_un_viaje_aceptado_libera_al_conductor(): void
+    {
+        // `active_driver_id` es una columna generada por la base (ver la
+        // migración de `rides`): confirmar que se libera es lo que garantiza
+        // que el conductor pueda aceptar otro viaje después.
+        $pasajero = User::factory()->create();
+        $conductor = User::factory()->create();
+        $viaje = Ride::factory()->for($pasajero, 'passenger')->create([
+            'status' => RideStatus::Accepted,
+            'driver_id' => $conductor->id,
+        ]);
+
+        $this->withToken(JWTAuth::fromUser($pasajero))
+            ->postJson($this->uri($viaje))
+            ->assertOk();
+
+        $this->assertDatabaseHas('rides', [
+            'id' => $viaje->id,
+            'active_driver_id' => null,
+        ]);
+    }
+
+    #[DataProvider('estadosNoCancelables')]
+    public function test_rechaza_cancelar_un_viaje_que_no_esta_requested_ni_accepted(RideStatus $estado): void
     {
         // Es 422 y no 403: el pasajero sigue siendo dueño del viaje, lo que
-        // cambia es el flujo a seguir (historia #22/#23 para viajes
-        // aceptados en adelante).
+        // cambia es que ya no hay ningún flujo de cancelación que aplique
+        // para ese punto del ciclo de vida.
         $pasajero = User::factory()->create();
         $viaje = Ride::factory()->for($pasajero, 'passenger')->create(['status' => $estado]);
 
@@ -75,10 +123,12 @@ class CancelRideTest extends TestCase
     /**
      * @return array<string, array{RideStatus}>
      */
-    public static function estadosYaNoRequested(): array
+    public static function estadosNoCancelables(): array
     {
+        $noCancelables = [RideStatus::InProgress, RideStatus::Completed, RideStatus::Cancelled];
+
         return array_reduce(
-            array_filter(RideStatus::cases(), static fn (RideStatus $estado): bool => $estado !== RideStatus::Requested),
+            $noCancelables,
             static fn (array $casos, RideStatus $estado): array => [...$casos, $estado->value => [$estado]],
             [],
         );

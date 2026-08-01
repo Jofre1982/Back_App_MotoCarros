@@ -46,25 +46,37 @@ class CancelRideRequest extends FormRequest
     public function after(): array
     {
         return [
-            $this->rejectAlreadyAccepted(...),
+            $this->rejectNotCancellable(...),
         ];
     }
 
     /**
-     * Que el viaje ya no esté en `requested` no es un problema de permisos
-     * —el pasajero sigue siendo dueño del viaje— sino de en qué punto del
-     * ciclo de vida está: por eso es 422 y no 403, y por eso vive acá y no en
+     * Este endpoint cubre dos ventanas del ciclo de vida del viaje: antes de
+     * que un conductor lo acepte (`requested`, historia #16) y después de que
+     * lo acepta pero todavía no lo inicia (`accepted`, historia #22) — en
+     * ambos casos el pasajero sigue siendo dueño del viaje, así que a partir
+     * de acá no es un problema de permisos sino de en qué punto del ciclo de
+     * vida está, por eso es 422 y no 403, y por eso vive acá y no en
      * `RidePolicy::cancel()`. Mismo criterio que "ya tiene un viaje activo"
      * en `CreateRideRequest`, con el error bajo la clave `ride`, que tampoco
      * es un campo de la entrada.
+     *
+     * El `match` cubre los cinco casos de `RideStatus` en vez de aislar los
+     * dos cancelables con un `if` antes: así queda un único punto exhaustivo
+     * — si `RideStatus` gana un caso nuevo, esto deja de compilar en vez de
+     * fallar en silencio con un mensaje genérico.
      */
-    private function rejectAlreadyAccepted(Validator $validator): void
+    private function rejectNotCancellable(Validator $validator): void
     {
-        if ($this->ride()->status !== RideStatus::Requested) {
-            $validator->errors()->add(
-                'ride',
-                'El viaje ya fue aceptado; usa el flujo de cancelación de viaje aceptado.',
-            );
+        $message = match ($this->ride()->status) {
+            RideStatus::Requested, RideStatus::Accepted => null,
+            RideStatus::InProgress => 'El viaje está en curso; no se puede cancelar de esta forma.',
+            RideStatus::Completed => 'El viaje ya se completó; no se puede cancelar.',
+            RideStatus::Cancelled => 'El viaje ya estaba cancelado.',
+        };
+
+        if ($message !== null) {
+            $validator->errors()->add('ride', $message);
         }
     }
 
