@@ -15,9 +15,8 @@ use App\Services\Realtime\RideParticipants;
  * que lo pidió y el conductor asignado.
  *
  * De dónde salen esos dos ids es problema de {@see RideParticipants}, no de
- * este canal — el modelo `Ride` llega con la historia #15 y hasta entonces la
- * implementación registrada no reconoce ningún viaje, con lo que este canal
- * deniega todo. La regla de autorización, en cambio, ya es la definitiva.
+ * este canal — hoy resuelve contra el modelo `Ride` (ver
+ * `EloquentRideParticipants`, vigente desde la historia #20).
  */
 final readonly class RideChannel
 {

@@ -12,12 +12,9 @@ namespace App\Services\Realtime;
  * viaje— vive en App\Broadcasting\RideChannel, y de dónde salen esos ids vive
  * detrás de esta interfaz.
  *
- * Existe como interfaz porque el modelo `Ride` todavía no está implementado
- * (llega con la historia #15, "Solicitar un viaje"). Mientras tanto la
- * implementación registrada es {@see PendingRideParticipants}, que no conoce
- * ningún viaje y por lo tanto no deja entrar a nadie. Cuando exista la tabla,
- * cambia el binding en AppServiceProvider y el canal empieza a autorizar sin
- * tocar routes/channels.php ni el canal.
+ * Existe como interfaz para que el canal no dependa de Eloquent directamente.
+ * La implementación registrada es {@see EloquentRideParticipants} desde la
+ * historia #20 (ver el binding en AppServiceProvider).
  */
 interface RideParticipants
 {

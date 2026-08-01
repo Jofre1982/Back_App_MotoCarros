@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\DTOs\FareSchedule;
 use App\Services\Maps\GoogleRoutesEstimator;
 use App\Services\Maps\RouteEstimator;
-use App\Services\Realtime\PendingRideParticipants;
+use App\Services\Realtime\EloquentRideParticipants;
 use App\Services\Realtime\RideParticipants;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -31,14 +31,15 @@ class AppServiceProvider extends ServiceProvider
      * Fuente de los participantes de un viaje, que es lo que autoriza el canal
      * privado `ride.{id}` (ver App\Broadcasting\RideChannel).
      *
-     * Hoy no existe el modelo `Ride`, así que la implementación registrada no
-     * reconoce ningún viaje y el canal deniega todo. Cuando la historia #15
-     * cree la tabla, esto pasa a apuntar a una implementación con Eloquent y
-     * ni el canal ni routes/channels.php se tocan.
+     * Apunta a una implementación con Eloquent desde la historia #20: el
+     * tracking en tiempo real (compartir ubicación acá, consumirla en #21)
+     * es lo que necesita que el canal autorice de verdad al pasajero y al
+     * conductor asignado, y ni el canal ni routes/channels.php se tocan para
+     * este cambio.
      */
     private function registerRideParticipants(): void
     {
-        $this->app->bind(RideParticipants::class, PendingRideParticipants::class);
+        $this->app->bind(RideParticipants::class, EloquentRideParticipants::class);
     }
 
     /**
