@@ -1905,6 +1905,124 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/{id}/rate-driver:
+    post:
+      tags:
+        - Rides
+      operationId: rateDriver
+      summary: Calificar al conductor al finalizar el viaje
+      description: >-
+        Registra la calificación que el pasajero da al conductor de un viaje
+        ya completado (historia #27): una puntuación de 1 a 5 y un comentario
+        opcional, asociados al viaje y al conductor asignado.
+
+        Solo el pasajero **dueño** del viaje puede calificarlo: cualquier
+        otra cuenta —el conductor asignado u otro pasajero— recibe **403**.
+        Que el viaje no esté `completed`, o que el pasajero ya lo haya
+        calificado antes, es en cambio **422**: el permiso lo tiene, lo que
+        falla es el momento del ciclo de vida o que ya no queda nada por
+        registrar.
+
+        No calcula ni expone el promedio de calificación del conductor; eso
+        se cubre en una historia aparte.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje completado a calificar.
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - score
+              properties:
+                score:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  description: Puntuación de 1 (peor) a 5 (mejor).
+                  example: 5
+                comment:
+                  type: string
+                  nullable: true
+                  description: Comentario libre y opcional sobre el servicio.
+                  example: Muy puntual y buen trato.
+            example:
+              score: 5
+              comment: Muy puntual y buen trato.
+      responses:
+        "201":
+          description: La calificación quedó registrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RideRating"
+              example:
+                data:
+                  ride_id: 1
+                  score: 5
+                  comment: Muy puntual y buen trato.
+                  rated_at: "2026-07-31T14:20:05+00:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            El viaje no le pertenece a la cuenta autenticada (incluye al
+            conductor asignado).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "422":
+          description: >-
+            El viaje no está `completed`, la puntuación está fuera de 1 a 5,
+            o el pasajero ya calificó a este conductor por este viaje.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Ya existe una calificación del conductor para este viaje.
+                errors:
+                  ride:
+                    - Ya existe una calificación del conductor para este viaje.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -2740,6 +2858,37 @@ components:
           format: date-time
           description: Momento en que el conductor marcó el viaje como completado.
           example: "2026-07-31T14:19:05+00:00"
+    RideRating:
+      type: object
+      description: >-
+        La calificación que el pasajero da al conductor de un viaje ya
+        completado (historia #27). Se basta sola, sin depender de que el
+        cliente ya tenga el viaje cargado, mismo criterio que `RideReceipt`.
+      required:
+        - ride_id
+        - score
+        - rated_at
+      properties:
+        ride_id:
+          type: integer
+          description: Identificador del viaje al que pertenece esta calificación.
+          example: 1
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Puntuación de 1 (peor) a 5 (mejor) que dio el pasajero.
+          example: 5
+        comment:
+          type: string
+          nullable: true
+          description: Comentario libre que dejó el pasajero, o `null` si no dejó ninguno.
+          example: Muy puntual y buen trato.
+        rated_at:
+          type: string
+          format: date-time
+          description: Momento en que se registró la calificación.
+          example: "2026-07-31T14:20:05+00:00"
     BroadcastAuthRequest:
       type: object
       description: >-

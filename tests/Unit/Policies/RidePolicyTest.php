@@ -191,4 +191,38 @@ class RidePolicyTest extends TestCase
 
         $this->assertTrue($pasajero->fresh()->can('view', $viaje));
     }
+
+    public function test_el_pasajero_dueno_puede_calificar_al_conductor_de_su_viaje(): void
+    {
+        $pasajero = User::factory()->create();
+        $viaje = Ride::factory()->for($pasajero, 'passenger')->create();
+
+        $this->assertTrue($pasajero->can('rateDriver', $viaje));
+    }
+
+    public function test_otro_pasajero_no_puede_calificar_un_viaje_ajeno(): void
+    {
+        $viaje = Ride::factory()->create();
+
+        $this->assertFalse(User::factory()->create()->can('rateDriver', $viaje));
+    }
+
+    public function test_el_conductor_asignado_no_puede_calificarse_a_si_mismo(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->create(['driver_id' => $conductor->id]);
+
+        $this->assertFalse($conductor->can('rateDriver', $viaje));
+    }
+
+    public function test_un_conductor_no_puede_calificar_aunque_la_fila_apunte_a_su_cuenta_como_pasajero(): void
+    {
+        // Mismo criterio que `cancel()`: el rol se comprueba además de la
+        // propiedad, porque nada impide que una fila apunte a una cuenta que
+        // dejó de ser pasajero.
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->for($conductor, 'passenger')->create();
+
+        $this->assertFalse($conductor->can('rateDriver', $viaje));
+    }
 }

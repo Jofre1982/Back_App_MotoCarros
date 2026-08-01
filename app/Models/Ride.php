@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\RatedRole;
 use App\Enums\RideStatus;
 use App\Policies\RidePolicy;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -112,5 +113,16 @@ class Ride extends Model
     public function payment(): HasOne
     {
         return $this->hasOne(Payment::class);
+    }
+
+    /**
+     * La calificación que el pasajero dio al conductor, o `null` mientras no
+     * la haya registrado (historia #27).
+     *
+     * @return HasOne<RideRating, $this>
+     */
+    public function driverRating(): HasOne
+    {
+        return $this->hasOne(RideRating::class)->where('rated_role', RatedRole::Driver);
     }
 }

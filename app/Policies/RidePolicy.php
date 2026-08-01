@@ -166,4 +166,21 @@ class RidePolicy
             && $ride->driver_id !== null
             && $ride->driver_id === $user->getKey();
     }
+
+    /**
+     * Calificar al conductor es del pasajero **dueño** de ese viaje (historia
+     * #27), mismo criterio que `cancel()`: se comprueba el rol además de la
+     * propiedad, porque nada impide que una fila apunte a una cuenta que dejó
+     * de ser pasajero.
+     *
+     * Que el viaje no esté `completed`, o que el pasajero ya lo haya
+     * calificado, no se decide acá: eso es 422 y lo resuelve
+     * `RateDriverRequest`, porque el permiso de calificar lo tiene y lo que
+     * falla es el momento del ciclo de vida o que ya no queda nada por
+     * registrar.
+     */
+    public function rateDriver(User $user, Ride $ride): bool
+    {
+        return $user->isPassenger() && $ride->passenger_id === $user->getKey();
+    }
 }
