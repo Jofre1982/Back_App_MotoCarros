@@ -11,6 +11,11 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * Entrada de POST /api/v1/rides/{ride}/cancel — ver openapi.yaml.
+ *
+ * Mismo endpoint para el pasajero dueño (historias #16/#22) y para el
+ * conductor asignado (historia #23); cuál de los dos puede cancelar y qué
+ * hace cada uno lo decide `RidePolicy::cancel()` y `CancelRideAction`, no
+ * este Form Request.
  */
 class CancelRideRequest extends FormRequest
 {
@@ -20,9 +25,9 @@ class CancelRideRequest extends FormRequest
      * resuelva este Form Request—, así que un id inexistente nunca llega
      * hasta acá: sale como 404 antes de que se evalúe `authorize()`.
      *
-     * Que el viaje sea del pasajero autenticado se resuelve acá y no en el
-     * controller, igual que en `CreateRideRequest`, para que el 403 se
-     * resuelva antes que la validación de estado.
+     * Que el viaje sea del pasajero dueño o del conductor asignado se
+     * resuelve acá y no en el controller, igual que en `CreateRideRequest`,
+     * para que el 403 se resuelva antes que la validación de estado.
      */
     public function authorize(): bool
     {
@@ -51,15 +56,15 @@ class CancelRideRequest extends FormRequest
     }
 
     /**
-     * Este endpoint cubre dos ventanas del ciclo de vida del viaje: antes de
-     * que un conductor lo acepte (`requested`, historia #16) y después de que
-     * lo acepta pero todavía no lo inicia (`accepted`, historia #22) — en
-     * ambos casos el pasajero sigue siendo dueño del viaje, así que a partir
-     * de acá no es un problema de permisos sino de en qué punto del ciclo de
-     * vida está, por eso es 422 y no 403, y por eso vive acá y no en
-     * `RidePolicy::cancel()`. Mismo criterio que "ya tiene un viaje activo"
-     * en `CreateRideRequest`, con el error bajo la clave `ride`, que tampoco
-     * es un campo de la entrada.
+     * `requested` y `accepted` son cancelables por quien ya tiene permiso
+     * según `RidePolicy::cancel()` — el pasajero en cualquiera de los dos
+     * (historias #16/#22), el conductor asignado solo en `accepted`, porque
+     * sin conductor asignado nunca llega hasta acá autorizado (historia
+     * #23). A partir de ahí no es un problema de permisos sino de en qué
+     * punto del ciclo de vida está el viaje, por eso es 422 y no 403, y por
+     * eso vive acá y no en `RidePolicy::cancel()`. Mismo criterio que "ya
+     * tiene un viaje activo" en `CreateRideRequest`, con el error bajo la
+     * clave `ride`, que tampoco es un campo de la entrada.
      *
      * El `match` cubre los cinco casos de `RideStatus` en vez de aislar los
      * dos cancelables con un `if` antes: así queda un único punto exhaustivo

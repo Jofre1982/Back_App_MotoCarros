@@ -53,6 +53,33 @@ class RidePolicyTest extends TestCase
         $this->assertFalse($conductor->can('cancel', $viaje));
     }
 
+    public function test_el_conductor_asignado_puede_cancelar_el_viaje_que_acepto(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->create(['driver_id' => $conductor->id]);
+
+        $this->assertTrue($conductor->can('cancel', $viaje));
+    }
+
+    public function test_otro_conductor_no_puede_cancelar_un_viaje_que_no_acepto(): void
+    {
+        $viaje = Ride::factory()->create(['driver_id' => User::factory()->driver()]);
+
+        $this->assertFalse(User::factory()->driver()->create()->can('cancel', $viaje));
+    }
+
+    public function test_un_pasajero_no_puede_cancelar_por_este_metodo_un_viaje_sin_conductor_asignado_aunque_la_fila_apunte_a_su_cuenta(): void
+    {
+        // Contraparte de `test_un_conductor_no_puede_cancelar_...`: un
+        // pasajero cuya cuenta quedó como `driver_id` de un viaje ajeno (algo
+        // que el dominio no produce hoy) tampoco debería poder cancelar por
+        // la vía del conductor, porque su rol no es conductor.
+        $pasajero = User::factory()->create();
+        $viaje = Ride::factory()->create(['driver_id' => $pasajero->id]);
+
+        $this->assertFalse($pasajero->can('cancel', $viaje));
+    }
+
     public function test_el_conductor_puede_aceptar_un_viaje(): void
     {
         $this->assertTrue(User::factory()->driver()->create()->can('accept', Ride::class));

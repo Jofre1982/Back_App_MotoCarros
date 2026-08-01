@@ -1216,23 +1216,36 @@ paths:
       operationId: cancelRide
       summary: Cancelar un viaje solicitado o ya aceptado
       description: >-
-        Cancela el viaje del pasajero autenticado, ya sea que siga en
+        Mismo endpoint para dos operaciones distintas según quién lo llama:
+
+        **El pasajero dueño del viaje** lo cancela, ya sea que siga en
         `requested` (historia #16) o que un conductor ya lo haya aceptado en
         `accepted` (historia #22). En ambos casos el viaje pasa a
-        `cancelled`; la diferencia es `cancellation_fee_applies` en la
-        respuesta: `false` cuando todavía no había conductor asignado, y
-        `true` cuando ya lo había, porque ese conductor ya se había
-        comprometido y desplazado hacia el punto de recogida. El cálculo y
-        cobro efectivo de esa penalización, si aplica, se procesan en el
-        flujo de pagos — acá solo se indica si corresponde.
+        `cancelled`, y la respuesta incluye `cancellation_fee_applies`:
+        `false` cuando todavía no había conductor asignado, y `true` cuando
+        ya lo había, porque ese conductor ya se había comprometido y
+        desplazado hacia el punto de recogida. El cálculo y cobro efectivo de
+        esa penalización, si aplica, se procesan en el flujo de pagos — acá
+        solo se indica si corresponde.
+
+        **El conductor asignado** cancela un viaje que aceptó pero todavía no
+        inició, es decir en `accepted` (historia #23). El viaje **no** se
+        cancela: vuelve a `requested` sin conductor asignado, para que otros
+        conductores puedan aceptarlo. La respuesta es el viaje ya sin
+        `driver` y sin el campo `cancellation_fee_applies` — no aplica
+        ningún cargo, porque el viaje sigue en pie para el pasajero. El
+        sistema registra internamente el conteo de cancelaciones del
+        conductor para uso futuro en políticas de calidad; no se expone en
+        esta respuesta ni bloquea la operación.
 
         Un viaje `in_progress`, `completed` o ya `cancelled` no se puede
-        cancelar por este endpoint.
+        cancelar por este endpoint, sin importar quién lo pida.
 
-        Solo el pasajero dueño del viaje puede cancelarlo: cualquier otra
-        cuenta recibe **403**. Que el viaje no esté en un estado cancelable
-        es en cambio **422**, porque no es un problema de permisos sino de en
-        qué punto del ciclo de vida está el viaje.
+        Solo el pasajero dueño del viaje o el conductor asignado pueden
+        llamar a este endpoint: cualquier otra cuenta recibe **403**. Que el
+        viaje no esté en un estado cancelable es en cambio **422**, porque no
+        es un problema de permisos sino de en qué punto del ciclo de vida
+        está el viaje.
       security:
         - bearerAuth: []
       parameters:
@@ -1245,7 +1258,10 @@ paths:
           example: 1
       responses:
         "200":
-          description: El viaje quedó cancelado.
+          description: >-
+            El viaje quedó `cancelled` (si cancela el pasajero) o volvió a
+            `requested` sin conductor asignado (si cancela el conductor) —
+            ver la descripción del endpoint.
           content:
             application/json:
               schema:
@@ -1257,8 +1273,6 @@ paths:
                     allOf:
                       - $ref: "#/components/schemas/Ride"
                       - type: object
-                        required:
-                          - cancellation_fee_applies
                         properties:
                           cancellation_fee_applies:
                             type: boolean
@@ -1270,6 +1284,11 @@ paths:
                               `requested`. El cálculo y cobro efectivo del
                               cargo, si aplica, se procesan en el flujo de
                               pagos, fuera de alcance de este endpoint.
+
+                              Ausente cuando quien cancela es el conductor
+                              asignado (historia #23): ese caso no cancela el
+                              viaje ni genera cargo, solo lo devuelve al pool
+                              sin conductor.
                             example: true
               example:
                 data:
@@ -1298,7 +1317,9 @@ paths:
               example:
                 message: Unauthenticated.
         "403":
-          description: El viaje no pertenece al pasajero autenticado.
+          description: >-
+            El viaje no pertenece al pasajero autenticado ni está asignado al
+            conductor autenticado.
           content:
             application/json:
               schema:
@@ -1317,7 +1338,8 @@ paths:
           description: >-
             El viaje no está en un estado cancelable por este endpoint: está
             `in_progress`, ya se `completed`, o ya se había `cancelled`
-            antes.
+            antes. Aplica igual sin importar si quien cancela es el pasajero
+            o el conductor asignado.
           content:
             application/json:
               schema:

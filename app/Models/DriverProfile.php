@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property float|null $latitude
  * @property float|null $longitude
  * @property Carbon|null $location_updated_at
+ * @property int $cancellation_count
  */
 #[Fillable(['user_id', 'license_number', 'is_available', 'latitude', 'longitude', 'location_updated_at'])]
 #[UsePolicy(DriverProfilePolicy::class)]
@@ -31,6 +32,7 @@ class DriverProfile extends Model
             'latitude' => 'float',
             'longitude' => 'float',
             'location_updated_at' => 'datetime',
+            'cancellation_count' => 'integer',
         ];
     }
 
