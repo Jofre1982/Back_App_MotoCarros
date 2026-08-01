@@ -1116,19 +1116,25 @@ paths:
       tags:
         - Rides
       operationId: cancelRide
-      summary: Cancelar una solicitud de viaje antes de que un conductor la acepte
+      summary: Cancelar un viaje solicitado o ya aceptado
       description: >-
-        Cancela el viaje del pasajero autenticado mientras sigue en
-        `requested`, sin que se genere ningún cargo (historia #16). Es la
-        ventana entre pedir el viaje y que algún conductor lo acepte; una vez
-        que el viaje pasa a `accepted` o más adelante, este endpoint ya no
-        aplica — esa cancelación tiene sus propias reglas (penalización,
-        liberar al conductor) y es una historia aparte (#22, #23).
+        Cancela el viaje del pasajero autenticado, ya sea que siga en
+        `requested` (historia #16) o que un conductor ya lo haya aceptado en
+        `accepted` (historia #22). En ambos casos el viaje pasa a
+        `cancelled`; la diferencia es `cancellation_fee_applies` en la
+        respuesta: `false` cuando todavía no había conductor asignado, y
+        `true` cuando ya lo había, porque ese conductor ya se había
+        comprometido y desplazado hacia el punto de recogida. El cálculo y
+        cobro efectivo de esa penalización, si aplica, se procesan en el
+        flujo de pagos — acá solo se indica si corresponde.
+
+        Un viaje `in_progress`, `completed` o ya `cancelled` no se puede
+        cancelar por este endpoint.
 
         Solo el pasajero dueño del viaje puede cancelarlo: cualquier otra
-        cuenta recibe **403**. Que el viaje ya no esté en `requested` es en
-        cambio **422**, porque no es un problema de permisos sino de en qué
-        punto del ciclo de vida está el viaje.
+        cuenta recibe **403**. Que el viaje no esté en un estado cancelable
+        es en cambio **422**, porque no es un problema de permisos sino de en
+        qué punto del ciclo de vida está el viaje.
       security:
         - bearerAuth: []
       parameters:
@@ -1150,7 +1156,23 @@ paths:
                   - data
                 properties:
                   data:
-                    $ref: "#/components/schemas/Ride"
+                    allOf:
+                      - $ref: "#/components/schemas/Ride"
+                      - type: object
+                        required:
+                          - cancellation_fee_applies
+                        properties:
+                          cancellation_fee_applies:
+                            type: boolean
+                            description: >-
+                              Si esta cancelación generó una penalización por
+                              cancelación tardía (historia #22): `true` cuando
+                              el viaje ya tenía conductor asignado
+                              (`accepted`), `false` cuando todavía estaba
+                              `requested`. El cálculo y cobro efectivo del
+                              cargo, si aplica, se procesan en el flujo de
+                              pagos, fuera de alcance de este endpoint.
+                            example: true
               example:
                 data:
                   id: 1
@@ -1167,6 +1189,7 @@ paths:
                   estimated_fare: 8850
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
+                  cancellation_fee_applies: true
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1193,17 +1216,18 @@ paths:
                 message: "No query results for model [App\\Models\\Ride] 1."
         "422":
           description: >-
-            El viaje ya no está en `requested` (fue aceptado, está en curso,
-            ya se completó o ya se había cancelado antes).
+            El viaje no está en un estado cancelable por este endpoint: está
+            `in_progress`, ya se `completed`, o ya se había `cancelled`
+            antes.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
               example:
-                message: El viaje ya fue aceptado; usa el flujo de cancelación de viaje aceptado.
+                message: El viaje está en curso; no se puede cancelar de esta forma.
                 errors:
                   ride:
-                    - El viaje ya fue aceptado; usa el flujo de cancelación de viaje aceptado.
+                    - El viaje está en curso; no se puede cancelar de esta forma.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
