@@ -8,6 +8,7 @@ use App\Enums\RideStatus;
 use App\Models\Ride;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -63,10 +64,11 @@ class AcceptRideTest extends TestCase
         ]);
     }
 
-    public function test_rechaza_al_conductor_que_ya_tiene_un_viaje_propio_activo(): void
+    #[DataProvider('estadosActivosDelConductor')]
+    public function test_rechaza_al_conductor_que_ya_tiene_un_viaje_propio_activo(RideStatus $estado): void
     {
         $conductor = User::factory()->driver()->create();
-        Ride::factory()->create(['status' => RideStatus::Accepted, 'driver_id' => $conductor->id]);
+        Ride::factory()->create(['status' => $estado, 'driver_id' => $conductor->id]);
         $otroViaje = Ride::factory()->create(['status' => RideStatus::Requested]);
 
         $this->withToken(JWTAuth::fromUser($conductor))
@@ -115,5 +117,19 @@ class AcceptRideTest extends TestCase
     private function uri(Ride $viaje): string
     {
         return "/api/v1/rides/{$viaje->id}/accept";
+    }
+
+    /**
+     * El criterio de aceptación #3 dice "accepted o in_progress": ambos
+     * estados tienen que rechazar la aceptación, no solo el primero.
+     *
+     * @return array<string, array{RideStatus}>
+     */
+    public static function estadosActivosDelConductor(): array
+    {
+        return [
+            RideStatus::Accepted->value => [RideStatus::Accepted],
+            RideStatus::InProgress->value => [RideStatus::InProgress],
+        ];
     }
 }

@@ -24,9 +24,18 @@ return new class extends Migration
             // `active_passenger_id`: una migración ya corrida no vuelve a
             // ejecutarse. `RideSchemaTest` recorre el enum contra esta columna
             // para que la divergencia falle en la suite y no en producción.
+            //
+            // VIRTUAL y no STORED (a diferencia de `active_passenger_id`, que
+            // sí puede serlo): esta columna se agrega con `ALTER TABLE` sobre
+            // una tabla `rides` que ya puede tener filas, y SQLite no admite
+            // añadir una columna generada STORED a una tabla con datos
+            // (`cannot add a STORED column`). `active_passenger_id` no tiene
+            // este problema porque se declara dentro del `CREATE TABLE`
+            // original. VIRTUAL sí se puede agregar con datos existentes y
+            // sigue admitiendo índice único tanto en SQLite como en MySQL.
             $table->unsignedBigInteger('active_driver_id')
                 ->nullable()
-                ->storedAs("case when status in ('requested', 'accepted', 'in_progress') then driver_id end");
+                ->virtualAs("case when status in ('requested', 'accepted', 'in_progress') then driver_id end");
 
             $table->unique('active_driver_id');
         });

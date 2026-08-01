@@ -22,11 +22,14 @@ enum RideStatus: string
     /**
      * Los estados en los que el viaje todavía ocupa al pasajero y al conductor.
      *
-     * Es lo que decide si un pasajero puede solicitar otro viaje. La tabla
-     * `rides` repite esta lista en la columna generada que sostiene el índice de
-     * "un viaje activo por pasajero": si acá se agrega un estado activo y allá
-     * no, la regla se cae en silencio. `RideSchemaTest` recorre estos casos
-     * contra la base justamente para que esa divergencia falle en la suite.
+     * Es lo que decide si un pasajero puede solicitar otro viaje y si un
+     * conductor puede aceptar otro. La tabla `rides` repite esta lista en las
+     * dos columnas generadas que sostienen los índices de "un viaje activo por
+     * pasajero" (`active_passenger_id`) y "un viaje activo por conductor"
+     * (`active_driver_id`): si acá se agrega un estado activo y allá no, la
+     * regla se cae en silencio en cualquiera de las dos. `RideSchemaTest`
+     * recorre estos casos contra la base justamente para que esa divergencia
+     * falle en la suite.
      *
      * @return array<int, self>
      */

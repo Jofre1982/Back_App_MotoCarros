@@ -87,10 +87,4 @@ class AcceptRideRequest extends FormRequest
             );
         }
     }
-
-    public function ride(): Ride
-    {
-        /** @var Ride */
-        return $this->route('ride');
-    }
 }
