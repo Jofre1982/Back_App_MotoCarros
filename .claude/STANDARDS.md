@@ -391,13 +391,17 @@ personas concretas.
   sin levantar HTTP. Los canales se registran en `App\Providers\BroadcastServiceProvider`.
 - Todos los canales declaran `['guards' => ['api']]` de forma explícita: la API es
   stateless con JWT y no existe el guard `web`.
-- El canal `ride.{id}` ya tiene su regla definitiva, pero el modelo `Ride` llega con
-  la historia #15. Hasta entonces resuelve los participantes contra
+- El canal `ride.{id}` ya tiene su regla definitiva y resuelve los participantes contra
   `App\Services\Realtime\RideParticipants`, cuya implementación registrada
   (`PendingRideParticipants`) no conoce ningún viaje y por lo tanto **deniega todo**.
   Fallar cerrado es la única opción aceptable acá: un canal abierto "provisionalmente"
-  expone posiciones en vivo a cualquier usuario autenticado que adivine un id. Cuando
-  exista la tabla, se cambia el binding en `AppServiceProvider` y nada más.
+  expone posiciones en vivo a cualquier usuario autenticado que adivine un id.
+  La tabla `rides` ya existe (#15), así que lo único que falta es cambiar el binding en
+  `AppServiceProvider` por una implementación con Eloquent — ni el canal ni
+  `routes/channels.php` se tocan. Ese cambio **no** se hizo en #15: abrir el canal es
+  lo que consumen las historias de tracking (#20, #21), y son ellas las que tienen los
+  criterios de aceptación de qué se emite y quién lo escucha. Mientras tanto el canal
+  sigue denegando todo, que es el estado seguro.
 
 ### La ruta de autorización es una ruta de la API
 
@@ -653,6 +657,63 @@ tiene criterio de aceptación para ellos y almacenarlos exige decidir antes dón
 los archivos y quién los verifica — la verificación administrativa está declarada fuera
 de alcance en el propio issue); actualizar el vehículo (#13); y que un conductor tenga
 más de una moto.
+
+## Solicitud de viaje (decidido en #15)
+
+`POST /api/v1/rides` crea la solicitud del pasajero autenticado entre dos coordenadas.
+Responde **201** con el schema `Ride`. El viaje nace en `requested` y espera a que un
+conductor lo acepte: la API **no asigna conductor** por su cuenta (explícitamente fuera
+de alcance en la historia).
+
+- **Es un recurso propio y no un sub-recurso de `/me`**, al revés que el vehículo. La
+  diferencia no es de gusto: al viaje se llega por su id —es el `{rideId}` del canal
+  privado `ride.{id}`— y del otro lado lo van a operar dos cuentas distintas, el
+  pasajero y el conductor asignado. Por eso `RideResource` **sí** publica el `id`,
+  aunque siga sin publicar el `passenger_id`.
+- **Solicitar un viaje es del rol pasajero, y lo decide `RidePolicy`**: una cuenta de
+  conductor recibe **403**, no 422, por el mismo criterio que el pasajero que intenta
+  registrar una moto. La Policy se invoca desde `authorize()` del Form Request para
+  que el 403 se resuelva antes que la validación. El conductor no queda afuera del
+  producto: consigue viajes aceptando los que ya existen (#18).
+- **El trayecto y la tarifa se calculan al crear el viaje y se guardan con él.** Salen
+  del mismo `RouteEstimator` y de la misma `CalculateFareAction` que `POST
+  /rides/estimate`, que es lo que garantiza que el número de antes de pedir el viaje y
+  el de después sean el mismo. Quedan persistidos en vez de recalcularse al consultar
+  el viaje por dos motivos: es el monto que el pasajero aceptó, y cada consulta al
+  proveedor de mapas se paga. El cobro final se recalcula al completarlo (#24).
+- **Si el proveedor no entrega una ruta, no se crea ningún viaje.** La excepción sale
+  antes del INSERT, así que no queda un viaje sin tarifa —que además le dejaría al
+  pasajero un viaje activo que nunca llegó a pedir, bloqueándole el siguiente.
+- **Un viaje activo por pasajero (`requested`, `accepted` o `in_progress`), garantizado
+  por la tabla y no por la validación.** El Form Request lo comprueba para responder
+  **422** bajo la clave `ride` —que no es un campo de la entrada, igual que `vehicle` en
+  el alta de moto—, pero entre esa consulta y el INSERT caben dos solicitudes
+  simultáneas, y en un móvil basta un doble toque. Lo que queda en pie ahí es un índice
+  único sobre `rides.active_passenger_id`, una **columna generada** que vale
+  `passenger_id` mientras el viaje está activo y `NULL` cuando terminó. Es una columna
+  generada y no un índice parcial (`WHERE ...`) porque MySQL no los tiene: así la misma
+  definición vale en SQLite y en MySQL, y como los índices únicos ignoran los `NULL` en
+  ambos, el pasajero acumula viajes terminados sin límite.
+  La lista de estados activos se escribe literal en la migración en vez de leerla de
+  `App\Enums\RideStatus`: una migración ya corrida no vuelve a ejecutarse, así que
+  depender del enum dejaría distintas una base creada hoy y otra creada después de
+  renombrar un caso. `RideSchemaTest` recorre el enum contra la tabla para que esa
+  divergencia falle en la suite y no en producción.
+- **El destino no puede ser el mismo punto que el origen** (422). La comparación es por
+  igualdad exacta: "demasiado cerca para pedir un viaje" es una decisión de producto con
+  un umbral que alguien tiene que fijar, y no es lo que pide la historia.
+- **Las coordenadas se guardan en `decimal`, no en `float`**: la posición de recogida es
+  la que el conductor tiene que encontrar. Los montos siguen siendo enteros en la unidad
+  mínima de la moneda, como todo el dinero del proyecto.
+- **`driver_id` es `nullOnDelete` y `passenger_id` es `cascadeOnDelete`.** Un viaje sin
+  pasajero no es nada que se pueda consultar ni cobrar; borrar al conductor, en cambio,
+  no puede llevarse el viaje del pasajero, que ya ocurrió y tiene un cobro asociado.
+
+Queda **fuera** de #15: la asignación automática de conductor y el aviso a los
+conductores cercanos (#17, que es quien tiene el criterio de aceptación de a quién se
+notifica); aceptar, iniciar, cancelar y completar el viaje (#18, #19, #22, #23, #24);
+consultar un viaje ya creado; y abrir el canal `ride.{id}`, que sigue denegando todo
+hasta que lo necesiten las historias de tracking (ver la sección de Reverb).
 
 ## Proveedor de mapas/geocoding (decidido en #3)
 

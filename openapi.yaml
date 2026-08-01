@@ -803,6 +803,114 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides:
+    post:
+      tags:
+        - Rides
+      operationId: requestRide
+      summary: Solicitar un viaje
+      description: >-
+        Crea la solicitud de viaje del pasajero autenticado entre dos
+        coordenadas (historia #15). El viaje nace en estado `requested` y queda
+        esperando a que un conductor lo acepte (historia #18): la API no asigna
+        conductor por su cuenta.
+
+        Es una operación del rol pasajero y la resuelve `RidePolicy`: una cuenta
+        de conductor recibe **403**, no 422, porque no es una entrada que se
+        pueda corregir mandando otros datos.
+
+        La distancia, la duración y la tarifa se calculan al crear el viaje con
+        el mismo proveedor de mapas y el mismo motor de tarifa que
+        `POST /rides/estimate`, y quedan guardadas con el viaje. `estimated_fare`
+        sigue siendo un estimado: el monto final se recalcula al completarlo
+        (historia #24) con el trayecto realmente recorrido.
+
+        Un pasajero solo puede tener **un viaje activo a la vez** (`requested`,
+        `accepted` o `in_progress`); pedir otro mientras tanto responde 422.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RideRequest"
+            example:
+              origin:
+                latitude: 4.710989
+                longitude: -74.072092
+              destination:
+                latitude: 4.698
+                longitude: -74.061
+      responses:
+        "201":
+          description: El viaje quedó solicitado y espera a que un conductor lo acepte.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ride"
+              example:
+                data:
+                  id: 1
+                  status: requested
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    latitude: 4.698
+                    longitude: -74.061
+                  distance_meters: 7421
+                  duration_seconds: 842
+                  currency: COP
+                  estimated_fare: 8850
+                  requested_at: "2026-07-31T14:03:21+00:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta no es de pasajero. Solicitar un viaje es una operación del
+            rol pasajero; un conductor consigue viajes aceptando los que ya
+            existen (historia #18).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: >-
+            La entrada no pasó la validación (falta una coordenada, está fuera
+            de rango, o el destino es el mismo punto que el origen), el pasajero
+            ya tiene un viaje activo, o el proveedor de mapas no encontró una
+            ruta entre origen y destino (zona sin cobertura).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Ya tienes un viaje en curso; termínalo o cancélalo antes de solicitar otro.
+                errors:
+                  ride:
+                    - Ya tienes un viaje en curso; termínalo o cancélalo antes de solicitar otro.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /rides/estimate:
     post:
       tags:
@@ -811,10 +919,11 @@ paths:
       summary: Ver la tarifa estimada de un viaje antes de solicitarlo
       description: >-
         Le muestra al pasajero cuánto costaría un viaje entre dos coordenadas
-        antes de pedirlo (historia #14). No crea nada — el modelo `Ride` todavía
-        no existe (historia #15) — así que es solo una consulta contra el
-        proveedor de mapas y el motor de tarifa configurados, con la misma
-        fórmula que se usa para cobrar el viaje real.
+        antes de pedirlo (historia #14). No crea nada: es solo una consulta
+        contra el proveedor de mapas y el motor de tarifa configurados, con la
+        misma fórmula que se usa para cobrar el viaje real. Para solicitar el
+        viaje de verdad está `POST /rides` (historia #15), que vuelve a calcular
+        estos mismos números y los guarda con el viaje.
 
         No cuelga de `/me` como el vehículo: no es un sub-recurso de la
         cuenta, es una consulta puntual. Requiere un token vigente igual que
@@ -1377,6 +1486,93 @@ components:
             en el monto final, que se recalcula al completar el viaje con el
             trayecto realmente recorrido.
           example: true
+    RideRequest:
+      type: object
+      description: >-
+        Origen y destino del viaje que el pasajero quiere solicitar.
+
+        Tiene la misma forma que `RideEstimateRequest` a propósito, para que la
+        app pueda mandar el mismo cuerpo con el que estimó la tarifa. Son dos
+        schemas y no uno porque son la entrada de dos operaciones distintas y
+        pueden divergir (un método de pago o una nota para el conductor tendrían
+        sentido acá y no en la estimación).
+      required:
+        - origin
+        - destination
+      properties:
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination:
+          $ref: "#/components/schemas/Coordinates"
+    Ride:
+      type: object
+      description: >-
+        Un viaje solicitado por un pasajero, con el trayecto y la tarifa que se
+        estimaron al crearlo.
+
+        No publica el `passenger_id`: el viaje se solicita siempre desde la
+        cuenta que manda el token, igual que el vehículo del conductor. Tampoco
+        trae al conductor asignado, que todavía no existe cuando el viaje nace
+        (lo asigna la historia #18).
+      required:
+        - id
+        - status
+        - origin
+        - destination
+        - distance_meters
+        - duration_seconds
+        - currency
+        - estimated_fare
+        - requested_at
+      properties:
+        id:
+          type: integer
+          description: >-
+            Identificador del viaje. Es el `{rideId}` del canal privado
+            `ride.{rideId}` por el que viajan sus cambios de estado.
+          example: 1
+        status:
+          type: string
+          description: >-
+            Estado del viaje. Nace en `requested`; el resto de los valores los
+            producen las historias de aceptar (#18), iniciar (#19), completar
+            (#24) y cancelar (#22, #23).
+          enum:
+            - requested
+            - accepted
+            - in_progress
+            - completed
+            - cancelled
+          example: requested
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination:
+          $ref: "#/components/schemas/Coordinates"
+        distance_meters:
+          type: integer
+          description: Distancia estimada del trayecto al solicitarlo, en metros.
+          example: 7421
+        duration_seconds:
+          type: integer
+          description: Duración estimada del trayecto al solicitarlo, en segundos.
+          example: 842
+        currency:
+          type: string
+          description: Código ISO 4217 de tres letras de la moneda del monto.
+          example: COP
+        estimated_fare:
+          type: integer
+          description: >-
+            Monto estimado del viaje al solicitarlo, entero en la unidad mínima
+            de `currency` (ver la nota sobre dinero en config/fares.php). No es
+            un cobro: el monto final se recalcula al completar el viaje con el
+            trayecto realmente recorrido.
+          example: 8850
+        requested_at:
+          type: string
+          format: date-time
+          description: Momento en que se creó la solicitud.
+          example: "2026-07-31T14:03:21+00:00"
     BroadcastAuthRequest:
       type: object
       description: >-

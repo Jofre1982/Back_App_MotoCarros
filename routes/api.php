@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
+use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
@@ -86,6 +87,15 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me/vehicle', UpdateVehicleController::class)
         ->name('vehicles.update');
+
+    // La solicitud de viaje (historia #15). Es un recurso propio y no un
+    // sub-recurso de `me`: se direcciona por su id —es el `{rideId}` del canal
+    // privado `ride.{id}`— y del otro lado lo van a operar tanto el pasajero
+    // como el conductor asignado. Que solo los pasajeros puedan crearlo lo
+    // decide `RidePolicy`, no un middleware de rol acá.
+    Route::middleware('auth:api')
+        ->post('rides', CreateRideController::class)
+        ->name('rides.store');
 
     // No cuelga de `me` como el vehículo: no es un sub-recurso de la cuenta,
     // es una consulta puntual que no persiste nada (historia #14). Exige
