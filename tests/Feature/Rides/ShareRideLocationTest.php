@@ -8,11 +8,9 @@ use App\Enums\RideStatus;
 use App\Events\Realtime\DriverLocationUpdated;
 use App\Models\Ride;
 use App\Models\User;
-use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Broadcast;
-use Illuminate\Support\Facades\Config;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\RecordsBroadcasts;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -25,7 +23,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  */
 class ShareRideLocationTest extends TestCase
 {
-    use RefreshDatabase;
+    use RecordsBroadcasts, RefreshDatabase;
 
     public function test_el_conductor_asignado_comparte_su_ubicacion_en_el_viaje_en_curso(): void
     {
@@ -180,33 +178,5 @@ class ShareRideLocationTest extends TestCase
     private function uri(Ride $viaje): string
     {
         return "/api/v1/rides/{$viaje->id}/location";
-    }
-
-    /**
-     * Registra una conexión de broadcasting que, en vez de hablar con Reverb,
-     * anota lo que se le pidió publicar (mismo patrón que RealtimePingTest).
-     */
-    private function grabarBroadcasts(): object
-    {
-        $grabador = new class implements Broadcaster
-        {
-            /** @var list<array{0: list<string>, 1: string, 2: array<string, mixed>}> */
-            public array $emitidos = [];
-
-            public function auth($request) {}
-
-            public function validAuthenticationResponse($request, $result) {}
-
-            public function broadcast(array $channels, $event, array $payload = []): void
-            {
-                $this->emitidos[] = [array_map(strval(...), $channels), $event, $payload];
-            }
-        };
-
-        Broadcast::extend('recording', fn (): Broadcaster => $grabador);
-        Config::set('broadcasting.connections.recording', ['driver' => 'recording']);
-        Config::set('broadcasting.default', 'recording');
-
-        return $grabador;
     }
 }

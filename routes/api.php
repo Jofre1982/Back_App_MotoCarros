@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\Rides\CancelRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Rides\ShareRideLocationController;
+use App\Http\Controllers\Api\V1\Rides\ShowRideController;
 use App\Http\Controllers\Api\V1\Rides\StartRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
@@ -121,6 +122,15 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('rides/estimate', EstimateRideController::class)
         ->name('rides.estimate');
+
+    // Consultar el estado del viaje (historia #21). Es el fallback no
+    // realtime del canal privado `ride.{id}`: lo que llega por el socket
+    // mientras la app está viva, este endpoint lo responde cuando arranca o
+    // se reconecta. Por eso lo autoriza la misma regla que el canal —el
+    // pasajero dueño y el conductor asignado—, resuelta en `RidePolicy::view()`.
+    Route::middleware('auth:api')
+        ->get('rides/{ride}', ShowRideController::class)
+        ->name('rides.show');
 
     // Cancelar antes de que un conductor acepte (historia #16). Es el primer
     // endpoint del proyecto que direcciona por id de ruta: `{ride}` se

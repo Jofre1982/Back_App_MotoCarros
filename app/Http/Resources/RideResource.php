@@ -15,7 +15,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * el viaje sí se direcciona por él: es el `{rideId}` del canal privado
  * `ride.{rideId}` y el que van a llevar los endpoints de aceptar, iniciar y
  * completar. No publica el `passenger_id`: el viaje se solicita siempre desde la
- * cuenta que manda el token.
+ * cuenta que manda el token. Sí publica al conductor asignado, que es la única
+ * de las dos partes que el otro lado no conoce de antemano (historia #21).
  *
  * @property-read Ride $resource
  */
@@ -41,6 +42,18 @@ class RideResource extends JsonResource
             'duration_seconds' => $this->resource->estimated_duration_seconds,
             'currency' => $this->resource->currency,
             'estimated_fare' => $this->resource->estimated_fare,
+            // Presente siempre, aunque valga `null`, por el mismo motivo que
+            // `started_at`: el contrato lo declara obligatorio y nullable para
+            // que el cliente no distinga "todavía no hay conductor" de "esta
+            // respuesta no lo trae" (historia #21).
+            //
+            // La ubicación del conductor no está acá y no es un olvido: no se
+            // persiste, viaja solo por el evento `location.updated` del canal
+            // `ride.{id}` (historia #20). Que `driver` sea `null` es
+            // justamente lo que dice que todavía no hay nadie publicándola.
+            'driver' => $this->resource->driver === null
+                ? null
+                : new RideDriverResource($this->resource->driver),
             // ISO-8601 explícito en vez del formato por defecto de Eloquent:
             // el contrato publica `format: date-time` y el default trae
             // microsegundos que nadie usa acá.

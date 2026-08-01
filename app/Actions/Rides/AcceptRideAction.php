@@ -7,6 +7,7 @@ namespace App\Actions\Rides;
 use App\DTOs\Coordinates;
 use App\Enums\RideStatus;
 use App\Events\Realtime\RideNoLongerAvailable;
+use App\Events\Realtime\RideStatusChanged;
 use App\Exceptions\Rides\RideNoLongerAvailableException;
 use App\Models\Ride;
 use App\Models\User;
@@ -28,9 +29,11 @@ use Illuminate\Support\Facades\DB;
  * `AcceptRideRequest` (422); acá ya no queda esa decisión, solo el cambio de
  * estado.
  *
- * Después de confirmar el cambio, avisa a los demás conductores cercanos
- * (historia #17) que la solicitud ya no está disponible; ver
- * `notifyOtherDrivers()`.
+ * Después de confirmar el cambio salen dos avisos, los dos fuera de la
+ * transacción: al pasajero por su canal `ride.{id}`, que el viaje pasó a
+ * `accepted` y con qué conductor (historia #21); y a los demás conductores
+ * cercanos, que la solicitud ya no está disponible (historia #17, ver
+ * `notifyOtherDrivers()`).
  */
 final readonly class AcceptRideAction
 {
@@ -58,6 +61,12 @@ final readonly class AcceptRideAction
 
             return $locked;
         });
+
+        // Fuera de la transacción y no adentro: el conductor que llega tarde
+        // sale por la excepción sin pasar por acá, así que el pasajero recibe
+        // un único "te aceptaron" por el único conductor que quedó asignado
+        // (historia #21).
+        RideStatusChanged::dispatch($accepted->id, $accepted->status, $accepted->driver_id);
 
         $this->notifyOtherDrivers($accepted, $driver);
 

@@ -979,6 +979,7 @@ paths:
                   duration_seconds: 842
                   currency: COP
                   estimated_fare: 8850
+                  driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
         "401":
@@ -1111,6 +1112,103 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/{id}:
+    get:
+      tags:
+        - Rides
+      operationId: showRide
+      summary: Ver el estado actual de un viaje
+      description: >-
+        Devuelve el estado del viaje y, si ya lo aceptó alguien, quién es el
+        conductor asignado (historia #21). Es la consulta puntual que
+        acompaña al canal privado `ride.{id}`: el seguimiento en vivo llega
+        por el canal, y este endpoint es el que responde "¿en qué punto está
+        mi viaje?" cuando el cliente arranca, vuelve del segundo plano o
+        perdió la conexión al canal.
+
+        Lo puede consultar el pasajero dueño del viaje y el conductor
+        asignado —los mismos dos que entran al canal—; cualquier otra cuenta
+        recibe **403**.
+
+        Mientras el viaje sigue en `requested` no hay conductor todavía y
+        `driver` vale `null`. Tampoco hay ubicación que mostrar en ese punto,
+        y no porque el campo falte: la posición del conductor no viaja nunca
+        por esta respuesta, solo por el evento `location.updated` del canal,
+        que publica el conductor asignado (historia #20). Sin conductor no hay
+        nadie publicándola.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del viaje a consultar.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El estado actual del viaje.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ride"
+              example:
+                data:
+                  id: 1
+                  status: requested
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    latitude: 4.698
+                    longitude: -74.061
+                  distance_meters: 7421
+                  duration_seconds: 842
+                  currency: COP
+                  estimated_fare: 8850
+                  driver: null
+                  requested_at: "2026-07-31T14:03:21+00:00"
+                  started_at: null
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            El viaje no es de la cuenta autenticada: ni lo pidió ni está
+            asignada a él como conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Ride] 1."
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /rides/{id}/cancel:
     post:
       tags:
@@ -1187,6 +1285,7 @@ paths:
                   duration_seconds: 842
                   currency: COP
                   estimated_fare: 8850
+                  driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
                   cancellation_fee_applies: true
@@ -1289,6 +1388,9 @@ paths:
                   duration_seconds: 842
                   currency: COP
                   estimated_fare: 8850
+                  driver:
+                    id: 42
+                    name: Carlos Pérez
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
         "401":
@@ -1402,6 +1504,9 @@ paths:
                   duration_seconds: 842
                   currency: COP
                   estimated_fare: 8850
+                  driver:
+                    id: 42
+                    name: Carlos Pérez
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: "2026-07-31T14:09:05+00:00"
         "401":
@@ -2120,9 +2225,9 @@ components:
         estimaron al crearlo.
 
         No publica el `passenger_id`: el viaje se solicita siempre desde la
-        cuenta que manda el token, igual que el vehículo del conductor. Tampoco
-        trae al conductor asignado, que todavía no existe cuando el viaje nace
-        (lo asigna la historia #18).
+        cuenta que manda el token, igual que el vehículo del conductor. Sí trae
+        al conductor asignado en `driver`, que vale `null` mientras el viaje
+        sigue en `requested` (lo asigna la historia #18).
       required:
         - id
         - status
@@ -2132,6 +2237,7 @@ components:
         - duration_seconds
         - currency
         - estimated_fare
+        - driver
         - requested_at
         - started_at
       properties:
@@ -2178,6 +2284,21 @@ components:
             un cobro: el monto final se recalcula al completar el viaje con el
             trayecto realmente recorrido.
           example: 8850
+        driver:
+          allOf:
+            - $ref: "#/components/schemas/RideDriver"
+          nullable: true
+          description: >-
+            El conductor asignado al viaje, o `null` mientras nadie lo haya
+            aceptado todavía (historia #21). El campo está siempre presente,
+            igual que `started_at`, para que el cliente no tenga que
+            distinguir "todavía no hay conductor" de "esta respuesta no lo
+            trae".
+
+            Mientras vale `null` tampoco hay ubicación que seguir: la posición
+            del conductor no viaja nunca en esta respuesta, solo por el evento
+            `location.updated` del canal `ride.{id}`, y ese evento lo publica
+            el conductor asignado. Sin conductor no hay nadie publicándolo.
         requested_at:
           type: string
           format: date-time
@@ -2193,6 +2314,31 @@ components:
             el campo está siempre presente para que el cliente no tenga que
             distinguir "todavía no empezó" de "esta respuesta no lo trae".
           example: null
+    RideDriver:
+      type: object
+      description: >-
+        El conductor asignado a un viaje, visto desde el viaje (historia #21).
+
+        Es deliberadamente más chico que `User`: acá el que mira es la
+        contraparte del viaje, no el dueño de la cuenta. Va lo mínimo para
+        saber a quién se está esperando; el teléfono y los datos de la moto
+        (placa, modelo) no entran todavía porque ninguna historia los pidió, y
+        publicar el contacto de una persona a la otra es una decisión de
+        producto, no un detalle de serialización.
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          description: >-
+            Id de la cuenta del conductor. Es el mismo id de `User` que usa
+            el canal privado `driver.{driverId}`.
+          example: 42
+        name:
+          type: string
+          description: Nombre con el que el conductor se registró.
+          example: Carlos Pérez
     BroadcastAuthRequest:
       type: object
       description: >-

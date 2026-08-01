@@ -9,6 +9,7 @@ use App\Models\Ride;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\RecordsBroadcasts;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -18,10 +19,15 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  * Historia #19: el conductor que ya aceptó el viaje marca que recogió al
  * pasajero. Lo que distingue esta operación de aceptar es de quién es el
  * permiso: acá no vale cualquier conductor, solo el asignado a ese viaje.
+ *
+ * Iniciar publica el cambio de estado hacia el pasajero (historia #21); lo que
+ * sale por el canal se prueba en `RideStatusChangedTest`. Acá el trait está
+ * solo para que las requests que lo disparan no terminen buscando un Reverb
+ * real.
  */
 class StartRideTest extends TestCase
 {
-    use RefreshDatabase;
+    use RecordsBroadcasts, RefreshDatabase;
 
     public function test_el_conductor_asignado_inicia_su_viaje_aceptado(): void
     {

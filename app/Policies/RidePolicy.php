@@ -35,6 +35,26 @@ class RidePolicy
     }
 
     /**
+     * Ver un viaje es de quienes participan de él: el pasajero que lo pidió y
+     * el conductor asignado (historia #21). Son exactamente los mismos dos que
+     * entran al canal privado `ride.{id}` — el endpoint es la consulta puntual
+     * que acompaña a ese canal, así que un desacuerdo entre ambas reglas sería
+     * un agujero: lo que no se puede leer por HTTP tampoco debería llegar por
+     * el socket, y al revés.
+     *
+     * A diferencia de `cancel()` y `start()`, acá **no** se comprueba además
+     * el rol. Esas deciden si la cuenta puede *operar* el viaje, y una cuenta
+     * que cambió de rol no debería poder; esta solo lee lo que esa misma
+     * persona ya vivió, y quitarle el acceso a su propio viaje porque después
+     * se registró como conductor sería un efecto secundario que nadie pidió.
+     */
+    public function view(User $user, Ride $ride): bool
+    {
+        return $ride->passenger_id === $user->getKey()
+            || ($ride->driver_id !== null && $ride->driver_id === $user->getKey());
+    }
+
+    /**
      * Cancelar un viaje es del pasajero **dueño** de ese viaje (historia #16).
      *
      * Que el viaje ya no esté en `requested` **no** se decide acá: eso

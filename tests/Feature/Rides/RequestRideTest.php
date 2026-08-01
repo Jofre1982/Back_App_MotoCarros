@@ -8,12 +8,11 @@ use App\Enums\RideStatus;
 use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
-use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\RecordsBroadcasts;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -27,7 +26,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  */
 class RequestRideTest extends TestCase
 {
-    use RefreshDatabase;
+    use RecordsBroadcasts, RefreshDatabase;
 
     private const URI = '/api/v1/rides';
 
@@ -68,6 +67,10 @@ class RequestRideTest extends TestCase
                 'duration_seconds' => 842,
                 'currency' => 'COP',
                 'estimated_fare' => 8850,
+                // Todavía no lo aceptó nadie, y el campo viaja igual por el
+                // mismo motivo que `started_at`: el schema `Ride` lo declara
+                // obligatorio y nullable (historia #21).
+                'driver' => null,
                 'requested_at' => $viaje->created_at?->toIso8601String(),
                 // El viaje nace sin empezar, pero el campo viaja igual: el
                 // schema `Ride` lo declara obligatorio y nullable (historia
@@ -445,35 +448,6 @@ class RequestRideTest extends TestCase
             ->assertCreated();
 
         $this->assertSame([], $grabador->emitidos);
-    }
-
-    /**
-     * Registra una conexión de broadcasting que, en vez de hablar con Reverb,
-     * anota lo que se le pidió publicar (mismo patrón que
-     * ShareRideLocationTest).
-     */
-    private function grabarBroadcasts(): object
-    {
-        $grabador = new class implements Broadcaster
-        {
-            /** @var list<array{0: list<string>, 1: string, 2: array<string, mixed>}> */
-            public array $emitidos = [];
-
-            public function auth($request) {}
-
-            public function validAuthenticationResponse($request, $result) {}
-
-            public function broadcast(array $channels, $event, array $payload = []): void
-            {
-                $this->emitidos[] = [array_map(strval(...), $channels), $event, $payload];
-            }
-        };
-
-        Broadcast::extend('recording', fn (): Broadcaster => $grabador);
-        Config::set('broadcasting.connections.recording', ['driver' => 'recording']);
-        Config::set('broadcasting.default', 'recording');
-
-        return $grabador;
     }
 
     private function fakeRuta(int $distanciaMetros = 7421, int $duracionSegundos = 842): void

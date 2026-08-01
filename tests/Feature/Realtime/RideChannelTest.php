@@ -106,6 +106,25 @@ class RideChannelTest extends TestCase
         $this->assertFalse($channel->join(User::factory()->create(), (string) $viaje->id));
     }
 
+    /**
+     * Criterio de aceptación de la historia #21: un pasajero cualquiera no es
+     * un tercero anónimo —tiene su propio viaje andando— y aun así no escucha
+     * el de otro. El caso importa aparte del tercero sin viajes porque es el
+     * que puede confundirse en el cliente: la app manda el id que tiene a mano
+     * y el canal no debe darle nada si ese id no es el suyo.
+     */
+    public function test_un_pasajero_no_entra_al_canal_de_un_viaje_ajeno(): void
+    {
+        $ajeno = Ride::factory()->create([
+            'status' => RideStatus::InProgress,
+            'driver_id' => User::factory()->driver()->create()->id,
+        ]);
+        $otroPasajero = User::factory()->create();
+        Ride::factory()->for($otroPasajero, 'passenger')->create();
+
+        $this->assertFalse(app(RideChannel::class)->join($otroPasajero, (string) $ajeno->id));
+    }
+
     public function test_la_implementacion_registrada_deniega_un_viaje_que_no_existe(): void
     {
         $usuario = User::factory()->create();
