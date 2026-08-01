@@ -803,6 +803,117 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /me/availability:
+    patch:
+      tags:
+        - Drivers
+      operationId: updateDriverAvailability
+      summary: Marcar disponibilidad y ubicación del conductor
+      description: >-
+        Marca al conductor autenticado disponible o no disponible para recibir
+        solicitudes de viaje nuevas cerca de su ubicación (historia #17), y
+        opcionalmente actualiza esa ubicación.
+
+        Cuelga de `/me` y no lleva id, igual que `/me/vehicle`: se llega al
+        perfil por el token, nunca por un id propio, así que estructuralmente
+        no existe forma de tocar la disponibilidad de otro conductor.
+
+        `latitude`/`longitude` son obligatorias cuando `is_available` es
+        `true`: sin una ubicación conocida, el conductor no entraría en
+        ninguna búsqueda por radio y marcarse disponible no tendría efecto.
+        Son opcionales al marcarse no disponible.
+
+        Mientras está disponible, un conductor recibe por el canal privado
+        `driver.{id}` un evento `ride.requested` por cada viaje nuevo dentro
+        del radio configurado (`RIDES_NEARBY_RADIUS_METERS`), y un evento
+        `ride.unavailable` cuando alguno de esos viajes lo acepta otro
+        conductor.
+
+        Requiere un token vigente y rol `driver`: una cuenta de pasajero
+        recibe 403. Un conductor que todavía no tiene perfil creado recibe
+        404.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriverAvailabilityRequest"
+            example:
+              is_available: true
+              latitude: 4.710989
+              longitude: -74.072092
+      responses:
+        "200":
+          description: Disponibilidad (y ubicación, si vino) actualizadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverProfile"
+              example:
+                data:
+                  license_number: LIC-445566
+                  is_available: true
+                  latitude: 4.710989
+                  longitude: -74.072092
+                  location_updated_at: "2026-07-31T10:04:05-05:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no es de conductor. Marcar disponibilidad no
+            es algo que un pasajero pueda hacer con otros datos, así que no es
+            un 422.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: >-
+            La cuenta es de conductor pero todavía no tiene un perfil
+            registrado, así que no hay recurso que actualizar.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No tienes un perfil de conductor; regístrate como conductor antes de marcarte disponible.
+        "422":
+          description: >-
+            La entrada no pasó la validación: falta `is_available`, o falta
+            `latitude`/`longitude` (u otra fuera de rango) al marcarse
+            disponible.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The latitude field is required when is available is true.
+                errors:
+                  latitude:
+                    - The latitude field is required when is available is true.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /rides:
     post:
       tags:
@@ -1492,11 +1603,16 @@ components:
     DriverProfile:
       type: object
       description: >-
-        Datos que solo existen para una cuenta de conductor. Hoy es únicamente
-        la licencia; los documentos del vehículo son otra entidad y se registran
-        aparte (historia #12).
+        Datos que solo existen para una cuenta de conductor: la licencia
+        (historia #12) y la disponibilidad/ubicación para recibir solicitudes
+        de viaje cercanas (historia #17); los documentos del vehículo son otra
+        entidad y se registran aparte.
       required:
         - license_number
+        - is_available
+        - latitude
+        - longitude
+        - location_updated_at
       properties:
         license_number:
           type: string
@@ -1506,6 +1622,66 @@ components:
             verifica contra ninguna entidad externa que exista ni que esté
             vigente: devuelve lo que el conductor declaró.
           example: LIC-445566
+        is_available:
+          type: boolean
+          description: >-
+            Si el conductor está marcado como disponible para recibir
+            solicitudes de viaje cercanas por el canal `driver.{id}` (historia
+            #17). `false` por defecto: recién registrado, ningún conductor
+            está trabajando todavía.
+          example: true
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          minimum: -90
+          maximum: 90
+          description: >-
+            Última posición conocida mientras está disponible. `null` si
+            todavía no la compartió.
+          example: 4.710989
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          minimum: -180
+          maximum: 180
+          example: -74.072092
+        location_updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Cuándo se actualizó la posición por última vez. `null` si nunca se compartió.
+          example: "2026-07-31T10:04:05-05:00"
+    UpdateDriverAvailabilityRequest:
+      type: object
+      description: >-
+        Disponibilidad (y opcionalmente ubicación) que el conductor
+        autenticado publica para recibir solicitudes de viaje cercanas
+        (historia #17).
+      required:
+        - is_available
+      properties:
+        is_available:
+          type: boolean
+          description: Si el conductor puede recibir solicitudes de viaje cercanas en este momento.
+          example: true
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          description: >-
+            Obligatoria cuando `is_available` es `true`: sin ubicación, el
+            conductor no entraría en ninguna búsqueda por radio. Opcional al
+            marcarse no disponible.
+          example: 4.710989
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: -74.072092
     Profile:
       description: >-
         Cuenta autenticada vista por su dueño. Es el schema `User` más lo que

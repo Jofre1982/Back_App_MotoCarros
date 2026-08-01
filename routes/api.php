@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
+use App\Http\Controllers\Api\V1\Drivers\UpdateDriverAvailabilityController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
 use App\Http\Controllers\Api\V1\Rides\AcceptRideController;
@@ -91,6 +92,16 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me/vehicle', UpdateVehicleController::class)
         ->name('vehicles.update');
+
+    // Disponibilidad y ubicación del conductor mientras no está en un viaje
+    // (historia #17). Cuelga de `me`, mismo criterio que el vehículo: se
+    // llega por el token, nunca por un id propio, así que estructuralmente
+    // no existe forma de tocar la disponibilidad de otro conductor. Que solo
+    // los conductores puedan usarlo no lo decide un middleware de rol acá,
+    // sino `DriverProfilePolicy` desde `UpdateDriverAvailabilityRequest`.
+    Route::middleware('auth:api')
+        ->patch('me/availability', UpdateDriverAvailabilityController::class)
+        ->name('drivers.availability');
 
     // La solicitud de viaje (historia #15). Es un recurso propio y no un
     // sub-recurso de `me`: se direcciona por su id —es el `{rideId}` del canal

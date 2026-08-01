@@ -9,13 +9,16 @@ use App\DTOs\Coordinates;
 use App\DTOs\RideRequest;
 use App\DTOs\RouteEstimate;
 use App\Enums\RideStatus;
+use App\Events\Realtime\RideRequested;
 use App\Exceptions\RouteEstimationFailed;
+use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
 use App\Services\Maps\RouteEstimator;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 /**
@@ -136,6 +139,46 @@ class CreateRideActionTest extends TestCase
         } finally {
             $this->assertDatabaseCount('rides', 1);
         }
+    }
+
+    /**
+     * Historia #17: avisa a los conductores disponibles cercanos al origen.
+     */
+    public function test_dispara_ride_requested_con_los_conductores_disponibles_cercanos(): void
+    {
+        Event::fake([RideRequested::class]);
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->available(latitude: 4.710989, longitude: -74.072092)
+            ->create(['user_id' => $conductor->id]);
+
+        $viaje = $this->action()->handle(User::factory()->create(), $this->solicitud());
+
+        Event::assertDispatched(
+            RideRequested::class,
+            fn (RideRequested $evento): bool => $evento->rideId === $viaje->id
+                && $evento->nearbyDriverIds === [$conductor->id],
+        );
+    }
+
+    public function test_no_dispara_ride_requested_si_no_hay_conductores_disponibles_cerca(): void
+    {
+        Event::fake([RideRequested::class]);
+
+        $this->action()->handle(User::factory()->create(), $this->solicitud());
+
+        Event::assertNotDispatched(RideRequested::class);
+    }
+
+    public function test_no_dispara_ride_requested_para_un_conductor_no_disponible(): void
+    {
+        Event::fake([RideRequested::class]);
+        $conductor = User::factory()->driver()->create();
+        // No disponible: la fábrica lo deja así por defecto.
+        DriverProfile::factory()->create(['user_id' => $conductor->id]);
+
+        $this->action()->handle(User::factory()->create(), $this->solicitud());
+
+        Event::assertNotDispatched(RideRequested::class);
     }
 
     private function action(?RouteEstimate $trayecto = null): CreateRideAction

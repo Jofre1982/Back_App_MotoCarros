@@ -5,7 +5,9 @@ namespace App\Providers;
 use App\DTOs\FareSchedule;
 use App\Services\Maps\GoogleRoutesEstimator;
 use App\Services\Maps\RouteEstimator;
+use App\Services\Realtime\EloquentNearbyDriverFinder;
 use App\Services\Realtime\EloquentRideParticipants;
+use App\Services\Realtime\NearbyDriverFinder;
 use App\Services\Realtime\RideParticipants;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -25,6 +27,22 @@ class AppServiceProvider extends ServiceProvider
         $this->registerRouteEstimator();
         $this->registerFareSchedule();
         $this->registerRideParticipants();
+        $this->registerNearbyDriverFinder();
+    }
+
+    /**
+     * Fuente de los conductores disponibles cerca de un punto (historia
+     * #17), que es lo que necesitan `CreateRideAction` y `AcceptRideAction`
+     * para avisar y desavisar a los conductores cercanos.
+     *
+     * El radio vigente sale de `config/rides.php`, mismo criterio diferido
+     * que `FareSchedule`: se lee al resolver la clase, no en cada arranque.
+     */
+    private function registerNearbyDriverFinder(): void
+    {
+        $this->app->singleton(NearbyDriverFinder::class, static fn (): NearbyDriverFinder => new EloquentNearbyDriverFinder(
+            radiusMeters: Config::integer('rides.nearby_radius_meters'),
+        ));
     }
 
     /**

@@ -92,6 +92,14 @@ class ShowProfileTest extends TestCase
                     'role' => 'driver',
                     'driver_profile' => [
                         'license_number' => 'LIC-445566',
+                        // Historia #17: `false`/`null` por defecto, mismo
+                        // criterio que `started_at` en `RideResource` — el
+                        // campo viaja siempre presente, aunque no aplique
+                        // todavía.
+                        'is_available' => false,
+                        'latitude' => null,
+                        'longitude' => null,
+                        'location_updated_at' => null,
                     ],
                 ],
             ]);

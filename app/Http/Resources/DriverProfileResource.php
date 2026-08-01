@@ -28,6 +28,17 @@ class DriverProfileResource extends JsonResource
     {
         return [
             'license_number' => $this->resource->license_number,
+            // Historia #17: si el conductor puede recibir solicitudes de
+            // viaje cercanas, y su última posición conocida. `latitude`,
+            // `longitude` y `location_updated_at` viajan siempre presentes,
+            // aunque valgan `null` — mismo criterio que `started_at` en
+            // `RideResource`: el contrato los declara nullable justamente
+            // para que el cliente no tenga que distinguir "sin ubicación
+            // todavía" de "esta respuesta no trae el campo".
+            'is_available' => $this->resource->is_available,
+            'latitude' => $this->resource->latitude,
+            'longitude' => $this->resource->longitude,
+            'location_updated_at' => $this->resource->location_updated_at?->toIso8601String(),
         ];
     }
 }
