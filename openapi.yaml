@@ -921,10 +921,13 @@ paths:
       operationId: listMyRides
       summary: Ver el historial de viajes propios
       description: >-
-        Devuelve los viajes del pasajero autenticado, ordenados del más
-        reciente al más antiguo (historia #29). Es la vista con la que el
-        pasajero consulta y audita sus viajes pasados; no trae filtros por
-        fecha o estado ni exportación — se evalúan como historias aparte.
+        Devuelve los viajes de la cuenta autenticada, ordenados del más
+        reciente al más antiguo: los que pidió, si es pasajero (historia #29),
+        o los que le asignaron, si es conductor (historia #30). Es la vista
+        con la que cada cuenta consulta y audita sus viajes pasados; no trae
+        filtros por fecha o estado ni exportación — se evalúan como historias
+        aparte. Para el conductor, el resumen de ganancias en un rango de
+        fechas es un endpoint aparte (`GET /me/earnings`).
 
         Una cuenta sin viajes previos recibe **200** con `data` en una lista
         vacía, no un error.
@@ -1028,17 +1031,6 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Unauthenticated.
-        "403":
-          description: >-
-            La cuenta autenticada no es de pasajero. El historial de
-            ganancias del conductor es la historia #30, con su propio
-            endpoint.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-              example:
-                message: This action is unauthorized.
         "422":
           description: >-
             `page` o `per_page` no son enteros positivos (por ejemplo, texto
@@ -1052,6 +1044,107 @@ paths:
                 errors:
                   per_page:
                     - The per page field must be an integer.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /me/earnings:
+    get:
+      tags:
+        - Drivers
+      operationId: showDriverEarnings
+      summary: Ver el resumen de ganancias del conductor en un rango de fechas
+      description: >-
+        Devuelve cuánto ganó el conductor autenticado en un rango de fechas, y
+        cuántos viajes completados componen ese total (historia #30). Es el
+        complemento de `GET /me/rides` para hacer seguimiento de ingresos, no
+        el detalle viaje por viaje.
+
+        `from` y `to` son obligatorios y se toman como fechas completas (todo
+        el día), inclusive en ambos extremos. Solo cuentan los viajes en
+        estado `completed` cuyo `completed_at` cae dentro del rango; un viaje
+        `cancelled` o todavía activo no suma nada.
+
+        No se hace liquidación ni transferencia real del monto: es solo un
+        resumen de lectura, el flujo de pago al conductor queda fuera de
+        alcance de esta historia.
+
+        Requiere un token vigente y rol `driver`: una cuenta de pasajero
+        recibe 403, mismo criterio que `PATCH /me/availability`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Fecha inicial del rango (inclusive).
+          schema:
+            type: string
+            format: date
+          example: "2026-07-01"
+        - name: to
+          in: query
+          required: true
+          description: Fecha final del rango (inclusive).
+          schema:
+            type: string
+            format: date
+          example: "2026-07-31"
+      responses:
+        "200":
+          description: Resumen de ganancias del conductor en el rango solicitado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverEarningsSummary"
+              example:
+                data:
+                  from: "2026-07-01"
+                  to: "2026-07-31"
+                  currency: COP
+                  total_earned: 182400
+                  completed_rides: 21
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no es de conductor. El historial de viajes
+            del pasajero es la historia #29, con su propio endpoint
+            (`GET /me/rides`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: >-
+            Falta `from` o `to`, alguna no es una fecha válida, o `from` es
+            posterior a `to`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The to field must be a date after or equal to from.
+                errors:
+                  to:
+                    - The to field must be a date after or equal to from.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -2721,6 +2814,45 @@ components:
             en el monto final, que se recalcula al completar el viaje con el
             trayecto realmente recorrido.
           example: true
+    DriverEarningsSummary:
+      type: object
+      description: >-
+        Lo que ganó un conductor en un rango de fechas, junto con el número de
+        viajes completados que componen ese total (historia #30). No incluye
+        el detalle viaje por viaje — eso es `GET /me/rides` — ni implica que
+        el monto ya se haya liquidado al conductor.
+      required:
+        - from
+        - to
+        - currency
+        - total_earned
+        - completed_rides
+      properties:
+        from:
+          type: string
+          format: date
+          description: Fecha inicial del rango solicitado (inclusive).
+          example: "2026-07-01"
+        to:
+          type: string
+          format: date
+          description: Fecha final del rango solicitado (inclusive).
+          example: "2026-07-31"
+        currency:
+          type: string
+          description: Código ISO 4217 de tres letras de la moneda del monto.
+          example: COP
+        total_earned:
+          type: integer
+          description: >-
+            Suma de `final_fare` de los viajes completados del conductor en
+            el rango, entero en la unidad mínima de `currency` (ver la nota
+            sobre dinero en config/fares.php).
+          example: 182400
+        completed_rides:
+          type: integer
+          description: Número de viajes completados que componen `total_earned`.
+          example: 21
     RideRequest:
       type: object
       description: >-

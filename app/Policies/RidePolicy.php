@@ -185,14 +185,28 @@ class RidePolicy
     }
 
     /**
-     * Ver el propio historial de viajes es del rol pasajero (historia #29),
-     * mismo criterio que `create()`: no depende de una fila concreta porque
-     * la consulta ya viene acotada a la cuenta autenticada, así que no existe
-     * la pregunta "¿de quién es este viaje?" que sí resuelven `view()` o
-     * `cancel()`.
+     * Ver el propio historial de viajes es de cualquier cuenta autenticada:
+     * el pasajero ve los que pidió (historia #29), el conductor ve los que le
+     * asignaron (historia #30). Mismo criterio que `create()` para no
+     * depender de una fila concreta: la consulta ya viene acotada a la cuenta
+     * autenticada (`User::rides()` o `User::driverRides()` según el rol, ver
+     * `ShowRideHistoryController`), así que no existe la pregunta "¿de quién
+     * es este viaje?" que sí resuelven `view()` o `cancel()`.
      */
     public function viewHistory(User $user): bool
     {
-        return $user->isPassenger();
+        return $user->isPassenger() || $user->isDriver();
+    }
+
+    /**
+     * Ver el resumen de ganancias por rango de fechas es del rol conductor
+     * (historia #30): es a él a quien le corresponde el monto de cada viaje,
+     * el pasajero ya vio lo que pagó en su propio historial y en el recibo
+     * (historia #26). No depende de una fila concreta, mismo criterio que
+     * `viewHistory()`: la consulta ya viene acotada a la cuenta autenticada.
+     */
+    public function viewEarnings(User $user): bool
+    {
+        return $user->isDriver();
     }
 }

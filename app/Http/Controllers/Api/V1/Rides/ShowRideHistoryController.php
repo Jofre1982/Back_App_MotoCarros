@@ -12,17 +12,18 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 /**
  * GET /api/v1/me/rides
  *
- * Devuelve los viajes del pasajero autenticado, del más reciente al más
- * antiguo (historia #29). Es la vista con la que consulta y audita sus
- * viajes pasados; no trae filtros por fecha o estado, eso queda para una
- * historia aparte.
+ * Devuelve los viajes de la cuenta autenticada, del más reciente al más
+ * antiguo: los que pidió, si es pasajero (historia #29), o los que le
+ * asignaron, si es conductor (historia #30). No trae filtros por fecha o
+ * estado, eso queda para una historia aparte; el resumen de ganancias del
+ * conductor en un rango de fechas es un endpoint propio
+ * (`GET /me/earnings`, `ShowDriverEarningsController`).
  *
  * No hay Action detrás, mismo criterio que `ShowRideController`: leer los
  * viajes ya acotados a la cuenta del token no decide ni cambia nada. Sí hay
  * Policy, a diferencia de `ShowProfileController` —acá el rol sí importa,
- * porque el mismo path va a servir el historial de ganancias del conductor
- * (historia #30)— y la resuelve `RidePolicy::viewHistory()` desde
- * `ShowRideHistoryRequest`.
+ * porque decide **qué relación** se consulta— y la resuelve
+ * `RidePolicy::viewHistory()` desde `ShowRideHistoryRequest`.
  */
 class ShowRideHistoryController extends Controller
 {
@@ -41,8 +42,11 @@ class ShowRideHistoryController extends Controller
             self::MAX_PER_PAGE,
         );
 
-        $viajes = $request->user()
-            ->rides()
+        $usuario = $request->user();
+
+        $relacion = $usuario->isDriver() ? $usuario->driverRides() : $usuario->rides();
+
+        $viajes = $relacion
             ->with('driver')
             ->latest()
             ->paginate($perPage)

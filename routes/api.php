@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
+use App\Http\Controllers\Api\V1\Drivers\ShowDriverEarningsController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverAvailabilityController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
@@ -108,16 +109,25 @@ Route::prefix('v1')->group(function () {
         ->patch('me/availability', UpdateDriverAvailabilityController::class)
         ->name('drivers.availability');
 
-    // Historial de viajes del pasajero autenticado (historia #29). Cuelga de
-    // `me` como el vehículo y la disponibilidad: se llega por el token, nunca
-    // por un id propio, así que estructuralmente no existe forma de leer el
-    // historial de otra cuenta. Que solo los pasajeros lo consulten hoy no lo
-    // decide un middleware de rol acá, sino `RidePolicy::viewHistory()` desde
-    // `ShowRideHistoryRequest`; el mismo path servirá el historial de
-    // ganancias del conductor (historia #30).
+    // Historial de viajes de la cuenta autenticada: los que pidió, si es
+    // pasajero (historia #29), o los que le asignaron, si es conductor
+    // (historia #30). Cuelga de `me` como el vehículo y la disponibilidad: se
+    // llega por el token, nunca por un id propio, así que estructuralmente no
+    // existe forma de leer el historial de otra cuenta. Qué relación se
+    // consulta según el rol no lo decide un middleware acá, sino
+    // `RidePolicy::viewHistory()` y `ShowRideHistoryController`.
     Route::middleware('auth:api')
         ->get('me/rides', ShowRideHistoryController::class)
         ->name('rides.history');
+
+    // Resumen de ganancias del conductor por rango de fechas (historia #30).
+    // Cuelga de `me` mismo criterio que el historial: se llega por el token,
+    // nunca por un id propio. Que solo los conductores lo consulten no lo
+    // decide un middleware de rol acá, sino `RidePolicy::viewEarnings()` desde
+    // `ShowDriverEarningsRequest`.
+    Route::middleware('auth:api')
+        ->get('me/earnings', ShowDriverEarningsController::class)
+        ->name('drivers.earnings');
 
     // La solicitud de viaje (historia #15). Es un recurso propio y no un
     // sub-recurso de `me`: se direcciona por su id —es el `{rideId}` del canal

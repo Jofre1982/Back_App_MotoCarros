@@ -68,6 +68,18 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(Ride::class, 'passenger_id');
     }
 
+    /**
+     * Los viajes que esta cuenta aceptó como conductor (historia #30). Sirve
+     * el mismo historial que `rides()` del lado del pasajero, y además la
+     * base de la que se agregan las ganancias en `SummarizeDriverEarningsAction`.
+     *
+     * @return HasMany<Ride, $this>
+     */
+    public function driverRides(): HasMany
+    {
+        return $this->hasMany(Ride::class, 'driver_id');
+    }
+
     public function isDriver(): bool
     {
         return $this->role === UserRole::Driver;
