@@ -231,8 +231,24 @@ class RidePolicyTest extends TestCase
         $this->assertTrue(User::factory()->create()->can('viewHistory', Ride::class));
     }
 
-    public function test_el_conductor_no_puede_ver_el_historial_por_este_metodo(): void
+    /**
+     * El mismo path (`GET /me/rides`) sirve también el historial de viajes
+     * asignados del conductor (historia #30): no depende de una fila
+     * concreta, mismo criterio que el pasajero, porque la consulta ya viene
+     * acotada a la cuenta autenticada.
+     */
+    public function test_el_conductor_tambien_puede_ver_su_historial_de_viajes(): void
     {
-        $this->assertFalse(User::factory()->driver()->create()->can('viewHistory', Ride::class));
+        $this->assertTrue(User::factory()->driver()->create()->can('viewHistory', Ride::class));
+    }
+
+    public function test_el_conductor_puede_ver_el_resumen_de_sus_ganancias(): void
+    {
+        $this->assertTrue(User::factory()->driver()->create()->can('viewEarnings', Ride::class));
+    }
+
+    public function test_el_pasajero_no_puede_ver_el_resumen_de_ganancias(): void
+    {
+        $this->assertFalse(User::factory()->create()->can('viewEarnings', Ride::class));
     }
 }

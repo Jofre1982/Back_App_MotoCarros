@@ -15,8 +15,10 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  * Contrato de GET /api/v1/me/rides — ver openapi.yaml.
  *
  * Historia #29: el pasajero consulta y audita sus viajes pasados. El mismo
- * path servirá el historial del conductor (historia #30), pero eso es fuera
- * de alcance acá.
+ * path sirve también el historial del conductor (historia #30, ver los tests
+ * `test_el_conductor_ve_*` más abajo); el resumen de ganancias en un rango de
+ * fechas es un endpoint aparte (`GET /me/earnings`,
+ * `tests/Feature/Drivers/ShowDriverEarningsTest.php`).
  */
 class ShowRideHistoryTest extends TestCase
 {
@@ -118,14 +120,81 @@ class ShowRideHistoryTest extends TestCase
             ->assertJsonValidationErrors('per_page');
     }
 
-    public function test_rechaza_a_un_conductor(): void
+    public function test_el_conductor_ve_su_historial_ordenado_del_mas_reciente_al_mas_antiguo(): void
+    {
+        $conductor = User::factory()->driver()->create();
+
+        $viejo = Ride::factory()->create([
+            'driver_id' => $conductor->id,
+            'status' => RideStatus::Completed,
+            'created_at' => now()->subDays(2),
+        ]);
+        $reciente = Ride::factory()->create([
+            'driver_id' => $conductor->id,
+            'status' => RideStatus::Completed,
+            'created_at' => now()->subHour(),
+        ]);
+
+        $respuesta = $this->withToken(JWTAuth::fromUser($conductor))
+            ->getJson('/api/v1/me/rides')
+            ->assertOk();
+
+        $respuesta->assertJsonPath('data.0.id', $reciente->id);
+        $respuesta->assertJsonPath('data.1.id', $viejo->id);
+    }
+
+    public function test_el_conductor_sin_viajes_asignados_recibe_una_lista_vacia_con_200(): void
     {
         $conductor = User::factory()->driver()->create();
 
         $this->withToken(JWTAuth::fromUser($conductor))
             ->getJson('/api/v1/me/rides')
-            ->assertForbidden()
-            ->assertJsonStructure(['message']);
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_el_historial_del_conductor_no_incluye_viajes_de_otro_conductor(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        Ride::factory()->create(['driver_id' => User::factory()->driver()]);
+
+        $this->withToken(JWTAuth::fromUser($conductor))
+            ->getJson('/api/v1/me/rides')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    /**
+     * Un viaje sin conductor asignado (`requested`, todavía en el pool) no es
+     * de nadie del lado del conductor: no debería aparecer en el historial de
+     * ningún conductor solo porque ninguno lo tomó todavía.
+     */
+    public function test_el_historial_del_conductor_no_incluye_viajes_sin_conductor_asignado(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        Ride::factory()->create(['driver_id' => null]);
+
+        $this->withToken(JWTAuth::fromUser($conductor))
+            ->getJson('/api/v1/me/rides')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_el_historial_del_conductor_incluye_el_monto_ganado_de_cada_viaje(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->create([
+            'driver_id' => $conductor->id,
+            'status' => RideStatus::Completed,
+            'final_fare' => 9100,
+        ]);
+
+        $this->withToken(JWTAuth::fromUser($conductor))
+            ->getJson('/api/v1/me/rides')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $viaje->id)
+            ->assertJsonPath('data.0.final_fare', 9100);
     }
 
     public function test_rechaza_la_solicitud_sin_token(): void
