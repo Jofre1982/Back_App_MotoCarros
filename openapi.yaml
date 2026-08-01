@@ -984,6 +984,7 @@ paths:
                   started_at: null
                   completed_at: null
                   final_fare: null
+                  payment: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1179,6 +1180,7 @@ paths:
                   started_at: null
                   completed_at: null
                   final_fare: null
+                  payment: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1313,6 +1315,7 @@ paths:
                   started_at: null
                   completed_at: null
                   final_fare: null
+                  payment: null
                   cancellation_fee_applies: true
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -1423,6 +1426,7 @@ paths:
                   started_at: null
                   completed_at: null
                   final_fare: null
+                  payment: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1541,6 +1545,7 @@ paths:
                   started_at: "2026-07-31T14:09:05+00:00"
                   completed_at: null
                   final_fare: null
+                  payment: null
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -1610,9 +1615,12 @@ paths:
         ya se completó o se canceló) es en cambio **422**, porque el permiso
         lo tiene y lo que no corresponde es la transición.
 
-        El procesamiento del cobro en sí queda fuera de esta historia: acá
-        solo se calcula y persiste el monto a cobrar (la historia "Pagar el
-        viaje al finalizar" es quien lo procesa).
+        Completar el viaje también dispara su cobro (historia #25) por
+        `final_fare`, publicado en `payment`. Que el proveedor de pago
+        rechace el cobro no revierte la finalización ni responde un error:
+        el viaje igual queda `completed` y `payment.status` queda en
+        `failed` — el conductor ya hizo el trayecto, y un cobro que no se
+        pudo procesar se resuelve aparte, no reabriendo el viaje.
       security:
         - bearerAuth: []
       parameters:
@@ -1656,6 +1664,8 @@ paths:
                   started_at: "2026-07-31T14:09:05+00:00"
                   completed_at: "2026-07-31T14:19:05+00:00"
                   final_fare: 8450
+                  payment:
+                    status: paid
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -2389,6 +2399,7 @@ components:
         - started_at
         - completed_at
         - final_fare
+        - payment
       properties:
         id:
           type: integer
@@ -2480,10 +2491,20 @@ components:
             Monto final del viaje, entero en la unidad mínima de `currency`,
             recalculado al completarlo (historia #24) con el trayecto
             realmente recorrido en vez del estimado al solicitarlo. Es
-            `null` mientras el viaje no esté `completed`; no es en sí mismo
-            un cobro procesado, solo el monto que corresponde cobrar (eso lo
-            resuelve la historia "Pagar el viaje al finalizar", fuera de
-            alcance de #24).
+            `null` mientras el viaje no esté `completed`. No es en sí mismo
+            el resultado del cobro —eso lo publica `payment`—, solo el monto
+            que corresponde cobrar.
+          example: null
+        payment:
+          allOf:
+            - $ref: "#/components/schemas/Payment"
+          nullable: true
+          description: >-
+            El cobro del viaje (historia #25), o `null` mientras el viaje no
+            esté `completed`. El campo está siempre presente, mismo criterio
+            que `driver` y `started_at`, para que el cliente no tenga que
+            distinguir "todavía no se completó" de "esta respuesta no lo
+            trae".
           example: null
     RideDriver:
       type: object
@@ -2510,6 +2531,31 @@ components:
           type: string
           description: Nombre con el que el conductor se registró.
           example: Carlos Pérez
+    Payment:
+      type: object
+      description: >-
+        El cobro de un viaje completado, visto desde el viaje (historia #25).
+
+        No repite `amount` ni `currency`: son el `final_fare` y `currency`
+        que ya trae el viaje que contiene este objeto, y el pago no puede
+        valer un monto distinto del que se calculó al completarlo.
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: >-
+            Resultado del cobro. `paid` cuando el proveedor de pago lo
+            confirmó, `failed` cuando lo rechazó o no se lo pudo contactar
+            —eso no bloquea que el viaje quede `completed`—. `pending` no lo
+            produce hoy ningún flujo (el cobro se procesa de forma síncrona
+            al completar el viaje), pero es parte del contrato para cuando
+            se integre un proveedor real asíncrono.
+          enum:
+            - pending
+            - paid
+            - failed
+          example: paid
     BroadcastAuthRequest:
       type: object
       description: >-
