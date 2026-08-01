@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Rides\AcceptRideController;
 use App\Http\Controllers\Api\V1\Rides\CancelRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
+use App\Http\Controllers\Api\V1\Rides\StartRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
 use Illuminate\Broadcasting\BroadcastController;
@@ -129,4 +130,14 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('rides/{ride}/accept', AcceptRideController::class)
         ->name('rides.accept');
+
+    // Iniciar el viaje ya aceptado (historia #19). A diferencia de aceptar,
+    // acá el permiso depende del viaje concreto y no solo del rol: lo inicia
+    // el conductor asignado a *ese* viaje, y eso lo decide `RidePolicy`. Que
+    // el viaje no esté en `accepted` es 422 y lo resuelve `StartRideRequest`;
+    // no hace falta lock porque el único que puede competir por esta fila es
+    // el mismo conductor (ver `StartRideAction`).
+    Route::middleware('auth:api')
+        ->post('rides/{ride}/start', StartRideController::class)
+        ->name('rides.start');
 });
