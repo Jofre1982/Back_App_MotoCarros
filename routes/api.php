@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\V1\Rides\ShowRideHistoryController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideReceiptController;
 use App\Http\Controllers\Api\V1\Rides\StartRideController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
+use App\Http\Controllers\Api\V1\Vehicles\ShowVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
@@ -87,6 +88,14 @@ Route::prefix('v1')->group(function () {
     // conductores puedan registrarlo no se declara acá con un middleware de
     // rol, sino con `VehiclePolicy` (ver .claude/STANDARDS.md: la autorización
     // de negocio va en Policies, no en el token ni en la ruta).
+    // Consultar la moto ya registrada (historia técnica #60): es la única
+    // forma de leerla fuera del instante en que se acaba de registrar o
+    // actualizar en la misma sesión. Mismo criterio que el alta y la
+    // actualización: se llega a ella por el token, nunca por un id propio.
+    Route::middleware('auth:api')
+        ->get('me/vehicle', ShowVehicleController::class)
+        ->name('vehicles.show');
+
     Route::middleware('auth:api')
         ->post('me/vehicle', RegisterVehicleController::class)
         ->name('vehicles.store');
