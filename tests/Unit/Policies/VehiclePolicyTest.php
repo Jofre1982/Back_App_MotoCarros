@@ -60,4 +60,28 @@ class VehiclePolicyTest extends TestCase
 
         $this->assertFalse($pasajero->can('update', $vehiculo));
     }
+
+    public function test_el_conductor_puede_ver_su_propio_vehiculo(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $vehiculo = Vehicle::factory()->create(['user_id' => $conductor->id]);
+
+        $this->assertTrue($conductor->can('view', $vehiculo));
+    }
+
+    public function test_el_conductor_no_puede_ver_el_vehiculo_de_otro_conductor(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        $ajeno = Vehicle::factory()->create(['user_id' => User::factory()->driver()]);
+
+        $this->assertFalse($conductor->can('view', $ajeno));
+    }
+
+    public function test_el_pasajero_no_puede_ver_un_vehiculo_aunque_figure_como_dueno(): void
+    {
+        $pasajero = User::factory()->create();
+        $vehiculo = Vehicle::factory()->create(['user_id' => $pasajero->id]);
+
+        $this->assertFalse($pasajero->can('view', $vehiculo));
+    }
 }

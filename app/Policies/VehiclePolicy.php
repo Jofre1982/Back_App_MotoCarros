@@ -49,4 +49,17 @@ class VehiclePolicy
     {
         return $user->isDriver() && $vehicle->user_id === $user->getKey();
     }
+
+    /**
+     * Consultar los datos de una moto es del conductor **dueño** de esa moto.
+     *
+     * Misma regla que `update()` y mismo motivo: `GET /me/vehicle` tampoco
+     * lleva id en la ruta, así que hoy no existe una request capaz de traer
+     * acá el vehículo de otra persona, pero la garantía se escribe igual en
+     * la Policy y no en la forma de la ruta de hoy.
+     */
+    public function view(User $user, Vehicle $vehicle): bool
+    {
+        return $user->isDriver() && $vehicle->user_id === $user->getKey();
+    }
 }

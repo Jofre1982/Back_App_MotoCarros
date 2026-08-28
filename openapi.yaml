@@ -588,6 +588,81 @@ paths:
               example:
                 message: Too Many Attempts.
   /me/vehicle:
+    get:
+      tags:
+        - Vehicles
+      operationId: showVehicle
+      summary: Consultar los datos de mi vehículo
+      description: >-
+        Devuelve la moto ya registrada del conductor que envía el token. Es la
+        única forma de leerla fuera del instante en que se acaba de registrar
+        o actualizar en la misma sesión: ni `GET /me` ni ningún otro endpoint
+        la embeben.
+
+        Cuelga de `/me` como el alta y la actualización: se llega a ella por
+        el token, nunca por un id propio. Que no haya id en la ruta es lo que
+        hace estructuralmente imposible pedir la moto de otro conductor; la
+        propiedad se comprueba igual con `VehiclePolicy`, que es donde vive la
+        autorización de negocio.
+
+        Requiere un token vigente y rol `driver`. Un conductor que todavía no
+        registró su moto recibe 404, para que el cliente pueda distinguir
+        "no tiene vehículo" de un error real.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Vehículo de la cuenta autenticada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Vehicle"
+              example:
+                data:
+                  plate: ABC12D
+                  model: Bajaj Boxer CT 100
+                  year: 2022
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no es de conductor. No es que le falte
+            registrar la moto, es que operar vehículos no es de su rol.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: >-
+            La cuenta es de conductor pero todavía no tiene vehículo
+            registrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No tienes un vehículo registrado.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
     post:
       tags:
         - Vehicles
