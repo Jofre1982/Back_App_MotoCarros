@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MotoYa — Panel de administrador</title>
+<!--
+  Historia técnica #71 (Back_App_MotoCarros): panel para que un administrador
+  apruebe/rechace los documentos de verificación de un conductor con clics,
+  en vez de usar la API a mano.
+
+  Un solo archivo, sin build ni dependencias externas, servido como estático
+  por el mismo servidor de la API (este backend es solo API por decisión de
+  ".claude/CLAUDE.md" — esta página no le agrega vistas ni rutas web con
+  sesión al framework, solo llama a /api/v1 con JS plano, igual que la app
+  de Dioxus). Al vivir en el mismo origen que la API, no hace falta
+  configurar CORS ni una URL base: todas las llamadas son a rutas relativas.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f7f7f8;
+    --panel: #ffffff;
+    --border: #e2e2e5;
+    --text: #1f2328;
+    --muted: #6b7280;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --success: #16a34a;
+    --error-bg: #fef2f2;
+    --error-text: #991b1b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 24px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 0.9rem; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  label { display: block; font-size: 0.85rem; margin: 12px 0 4px; font-weight: 600; }
+  input[type="email"], input[type="password"], textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
+  .btn-link {
+    background: none;
+    color: var(--muted);
+    font-weight: 400;
+    padding: 4px 0;
+    text-decoration: underline;
+  }
+  .error {
+    background: var(--error-bg);
+    color: var(--error-text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+  }
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .doc-list { list-style: none; margin: 0; padding: 0; }
+  .doc-row {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .doc-row .driver { font-weight: 600; }
+  .doc-row .meta { color: var(--muted); font-size: 0.85rem; margin: 2px 0 10px; }
+  .doc-row .actions { display: flex; gap: 8px; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+  .loading { color: var(--muted); text-align: center; padding: 24px 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top-bar">
+    <div>
+      <h1>MotoYa — Documentos pendientes</h1>
+      <p class="subtitle">Panel interno de administración</p>
+    </div>
+    <button id="logout-button" class="btn-link" hidden>Cerrar sesión</button>
+  </div>
+
+  <div id="login-card" class="card">
+    <form id="login-form">
+      <label for="login-email">Email</label>
+      <input id="login-email" type="email" autocomplete="username" required>
+      <label for="login-password">Contraseña</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+      <div style="margin-top: 16px;">
+        <button type="submit" id="login-button" class="btn-primary">Entrar</button>
+      </div>
+    </form>
+    <p id="login-error" class="error" hidden></p>
+  </div>
+
+  <div id="documents-card" class="card" hidden>
+    <p id="documents-loading" class="loading">Cargando documentos...</p>
+    <p id="documents-empty" class="empty" hidden>No hay documentos pendientes por ahora.</p>
+    <p id="documents-error" class="error" hidden></p>
+    <ul id="documents-list" class="doc-list"></ul>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var TOKEN_KEY = "motoya_admin_token";
+
+  var loginCard = document.getElementById("login-card");
+  var loginForm = document.getElementById("login-form");
+  var loginButton = document.getElementById("login-button");
+  var loginError = document.getElementById("login-error");
+  var documentsCard = document.getElementById("documents-card");
+  var documentsLoading = document.getElementById("documents-loading");
+  var documentsEmpty = document.getElementById("documents-empty");
+  var documentsError = document.getElementById("documents-error");
+  var documentsList = document.getElementById("documents-list");
+  var logoutButton = document.getElementById("logout-button");
+
+  var documentTypeLabels = {
+    identidad: "Documento de identidad",
+    tarjeta_propiedad: "Tarjeta de propiedad",
+  };
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  function setToken(token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  }
+
+  function clearToken() {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+
+  function showError(el, message) {
+    el.textContent = message;
+    el.hidden = false;
+  }
+
+  function hideError(el) {
+    el.hidden = true;
+    el.textContent = "";
+  }
+
+  // Llamada autenticada a /api/v1. Un 401 significa token vencido o
+  // ilegible: se limpia y se vuelve al login, mismo criterio que el cliente
+  // Dioxus (moto_core::state::SessionState::logout).
+  function apiFetch(path, options) {
+    options = options || {};
+    var headers = options.headers || {};
+    var token = getToken();
+    if (token) {
+      headers["Authorization"] = "Bearer " + token;
+    }
+    if (options.body && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+    options.headers = headers;
+
+    return fetch("/api/v1" + path, options).then(function (response) {
+      if (response.status === 401) {
+        clearToken();
+        showLogin();
+        throw new Error("La sesión venció. Inicia sesión de nuevo.");
+      }
+      return response;
+    });
+  }
+
+  function showLogin() {
+    loginCard.hidden = false;
+    documentsCard.hidden = true;
+    logoutButton.hidden = true;
+  }
+
+  function showDocuments() {
+    loginCard.hidden = true;
+    documentsCard.hidden = false;
+    logoutButton.hidden = false;
+    loadPendingDocuments();
+  }
+
+  loginForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    hideError(loginError);
+    loginButton.disabled = true;
+    loginButton.textContent = "Entrando...";
+
+    var email = document.getElementById("login-email").value.trim();
+    var password = document.getElementById("login-password").value;
+
+    fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email, password: password }),
+    })
+      .then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok) {
+            throw new Error(body.message || "No se pudo iniciar sesión.");
+          }
+          return body;
+        });
+      })
+      .then(function (body) {
+        setToken(body.data.token.access_token);
+        // El login no distingue rol: cualquier cuenta válida entra. Si no es
+        // administrador, la propia lista de documentos lo va a mostrar (la
+        // API responde 403), así que no hace falta duplicar esa
+        // comprobación acá.
+        showDocuments();
+      })
+      .catch(function (err) {
+        showError(loginError, err.message);
+      })
+      .finally(function () {
+        loginButton.disabled = false;
+        loginButton.textContent = "Entrar";
+      });
+  });
+
+  logoutButton.addEventListener("click", function () {
+    clearToken();
+    showLogin();
+  });
+
+  function loadPendingDocuments() {
+    documentsLoading.hidden = false;
+    documentsEmpty.hidden = true;
+    hideError(documentsError);
+    documentsList.innerHTML = "";
+
+    apiFetch("/admin/documents?status=pending")
+      .then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok) {
+            if (response.status === 403) {
+              throw new Error("Esta cuenta no es de administrador.");
+            }
+            throw new Error(body.message || "No se pudo cargar la lista.");
+          }
+          return body;
+        });
+      })
+      .then(function (body) {
+        renderDocuments(body.data);
+      })
+      .catch(function (err) {
+        showError(documentsError, err.message);
+      })
+      .finally(function () {
+        documentsLoading.hidden = true;
+      });
+  }
+
+  function renderDocuments(documents) {
+    documentsList.innerHTML = "";
+
+    if (documents.length === 0) {
+      documentsEmpty.hidden = false;
+      return;
+    }
+    documentsEmpty.hidden = true;
+
+    documents.forEach(function (document_) {
+      documentsList.appendChild(buildDocumentRow(document_));
+    });
+  }
+
+  function buildDocumentRow(document_) {
+    var li = document.createElement("li");
+    li.className = "doc-row";
+    li.dataset.documentId = document_.id;
+
+    var driverLine = document.createElement("div");
+    driverLine.className = "driver";
+    driverLine.textContent = document_.driver.name;
+    li.appendChild(driverLine);
+
+    var metaLine = document.createElement("div");
+    metaLine.className = "meta";
+    var typeLabel = documentTypeLabels[document_.type] || document_.type;
+    var uploadedAt = new Date(document_.uploaded_at).toLocaleString("es-CO");
+    metaLine.textContent = typeLabel + " · subido " + uploadedAt;
+    li.appendChild(metaLine);
+
+    var rowError = document.createElement("p");
+    rowError.className = "error";
+    rowError.hidden = true;
+    li.appendChild(rowError);
+
+    var actions = document.createElement("div");
+    actions.className = "actions";
+
+    var approveButton = document.createElement("button");
+    approveButton.className = "btn-primary";
+    approveButton.textContent = "Aprobar";
+    actions.appendChild(approveButton);
+
+    var rejectButton = document.createElement("button");
+    rejectButton.className = "btn-danger";
+    rejectButton.textContent = "Rechazar";
+    actions.appendChild(rejectButton);
+
+    li.appendChild(actions);
+
+    // Formulario de rechazo, oculto hasta que se pide un motivo. En vez de
+    // window.prompt(): un diálogo nativo es más frágil (algunos navegadores
+    // lo bloquean fuera de una interacción directa) y no se puede probar de
+    // forma confiable.
+    var rejectForm = document.createElement("div");
+    rejectForm.hidden = true;
+    rejectForm.style.marginTop = "10px";
+
+    var reasonInput = document.createElement("textarea");
+    reasonInput.rows = 2;
+    reasonInput.placeholder = "Motivo del rechazo (el conductor lo va a ver)";
+    rejectForm.appendChild(reasonInput);
+
+    var rejectFormActions = document.createElement("div");
+    rejectFormActions.className = "actions";
+    rejectFormActions.style.marginTop = "8px";
+
+    var confirmRejectButton = document.createElement("button");
+    confirmRejectButton.className = "btn-danger";
+    confirmRejectButton.textContent = "Confirmar rechazo";
+    rejectFormActions.appendChild(confirmRejectButton);
+
+    var cancelRejectButton = document.createElement("button");
+    cancelRejectButton.type = "button";
+    cancelRejectButton.className = "btn-link";
+    cancelRejectButton.textContent = "Cancelar";
+    rejectFormActions.appendChild(cancelRejectButton);
+
+    rejectForm.appendChild(rejectFormActions);
+    li.appendChild(rejectForm);
+
+    approveButton.addEventListener("click", function () {
+      reviewDocument(document_.id, "approve", null, li, rowError);
+    });
+
+    rejectButton.addEventListener("click", function () {
+      hideError(rowError);
+      actions.hidden = true;
+      rejectForm.hidden = false;
+      reasonInput.focus();
+    });
+
+    cancelRejectButton.addEventListener("click", function () {
+      hideError(rowError);
+      reasonInput.value = "";
+      rejectForm.hidden = true;
+      actions.hidden = false;
+    });
+
+    confirmRejectButton.addEventListener("click", function () {
+      var reason = reasonInput.value.trim();
+      if (reason === "") {
+        showError(rowError, "Escribe un motivo para poder rechazarlo.");
+        return;
+      }
+      reviewDocument(document_.id, "reject", reason, li, rowError);
+    });
+
+    return li;
+  }
+
+  function reviewDocument(documentId, action, reason, row, rowError) {
+    hideError(rowError);
+    var buttons = row.querySelectorAll("button");
+    buttons.forEach(function (button) {
+      button.disabled = true;
+    });
+
+    var body = action === "reject" ? JSON.stringify({ reason: reason }) : undefined;
+
+    apiFetch("/admin/documents/" + documentId + "/" + action, {
+      method: "POST",
+      body: body,
+    })
+      .then(function (response) {
+        return response.json().then(function (responseBody) {
+          if (!response.ok) {
+            throw new Error(responseBody.message || "No se pudo procesar la acción.");
+          }
+          return responseBody;
+        });
+      })
+      .then(function () {
+        row.remove();
+        if (documentsList.children.length === 0) {
+          documentsEmpty.hidden = false;
+        }
+      })
+      .catch(function (err) {
+        showError(rowError, err.message);
+        buttons.forEach(function (button) {
+          button.disabled = false;
+        });
+      });
+  }
+
+  if (getToken()) {
+    showDocuments();
+  } else {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>
