@@ -1043,6 +1043,270 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/documents:
+    get:
+      tags:
+        - Documents
+      operationId: listAdminDriverDocuments
+      summary: Listar documentos de verificación para revisar
+      description: >-
+        Lista los documentos de verificación de conductores para que un
+        administrador los revise (historia técnica #64). Sin `status`, lista
+        los `pending`; con `status`, filtra por ese estado.
+
+        Requiere un token vigente y rol `admin`. No hay endpoint de registro
+        para este rol: una cuenta admin se crea manualmente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+          example: pending
+      responses:
+        "200":
+          description: Documentos que coinciden con el filtro, más recientes primero.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminDriverDocument"
+              example:
+                data:
+                  - id: 10
+                    driver:
+                      id: 3
+                      name: Carlos Ramírez
+                    type: identidad
+                    status: pending
+                    uploaded_at: "2026-09-04T15:00:00.000000Z"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /admin/documents/{document}/approve:
+    post:
+      tags:
+        - Documents
+      operationId: approveDriverDocument
+      summary: Aprobar un documento de verificación
+      description: >-
+        Aprueba un documento `pending` de un conductor (historia técnica
+        #64). Si con esta aprobación el conductor queda con **todos** los
+        documentos exigidos (`identidad`, `tarjeta_propiedad`) en
+        `approved`, su `verification_status` pasa a `verified`.
+
+        Solo se puede aprobar un documento `pending`: uno ya `approved` o
+        `rejected` responde 422, porque revisar dos veces la misma fila no es
+        un caso soportado (el conductor tendría que volver a subirlo).
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: document
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 10
+      responses:
+        "200":
+          description: Documento aprobado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdminDriverDocument"
+              example:
+                data:
+                  id: 10
+                  driver:
+                    id: 3
+                    name: Carlos Ramírez
+                  type: identidad
+                  status: approved
+                  uploaded_at: "2026-09-04T15:00:00.000000Z"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un documento con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\DriverDocument] 10
+        "422":
+          description: El documento no está `pending`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Solo se puede revisar un documento pendiente.
+                errors:
+                  document:
+                    - Solo se puede revisar un documento pendiente.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /admin/documents/{document}/reject:
+    post:
+      tags:
+        - Documents
+      operationId: rejectDriverDocument
+      summary: Rechazar un documento de verificación
+      description: >-
+        Rechaza un documento `pending` de un conductor con un motivo
+        obligatorio, para que sepa qué corregir (historia técnica #64). El
+        `verification_status` del conductor pasa a `rejected`.
+
+        Mismo criterio que aprobar: solo se puede rechazar un documento
+        `pending`. El conductor corrige y vuelve a subir el documento
+        (`POST /me/documents`), que vuelve a quedar `pending`.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: document
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 10
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  maxLength: 255
+                  example: La foto está borrosa, no se alcanza a leer el nombre.
+            example:
+              reason: La foto está borrosa, no se alcanza a leer el nombre.
+      responses:
+        "200":
+          description: Documento rechazado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdminDriverDocument"
+              example:
+                data:
+                  id: 10
+                  driver:
+                    id: 3
+                    name: Carlos Ramírez
+                  type: identidad
+                  status: rejected
+                  uploaded_at: "2026-09-04T15:00:00.000000Z"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un documento con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\DriverDocument] 10
+        "422":
+          description: El documento no está `pending`, o falta el motivo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The reason field is required.
+                errors:
+                  reason:
+                    - The reason field is required.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /me/availability:
     patch:
       tags:
@@ -2820,6 +3084,47 @@ components:
                 format: date-time
                 nullable: true
                 example: "2026-09-04T15:00:00.000000Z"
+    AdminDriverDocument:
+      type: object
+      description: >-
+        Un documento de verificación tal como lo ve un administrador: a
+        diferencia de `DriverDocument`, sí lleva `id` (es por lo que se lo
+        referencia en `/admin/documents/{document}/approve|reject`) y a qué
+        conductor pertenece.
+      required:
+        - id
+        - driver
+        - type
+        - status
+        - uploaded_at
+      properties:
+        id:
+          type: integer
+          example: 10
+        driver:
+          type: object
+          required:
+            - id
+            - name
+          properties:
+            id:
+              type: integer
+              example: 3
+            name:
+              type: string
+              example: Carlos Ramírez
+        type:
+          type: string
+          enum: [identidad, tarjeta_propiedad]
+          example: identidad
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        uploaded_at:
+          type: string
+          format: date-time
+          example: "2026-09-04T15:00:00.000000Z"
     LoginRequest:
       type: object
       description: >-

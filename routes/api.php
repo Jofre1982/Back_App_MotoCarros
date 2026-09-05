@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\ApproveDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
+use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
@@ -136,6 +139,25 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->get('me/documents', ShowDriverDocumentsController::class)
         ->name('documents.show');
+
+    // Revisión de documentos por un administrador (historia técnica #64).
+    // No cuelgan de `me`: el administrador no es dueño de los documentos que
+    // revisa, es staff operando sobre los de terceros. La autorización (solo
+    // `admin`) vive en `DriverDocumentPolicy::reviewAny()`/`review()`, no acá
+    // — mismo criterio que el resto de la API.
+    Route::prefix('admin')->name('admin.')->group(function () {
+        Route::middleware('auth:api')
+            ->get('documents', ListDriverDocumentsController::class)
+            ->name('documents.index');
+
+        Route::middleware('auth:api')
+            ->post('documents/{document}/approve', ApproveDriverDocumentController::class)
+            ->name('documents.approve');
+
+        Route::middleware('auth:api')
+            ->post('documents/{document}/reject', RejectDriverDocumentController::class)
+            ->name('documents.reject');
+    });
 
     // Historial de viajes de la cuenta autenticada: los que pidió, si es
     // pasajero (historia #29), o los que le asignaron, si es conductor

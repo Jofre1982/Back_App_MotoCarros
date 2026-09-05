@@ -47,6 +47,21 @@ class UserRoleSchemaTest extends TestCase
         $this->assertSame('LIC-001', $user->driverProfile->license_number);
     }
 
+    public function test_admin_user_can_be_created(): void
+    {
+        $user = User::create([
+            'name' => 'Staff MotoYa',
+            'email' => 'admin@example.com',
+            'phone' => '+573001112233',
+            'password' => 'secret',
+            'role' => UserRole::Admin,
+        ]);
+
+        $this->assertTrue($user->isAdmin());
+        $this->assertFalse($user->isDriver());
+        $this->assertFalse($user->isPassenger());
+    }
+
     public function test_license_number_is_unique_across_drivers(): void
     {
         $this->expectException(QueryException::class);
