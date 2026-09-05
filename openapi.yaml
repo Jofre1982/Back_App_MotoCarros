@@ -1090,10 +1090,10 @@ paths:
         `rejected`), y el estado general de la cuenta.
 
         Siempre lista los documentos exigidos hoy (`identidad`,
-        `tarjeta_propiedad`) aunque el conductor todavía no haya subido
-        alguno — ese documento aparece con `status: null`. Licencia de
-        conducción y SOAT no son obligatorios en esta etapa (decisión de
-        negocio) y por eso no aparecen en la lista.
+        `tarjeta_propiedad`, `foto_vehiculo`) aunque el conductor todavía no
+        haya subido alguno — ese documento aparece con `status: null`.
+        Licencia de conducción y SOAT no son obligatorios en esta etapa
+        (decisión de negocio) y por eso no aparecen en la lista.
 
         Cuelga de `/me` como el vehículo: se llega por el token, nunca por un
         id propio. Requiere un token vigente y rol `driver`.
@@ -1120,6 +1120,10 @@ paths:
                       rejection_reason: null
                       uploaded_at: "2026-09-04T15:00:00.000000Z"
                     - type: tarjeta_propiedad
+                      status: null
+                      rejection_reason: null
+                      uploaded_at: null
+                    - type: foto_vehiculo
                       status: null
                       rejection_reason: null
                       uploaded_at: null
@@ -1154,8 +1158,11 @@ paths:
       summary: Subir (o reemplazar) un documento de verificación
       description: >-
         Sube uno de los documentos de verificación del conductor autenticado:
-        `identidad` (cédula, cédula de extranjería o PTP, indistintamente) o
-        `tarjeta_propiedad` del motocarro.
+        `identidad` (cédula, cédula de extranjería o PTP, indistintamente),
+        `tarjeta_propiedad` del vehículo, o `foto_vehiculo` (foto del
+        vehículo físico, historia técnica #75 — antifraude: una tarjeta de
+        propiedad por sí sola no prueba que corresponda al vehículo que el
+        conductor realmente opera).
 
         Volver a subir el mismo `type` **reemplaza** el archivo y la fila
         existentes, no los duplica: no es un alta-o-reemplazo condicional
@@ -1165,7 +1172,8 @@ paths:
         nuevo (ver historia técnica #64, revisión por un administrador).
 
         El archivo se guarda en almacenamiento privado, nunca en una URL
-        servida públicamente: son documentos de identidad.
+        servida públicamente: son documentos sensibles (identidad y datos del
+        vehículo).
 
         Requiere un token vigente y rol `driver`.
       security:
@@ -1182,7 +1190,7 @@ paths:
               properties:
                 type:
                   type: string
-                  enum: [identidad, tarjeta_propiedad]
+                  enum: [identidad, tarjeta_propiedad, foto_vehiculo]
                   example: identidad
                 file:
                   type: string
@@ -1322,8 +1330,9 @@ paths:
       description: >-
         Aprueba un documento `pending` de un conductor (historia técnica
         #64). Si con esta aprobación el conductor queda con **todos** los
-        documentos exigidos (`identidad`, `tarjeta_propiedad`) en
-        `approved`, su `verification_status` pasa a `verified`.
+        documentos exigidos (`identidad`, `tarjeta_propiedad`,
+        `foto_vehiculo`) en `approved`, su `verification_status` pasa a
+        `verified`.
 
         Solo se puede aprobar un documento `pending`: uno ya `approved` o
         `rejected` responde 422, porque revisar dos veces la misma fila no es
@@ -3278,7 +3287,7 @@ components:
       properties:
         type:
           type: string
-          enum: [identidad, tarjeta_propiedad]
+          enum: [identidad, tarjeta_propiedad, foto_vehiculo]
           example: identidad
         status:
           type: string
@@ -3293,7 +3302,7 @@ components:
       description: >-
         Estado de verificación de un conductor: el general de la cuenta y el
         detalle de cada documento exigido hoy (`identidad`,
-        `tarjeta_propiedad`), lo haya subido o no.
+        `tarjeta_propiedad`, `foto_vehiculo`), lo haya subido o no.
       required:
         - verification_status
         - documents
@@ -3318,7 +3327,7 @@ components:
             properties:
               type:
                 type: string
-                enum: [identidad, tarjeta_propiedad]
+                enum: [identidad, tarjeta_propiedad, foto_vehiculo]
                 example: identidad
               status:
                 type: string
@@ -3366,7 +3375,7 @@ components:
               example: Carlos Ramírez
         type:
           type: string
-          enum: [identidad, tarjeta_propiedad]
+          enum: [identidad, tarjeta_propiedad, foto_vehiculo]
           example: identidad
         status:
           type: string
