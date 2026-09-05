@@ -878,6 +878,171 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /me/documents:
+    get:
+      tags:
+        - Documents
+      operationId: showDriverDocuments
+      summary: Consultar el estado de mis documentos de verificación
+      description: >-
+        Estado de verificación del conductor autenticado: qué documentos ya
+        subió, en qué estado quedó cada uno (`pending`, `approved`,
+        `rejected`), y el estado general de la cuenta.
+
+        Siempre lista los documentos exigidos hoy (`identidad`,
+        `tarjeta_propiedad`) aunque el conductor todavía no haya subido
+        alguno — ese documento aparece con `status: null`. Licencia de
+        conducción y SOAT no son obligatorios en esta etapa (decisión de
+        negocio) y por eso no aparecen en la lista.
+
+        Cuelga de `/me` como el vehículo: se llega por el token, nunca por un
+        id propio. Requiere un token vigente y rol `driver`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Estado de verificación de la cuenta autenticada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverVerification"
+              example:
+                data:
+                  verification_status: pending
+                  documents:
+                    - type: identidad
+                      status: approved
+                      rejection_reason: null
+                      uploaded_at: "2026-09-04T15:00:00.000000Z"
+                    - type: tarjeta_propiedad
+                      status: null
+                      rejection_reason: null
+                      uploaded_at: null
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es de conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+    post:
+      tags:
+        - Documents
+      operationId: uploadDriverDocument
+      summary: Subir (o reemplazar) un documento de verificación
+      description: >-
+        Sube uno de los documentos de verificación del conductor autenticado:
+        `identidad` (cédula, cédula de extranjería o PTP, indistintamente) o
+        `tarjeta_propiedad` del motocarro.
+
+        Volver a subir el mismo `type` **reemplaza** el archivo y la fila
+        existentes, no los duplica: no es un alta-o-reemplazo condicional
+        como el vehículo, es siempre un reemplazo. El documento vuelve a
+        quedar `pending` aunque el anterior ya hubiera sido `approved` o
+        `rejected` —es un archivo distinto, así que hay que revisarlo de
+        nuevo (ver historia técnica #64, revisión por un administrador).
+
+        El archivo se guarda en almacenamiento privado, nunca en una URL
+        servida públicamente: son documentos de identidad.
+
+        Requiere un token vigente y rol `driver`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - type
+                - file
+              properties:
+                type:
+                  type: string
+                  enum: [identidad, tarjeta_propiedad]
+                  example: identidad
+                file:
+                  type: string
+                  format: binary
+                  description: Imagen (jpg/jpeg/png) o PDF, hasta 5 MB.
+      responses:
+        "201":
+          description: Documento guardado, pendiente de revisión.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverDocument"
+              example:
+                data:
+                  type: identidad
+                  status: pending
+                  uploaded_at: "2026-09-04T15:00:00.000000Z"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es de conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: >-
+            La entrada no pasó la validación: falta el archivo o el tipo, el
+            tipo no es uno de los exigidos hoy, o el archivo no es una imagen
+            o PDF de hasta 5 MB.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "The file must be a file of type: jpg, jpeg, png, pdf."
+                errors:
+                  file:
+                    - "The file must be a file of type: jpg, jpeg, png, pdf."
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /me/availability:
     patch:
       tags:
@@ -2585,6 +2750,76 @@ components:
           type: integer
           description: Año del modelo.
           example: 2022
+    DriverDocument:
+      type: object
+      description: >-
+        Un documento de verificación recién subido por un conductor. No lleva
+        `id` ni `driver_profile_id`, mismo criterio que `Vehicle`: se llega a
+        él por la cuenta que envía el token, nunca por un id propio.
+      required:
+        - type
+        - status
+        - uploaded_at
+      properties:
+        type:
+          type: string
+          enum: [identidad, tarjeta_propiedad]
+          example: identidad
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+          example: pending
+        uploaded_at:
+          type: string
+          format: date-time
+          example: "2026-09-04T15:00:00.000000Z"
+    DriverVerification:
+      type: object
+      description: >-
+        Estado de verificación de un conductor: el general de la cuenta y el
+        detalle de cada documento exigido hoy (`identidad`,
+        `tarjeta_propiedad`), lo haya subido o no.
+      required:
+        - verification_status
+        - documents
+      properties:
+        verification_status:
+          type: string
+          enum: [pending, verified, rejected]
+          description: >-
+            `verified` solo cuando **todos** los documentos exigidos están
+            `approved`. Pasa a `rejected` en cuanto un administrador rechaza
+            cualquiera de ellos (ver historia técnica #64).
+          example: pending
+        documents:
+          type: array
+          items:
+            type: object
+            required:
+              - type
+              - status
+              - rejection_reason
+              - uploaded_at
+            properties:
+              type:
+                type: string
+                enum: [identidad, tarjeta_propiedad]
+                example: identidad
+              status:
+                type: string
+                enum: [pending, approved, rejected]
+                nullable: true
+                description: "`null` si el conductor todavía no subió este documento."
+                example: approved
+              rejection_reason:
+                type: string
+                nullable: true
+                example: null
+              uploaded_at:
+                type: string
+                format: date-time
+                nullable: true
+                example: "2026-09-04T15:00:00.000000Z"
     LoginRequest:
       type: object
       description: >-
