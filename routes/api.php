@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
+use App\Http\Controllers\Api\V1\Documents\ShowDriverDocumentsController;
+use App\Http\Controllers\Api\V1\Documents\UploadDriverDocumentController;
 use App\Http\Controllers\Api\V1\Drivers\ShowDriverEarningsController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverAvailabilityController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
@@ -117,6 +119,23 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me/availability', UpdateDriverAvailabilityController::class)
         ->name('drivers.availability');
+
+    // Documentos de verificación del conductor: documento de identidad
+    // (cédula, cédula de extranjería o PTP) y tarjeta de propiedad del
+    // motocarro — los únicos obligatorios hoy (decisión de negocio; ver
+    // DocumentType). Cuelgan de `me` como el vehículo y la disponibilidad: se
+    // llega por el token, nunca por un id propio. Volver a subir un tipo ya
+    // existente lo reemplaza (ver UploadDriverDocumentAction), no lo
+    // duplica. Que solo un conductor `verified` pueda marcarse disponible es
+    // una regla pendiente de conectar en UpdateDriverAvailabilityAction, no
+    // algo que este endpoint imponga.
+    Route::middleware('auth:api')
+        ->post('me/documents', UploadDriverDocumentController::class)
+        ->name('documents.store');
+
+    Route::middleware('auth:api')
+        ->get('me/documents', ShowDriverDocumentsController::class)
+        ->name('documents.show');
 
     // Historial de viajes de la cuenta autenticada: los que pidió, si es
     // pasajero (historia #29), o los que le asignaron, si es conductor
