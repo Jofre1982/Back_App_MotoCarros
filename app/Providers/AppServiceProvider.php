@@ -13,6 +13,8 @@ use App\Services\Realtime\NearbyDriverFinder;
 use App\Services\Realtime\NullPushNotificationGateway;
 use App\Services\Realtime\PushNotificationGateway;
 use App\Services\Realtime\RideParticipants;
+use App\Services\Sms\NullSmsGateway;
+use App\Services\Sms\SmsGateway;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
@@ -34,6 +36,20 @@ class AppServiceProvider extends ServiceProvider
         $this->registerRideParticipants();
         $this->registerNearbyDriverFinder();
         $this->registerPushNotificationGateway();
+        $this->registerSmsGateway();
+    }
+
+    /**
+     * Proveedor de SMS que envía el código de verificación de celular
+     * (historia #69). Todavía no hay cuenta de Twilio u otro proveedor
+     * configurada —ver "Fuera de alcance" en el issue—, así que apunta a
+     * `NullSmsGateway`, que solo deja un registro en el log. Cambiar a un
+     * proveedor real es reemplazar este binding, mismo criterio que
+     * `registerPaymentGateway()`.
+     */
+    private function registerSmsGateway(): void
+    {
+        $this->app->singleton(SmsGateway::class, NullSmsGateway::class);
     }
 
     /**
@@ -171,6 +187,11 @@ class AppServiceProvider extends ServiceProvider
      * sin `auth:api` — hoy solo el refresh, mañana login y registro. Son los
      * que se pueden golpear por fuerza bruta sin credenciales, y en el caso del
      * refresh cada acierto escribe además una entrada de blacklist en el cache.
+     *
+     * `phone-verification` es más estricto todavía y por usuario (no por IP:
+     * el endpoint exige `auth:api`): cada acierto le cuesta un SMS real a
+     * MotoYa apenas haya un proveedor conectado (historia #69), así que el
+     * límite general de 60/min dejaría pedir 60 códigos en un minuto.
      */
     private function configureRateLimiting(): void
     {
@@ -183,6 +204,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for(
             'auth',
             fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()),
+        );
+
+        RateLimiter::for(
+            'phone-verification',
+            fn (Request $request) => Limit::perMinutes(10, 3)->by((string) $request->user()?->getAuthIdentifier()),
         );
     }
 }

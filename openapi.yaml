@@ -66,6 +66,7 @@ paths:
                     name: Ana García
                     email: ana@example.com
                     phone: "+573001234567"
+                    phone_verified: false
                     role: passenger
                   token:
                     access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
@@ -274,6 +275,7 @@ paths:
                     name: Carlos Ramírez
                     email: carlos@example.com
                     phone: "+573009876543"
+                    phone_verified: false
                     role: driver
                   token:
                     access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJkcml2ZXIifQ.HCJUJDXBM6BAvUcTGF6ZiHR2Wr3ubuRxKh7uBB4Umt4
@@ -350,6 +352,7 @@ paths:
                     name: Ana García
                     email: ana@example.com
                     phone: "+573001234567"
+                    phone_verified: false
                     role: passenger
                   token:
                     access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
@@ -491,6 +494,7 @@ paths:
                   name: Ana García
                   email: ana@example.com
                   phone: "+573001234567"
+                  phone_verified: false
                   role: passenger
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -556,6 +560,7 @@ paths:
                   name: Ana García Pérez
                   email: ana@example.com
                   phone: "+573007654321"
+                  phone_verified: false
                   role: passenger
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -653,6 +658,127 @@ paths:
                 errors:
                   platform:
                     - The selected platform is invalid.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /me/phone/verification:
+    post:
+      tags:
+        - Auth
+      operationId: requestPhoneVerification
+      summary: Pedir un código de verificación de mi celular
+      description: >-
+        Genera un código de verificación y lo envía por SMS al celular de la
+        cuenta autenticada (historia #69). Pedir uno nuevo reemplaza el
+        anterior: nunca hay dos códigos vigentes a la vez para la misma
+        cuenta.
+
+        No hay proveedor de SMS configurado todavía: mientras tanto, el
+        código solo queda registrado en el log del servidor.
+
+        Límite de tasa más estricto que el general de la API (3 cada 10
+        minutos, por cuenta): cada acierto le va a costar un SMS real apenas
+        haya un proveedor conectado.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Código generado y enviado. No hay contenido que devolver.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "429":
+          description: >-
+            Se superó el límite de 3 solicitudes cada 10 minutos para esta
+            cuenta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /me/phone/verification/confirm:
+    post:
+      tags:
+        - Auth
+      operationId: confirmPhoneVerification
+      summary: Confirmar el código de verificación de mi celular
+      description: >-
+        Confirma el código pedido en `POST /me/phone/verification` (historia
+        #69). Si es correcto, no venció, y no se agotaron los intentos, la
+        cuenta queda con `phone_verified: true`.
+
+        Todas las razones por las que un código no se acepta —no hay
+        verificación pendiente, venció, se agotaron los intentos, o el valor
+        no coincide— responden 422 bajo la misma clave `code`: para el
+        cliente móvil todas piden lo mismo, pedir un código nuevo.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  example: "482913"
+            example:
+              code: "482913"
+      responses:
+        "200":
+          description: Celular confirmado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Profile"
+              example:
+                data:
+                  id: 1
+                  name: Ana García
+                  email: ana@example.com
+                  phone: "+573001234567"
+                  phone_verified: true
+                  role: passenger
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "422":
+          description: >-
+            El código no es correcto, venció, se agotaron los intentos, o no
+            hay ninguna verificación pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: El código no es correcto.
+                errors:
+                  code:
+                    - El código no es correcto.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -2882,6 +3008,7 @@ components:
         - name
         - email
         - phone
+        - phone_verified
         - role
       properties:
         id:
@@ -2897,16 +3024,26 @@ components:
         phone:
           type: string
           example: "+573001234567"
+        phone_verified:
+          type: boolean
+          description: >-
+            Si el celular ya se confirmó con un código por SMS (historia
+            #69). No exige nada todavía: hoy ninguna acción de la cuenta
+            depende de este valor.
+          example: false
         role:
           type: string
           description: >-
             Rol de autenticación de la cuenta (ver la decisión de modelo de
             datos en .claude/STANDARDS.md). Sirve para que el cliente sepa qué
             UI mostrar; la autorización de negocio se resuelve con Policies en
-            el servidor, no con este campo.
+            el servidor, no con este campo. `admin` no tiene endpoint de
+            registro público (historia técnica #64): la cuenta se crea
+            manualmente.
           enum:
             - passenger
             - driver
+            - admin
           example: passenger
     AuthenticatedUser:
       type: object

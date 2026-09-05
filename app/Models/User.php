@@ -12,10 +12,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
 /**
  * @property UserRole $role
+ * @property Carbon|null $phone_verified_at
  */
 #[Fillable(['name', 'email', 'phone', 'password', 'role'])]
 class User extends Authenticatable implements JWTSubject
@@ -30,6 +32,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'password' => 'hashed',
             'role' => UserRole::class,
+            'phone_verified_at' => 'datetime',
         ];
     }
 
@@ -93,6 +96,23 @@ class User extends Authenticatable implements JWTSubject
     public function isAdmin(): bool
     {
         return $this->role === UserRole::Admin;
+    }
+
+    public function isPhoneVerified(): bool
+    {
+        return $this->phone_verified_at !== null;
+    }
+
+    /**
+     * El código de verificación de celular vigente de esta cuenta (historia
+     * #69), si hay uno. Uno a uno: `phone_verification_codes.user_id` es
+     * único, y pedir un código nuevo reemplaza el que hubiera.
+     *
+     * @return HasOne<PhoneVerificationCode, $this>
+     */
+    public function phoneVerificationCode(): HasOne
+    {
+        return $this->hasOne(PhoneVerificationCode::class);
     }
 
     /**
