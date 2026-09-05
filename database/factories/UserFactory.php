@@ -45,4 +45,11 @@ class UserFactory extends Factory
             'role' => UserRole::Driver,
         ]);
     }
+
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => UserRole::Admin,
+        ]);
+    }
 }

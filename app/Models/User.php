@@ -90,6 +90,11 @@ class User extends Authenticatable implements JWTSubject
         return $this->role === UserRole::Passenger;
     }
 
+    public function isAdmin(): bool
+    {
+        return $this->role === UserRole::Admin;
+    }
+
     /**
      * Identificador que viaja en el claim `sub` del JWT.
      */
