@@ -6,15 +6,18 @@ namespace Tests\Unit\Actions\Rides;
 
 use App\Actions\Rides\CreateRideAction;
 use App\DTOs\Coordinates;
+use App\DTOs\PushNotification;
 use App\DTOs\RideRequest;
 use App\DTOs\RouteEstimate;
 use App\Enums\RideStatus;
 use App\Events\Realtime\RideRequested;
 use App\Exceptions\RouteEstimationFailed;
+use App\Models\DeviceToken;
 use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
 use App\Services\Maps\RouteEstimator;
+use App\Services\Realtime\PushNotificationGateway;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
@@ -179,6 +182,58 @@ class CreateRideActionTest extends TestCase
         $this->action()->handle(User::factory()->create(), $this->solicitud());
 
         Event::assertNotDispatched(RideRequested::class);
+    }
+
+    /**
+     * Historia #67: además del websocket, avisa por push a cada dispositivo
+     * registrado de los conductores cercanos.
+     */
+    public function test_envia_notificacion_push_a_cada_dispositivo_del_conductor_cercano(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->available(latitude: 4.710989, longitude: -74.072092)
+            ->create(['user_id' => $conductor->id]);
+        DeviceToken::factory()->create(['user_id' => $conductor->id, 'token' => 'device-1']);
+        DeviceToken::factory()->create(['user_id' => $conductor->id, 'token' => 'device-2']);
+
+        $gateway = new class implements PushNotificationGateway
+        {
+            /** @var list<string> */
+            public array $enviados = [];
+
+            public function send(DeviceToken $token, PushNotification $notification): void
+            {
+                $this->enviados[] = $token->token;
+            }
+        };
+        $this->app->instance(PushNotificationGateway::class, $gateway);
+
+        $this->action()->handle(User::factory()->create(), $this->solicitud());
+
+        $this->assertEqualsCanonicalizing(['device-1', 'device-2'], $gateway->enviados);
+    }
+
+    public function test_no_falla_si_el_conductor_cercano_no_tiene_ningun_dispositivo_registrado(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->available(latitude: 4.710989, longitude: -74.072092)
+            ->create(['user_id' => $conductor->id]);
+
+        $gateway = new class implements PushNotificationGateway
+        {
+            public int $llamadas = 0;
+
+            public function send(DeviceToken $token, PushNotification $notification): void
+            {
+                $this->llamadas++;
+            }
+        };
+        $this->app->instance(PushNotificationGateway::class, $gateway);
+
+        $viaje = $this->action()->handle(User::factory()->create(), $this->solicitud());
+
+        $this->assertTrue($viaje->exists);
+        $this->assertSame(0, $gateway->llamadas);
     }
 
     private function action(?RouteEstimate $trayecto = null): CreateRideAction
