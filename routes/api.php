@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Drivers\ShowDriverEarningsController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverAvailabilityController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
+use App\Http\Controllers\Api\V1\Realtime\RegisterDeviceTokenController;
 use App\Http\Controllers\Api\V1\Rides\AcceptRideController;
 use App\Http\Controllers\Api\V1\Rides\CancelRideController;
 use App\Http\Controllers\Api\V1\Rides\CompleteRideController;
@@ -87,6 +88,14 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me', UpdateProfileController::class)
         ->name('profile.update');
+
+    // Token de notificaciones push del dispositivo (historia #67). No es una
+    // operación de un rol en particular —pasajero o conductor pueden tener un
+    // dispositivo—, por eso cuelga de `me` junto al perfil y no de un
+    // sub-recurso de conductor como el vehículo.
+    Route::middleware('auth:api')
+        ->post('me/device-token', RegisterDeviceTokenController::class)
+        ->name('device-tokens.store');
 
     // El vehículo del conductor cuelga de `me` porque es un sub-recurso de la
     // cuenta: se llega a él por el token, nunca por un id propio. Que solo los

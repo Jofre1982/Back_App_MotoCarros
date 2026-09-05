@@ -587,6 +587,80 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /me/device-token:
+    post:
+      tags:
+        - Realtime
+      operationId: registerDeviceToken
+      summary: Registrar el token de notificaciones push de mi dispositivo
+      description: >-
+        Registra (o actualiza) el token de notificaciones push del
+        dispositivo de la cuenta autenticada (historia #67). No es una
+        operación de un rol en particular: cualquier cuenta autenticada
+        —pasajero o conductor— puede tener un dispositivo.
+
+        El token es único sin importar la cuenta: si el mismo dispositivo ya
+        estaba registrado —por esta cuenta o por otra, porque cambió de
+        usuario— esto lo actualiza en vez de duplicarlo.
+
+        Hoy esto solo dispara notificaciones para el conductor cuando hay un
+        viaje cercano nuevo (historia #17). El envío real a través de un
+        proveedor (Firebase/APNs) todavía no está conectado: mientras tanto,
+        cada notificación queda solo en el log del servidor.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceTokenRegistrationRequest"
+            example:
+              token: fcm-a1b2c3d4e5f6
+              platform: android
+      responses:
+        "201":
+          description: Token registrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DeviceToken"
+              example:
+                data:
+                  platform: android
+                  registered_at: "2026-09-05T15:00:00.000000Z"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "422":
+          description: Falta `token` o `platform`, o `platform` no es `android`/`ios`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The selected platform is invalid.
+                errors:
+                  platform:
+                    - The selected platform is invalid.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /me/vehicle:
     get:
       tags:
@@ -3014,6 +3088,42 @@ components:
           type: integer
           description: Año del modelo.
           example: 2022
+    DeviceToken:
+      type: object
+      description: >-
+        El token de notificaciones push recién registrado (historia #67). No
+        lleva el `token` en sí ni el `id` de la fila: el cliente ya sabe cuál
+        es su propio token, y el `id` no sirve para nada en esta respuesta.
+      required:
+        - platform
+        - registered_at
+      properties:
+        platform:
+          type: string
+          enum: [android, ios]
+          example: android
+        registered_at:
+          type: string
+          format: date-time
+          example: "2026-09-05T15:00:00.000000Z"
+    DeviceTokenRegistrationRequest:
+      type: object
+      description: >-
+        El token de push de un dispositivo. No lleva a quién pertenece: el
+        dueño es siempre la cuenta que envía el token de acceso.
+      required:
+        - token
+        - platform
+      properties:
+        token:
+          type: string
+          maxLength: 255
+          description: Token que entrega el SDK de notificaciones push del dispositivo.
+          example: fcm-a1b2c3d4e5f6
+        platform:
+          type: string
+          enum: [android, ios]
+          example: android
     DriverDocument:
       type: object
       description: >-

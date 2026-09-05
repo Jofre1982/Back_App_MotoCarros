@@ -6,14 +6,17 @@ namespace App\Actions\Rides;
 
 use App\Actions\Payments\CalculateFareAction;
 use App\DTOs\Coordinates;
+use App\DTOs\PushNotification;
 use App\DTOs\RideRequest;
 use App\Enums\RideStatus;
 use App\Events\Realtime\RideRequested;
 use App\Exceptions\RouteEstimationFailed;
+use App\Models\DeviceToken;
 use App\Models\Ride;
 use App\Models\User;
 use App\Services\Maps\RouteEstimator;
 use App\Services\Realtime\NearbyDriverFinder;
+use App\Services\Realtime\PushNotificationGateway;
 
 /**
  * Crea la solicitud de viaje de un pasajero.
@@ -37,6 +40,12 @@ use App\Services\Realtime\NearbyDriverFinder;
  * es "cercano" lo resuelve `NearbyDriverFinder`, y si no hay ninguno no se
  * dispara ningún evento —un `RideRequested` sin conductores a quién llegarle
  * no le sirve a nadie.
+ *
+ * Además de avisarles por el canal `driver.{id}` (que solo llega con la app
+ * abierta), les manda una notificación push por cada dispositivo que tengan
+ * registrado (historia #67): es el aviso que sí llega con la app cerrada. Un
+ * conductor cercano sin ningún `DeviceToken` no genera ningún error, solo se
+ * queda sin ese aviso adicional.
  */
 final readonly class CreateRideAction
 {
@@ -44,6 +53,7 @@ final readonly class CreateRideAction
         private RouteEstimator $routeEstimator,
         private CalculateFareAction $calculateFare,
         private NearbyDriverFinder $nearbyDrivers,
+        private PushNotificationGateway $pushGateway,
     ) {}
 
     /**
@@ -91,5 +101,23 @@ final readonly class CreateRideAction
             estimatedFare: $ride->estimated_fare,
             nearbyDriverIds: $driverIds,
         );
+
+        $this->sendPushToNearbyDrivers($driverIds);
+    }
+
+    /**
+     * @param  list<int>  $driverIds
+     */
+    private function sendPushToNearbyDrivers(array $driverIds): void
+    {
+        $notification = new PushNotification(
+            title: 'Nuevo viaje cerca de ti',
+            body: 'Hay un pasajero esperando cerca. Abre la app para ver el detalle.',
+        );
+
+        DeviceToken::query()
+            ->whereIn('user_id', $driverIds)
+            ->get()
+            ->each(fn (DeviceToken $token) => $this->pushGateway->send($token, $notification));
     }
 }

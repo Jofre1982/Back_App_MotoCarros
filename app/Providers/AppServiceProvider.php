@@ -10,6 +10,8 @@ use App\Services\Payments\PaymentGateway;
 use App\Services\Realtime\EloquentNearbyDriverFinder;
 use App\Services\Realtime\EloquentRideParticipants;
 use App\Services\Realtime\NearbyDriverFinder;
+use App\Services\Realtime\NullPushNotificationGateway;
+use App\Services\Realtime\PushNotificationGateway;
 use App\Services\Realtime\RideParticipants;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -31,6 +33,20 @@ class AppServiceProvider extends ServiceProvider
         $this->registerFareSchedule();
         $this->registerRideParticipants();
         $this->registerNearbyDriverFinder();
+        $this->registerPushNotificationGateway();
+    }
+
+    /**
+     * Proveedor de notificaciones push que avisa a los conductores cercanos
+     * de un viaje nuevo (historia #67). Todavía no hay cuenta de Firebase/APNs
+     * configurada —ver "Fuera de alcance" en el issue—, así que apunta a
+     * `NullPushNotificationGateway`, que solo deja un registro en el log.
+     * Cambiar a un proveedor real es reemplazar este binding, mismo criterio
+     * que `registerPaymentGateway()`.
+     */
+    private function registerPushNotificationGateway(): void
+    {
+        $this->app->singleton(PushNotificationGateway::class, NullPushNotificationGateway::class);
     }
 
     /**
