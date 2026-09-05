@@ -1031,10 +1031,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
               example:
-                message: The file must be a file of type: jpg, jpeg, png, pdf.
+                message: "The file must be a file of type: jpg, jpeg, png, pdf."
                 errors:
                   file:
-                    - The file must be a file of type: jpg, jpeg, png, pdf.
+                    - "The file must be a file of type: jpg, jpeg, png, pdf."
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
