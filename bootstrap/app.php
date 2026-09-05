@@ -3,11 +3,16 @@
 use App\Exceptions\Auth\InvalidCredentialsException;
 use App\Exceptions\Rides\RideNoLongerAvailableException;
 use App\Exceptions\RouteEstimationFailed;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 use Tymon\JWTAuth\Exceptions\UserNotDefinedException;
@@ -25,6 +30,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // endpoints anónimos (auth) llevan encima uno más estricto — ambos
         // limitadores se definen en AppServiceProvider.
         $middleware->throttleApi();
+
+        // `ApplicationBuilder::withMiddleware()` deja por defecto
+        // `redirectGuestsTo(fn () => route('login'))` (pensado para una app
+        // web con sesión) *antes* de correr este closure — ver
+        // vendor/laravel/framework/.../ApplicationBuilder.php. Este backend
+        // es solo API (ver .claude/CLAUDE.md) y no tiene ninguna ruta
+        // llamada `login`: sin este override, cualquier request sin token
+        // que además no mande `Accept: application/json` (Laravel decide por
+        // ahí si "expectsJson", no por el prefijo /api/*) hace que
+        // `Authenticate::redirectTo()` intente construir esa URL y explote
+        // con un 500 (`RouteNotFoundException`) en vez de responder 401.
+        // `fn () => null` dice "nunca redirijas", así que el flujo llega
+        // siempre al render JSON (ver `withExceptions()`, `AuthenticationException`
+        // más abajo) sin importar qué mande el cliente en `Accept`.
+        $middleware->redirectGuestsTo(fn () => null);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -98,4 +118,76 @@ return Application::configure(basePath: dirname(__DIR__))
                 JsonResponse::HTTP_CONFLICT,
             ),
         );
+
+        // Los siguientes cuatro traducen mensajes que el propio framework
+        // genera en inglés y que ningún Form Request ni Policy del proyecto
+        // escribe a mano (historia técnica #73) — a diferencia de los render()
+        // de arriba, que traducen excepciones de dominio.
+
+        // Sin token en absoluto (a diferencia de uno vencido o ilegible, que ya
+        // cubre TokenExpiredException|TokenInvalidException arriba): el guard
+        // `auth:api` resuelve ese caso con la `AuthenticationException` de
+        // Laravel, no con una excepción de jwt-auth.
+        $exceptions->render(
+            fn (AuthenticationException $e) => new JsonResponse(
+                ['message' => 'No has iniciado sesión.'],
+                JsonResponse::HTTP_UNAUTHORIZED,
+            ),
+        );
+
+        // Una Policy o un Form Request rechazó la operación por rol o por
+        // dueño del recurso (`$this->authorize()` o `Gate::denies()`).
+        //
+        // Mismo motivo que el `NotFoundHttpException` más abajo:
+        // `Handler::prepareException()` convierte `AuthorizationException` en
+        // `AccessDeniedHttpException` (cuando no trae un status propio, que es
+        // el caso de todas las de este proyecto) *antes* de que corran los
+        // `render()` de acá — registrar el render para `AuthorizationException`
+        // directamente nunca dispararía.
+        $exceptions->render(
+            fn (AccessDeniedHttpException $e) => new JsonResponse(
+                ['message' => 'No tienes permiso para hacer esto.'],
+                JsonResponse::HTTP_FORBIDDEN,
+            ),
+        );
+
+        $exceptions->render(
+            fn (ThrottleRequestsException $e) => new JsonResponse(
+                ['message' => 'Se superó el límite de solicitudes. Intenta de nuevo en unos minutos.'],
+                JsonResponse::HTTP_TOO_MANY_REQUESTS,
+            ),
+        );
+
+        // Laravel convierte `ModelNotFoundException` en `NotFoundHttpException`
+        // en `Handler::prepareException()`, **antes** de que corran los
+        // `render()` registrados acá — así que hay que interceptar
+        // `NotFoundHttpException` y no `ModelNotFoundException` directamente
+        // (nunca llegaría a verse). La conversión guarda la excepción original
+        // como "previous"; eso es lo que distingue un id que no existe (mensaje
+        // en inglés del framework, "No query results for model [...] N", que
+        // además expone el namespace completo del modelo) de un
+        // `NotFoundHttpException` que el propio proyecto lanza a mano con un
+        // mensaje ya en español (ej. "No tienes un vehículo registrado" en
+        // `ShowVehicleRequest`/`UpdateVehicleRequest`).
+        //
+        // Los dos casos usan `$e->getMessage()` (genérico para el primero,
+        // el propio del proyecto para el segundo) en vez de devolver `null`
+        // para "dejarlo pasar": con `APP_DEBUG=true` el renderer por defecto
+        // de Laravel para JSON no vuelve a mostrar solo el mensaje, muestra
+        // el volcado completo de depuración (clase PHP, archivo, línea y
+        // stack trace) — un caso real de fuga de información que esta misma
+        // suite detectó.
+        $exceptions->render(function (NotFoundHttpException $e) {
+            if ($e->getPrevious() instanceof ModelNotFoundException) {
+                return new JsonResponse(
+                    ['message' => 'No se encontró el recurso solicitado.'],
+                    JsonResponse::HTTP_NOT_FOUND,
+                );
+            }
+
+            return new JsonResponse(
+                ['message' => $e->getMessage()],
+                JsonResponse::HTTP_NOT_FOUND,
+            );
+        });
     })->create();
