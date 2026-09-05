@@ -25,6 +25,14 @@ class DeviceToken extends Model
 {
     use HasFactory;
 
+    /**
+     * El token identifica al dispositivo ante el proveedor de push: no debe
+     * salir en ninguna respuesta de la API, mismo criterio que `password` en
+     * `User`. `DeviceTokenResource` ya no lo incluye, pero esto lo protege
+     * también si algún día se serializa el modelo directamente.
+     */
+    protected $hidden = ['token'];
+
     protected function casts(): array
     {
         return [
