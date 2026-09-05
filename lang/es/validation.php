@@ -182,7 +182,6 @@ return [
         'latitude' => 'latitud',
         'license_number' => 'número de licencia',
         'longitude' => 'longitud',
-        'model' => 'modelo',
         'name' => 'nombre',
         'origin' => 'origen',
         'page' => 'página',

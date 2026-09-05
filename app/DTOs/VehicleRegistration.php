@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Enums\VehicleType;
+
 /**
  * Datos con los que un conductor da de alta su moto, ya validados.
  *
@@ -17,7 +19,7 @@ final readonly class VehicleRegistration
 {
     public function __construct(
         public string $plate,
-        public string $model,
+        public VehicleType $type,
         public int $year,
     ) {}
 }

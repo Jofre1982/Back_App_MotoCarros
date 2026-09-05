@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Requests\Vehicles;
 
 use App\DTOs\VehicleRegistration;
+use App\Enums\VehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Enum;
 
 /**
  * Entrada de POST /api/v1/me/vehicle — ver openapi.yaml.
@@ -70,7 +72,7 @@ class RegisterVehicleRequest extends FormRequest
                 'regex:/^[A-Z0-9-]{5,10}$/',
                 'unique:vehicles,plate',
             ],
-            'model' => ['required', 'string', 'max:100'],
+            'type' => ['required', new Enum(VehicleType::class)],
             // El tope es el año que viene porque los modelos se venden
             // adelantados al calendario. Los dos límites atajan el dedazo
             // (`2205`, `19999`), no declaran una antigüedad máxima de la flota:
@@ -130,7 +132,7 @@ class RegisterVehicleRequest extends FormRequest
     {
         return new VehicleRegistration(
             plate: $this->string('plate')->toString(),
-            model: $this->string('model')->toString(),
+            type: VehicleType::from($this->string('type')->toString()),
             year: $this->integer('year'),
         );
     }

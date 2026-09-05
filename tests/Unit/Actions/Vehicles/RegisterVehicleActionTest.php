@@ -6,6 +6,7 @@ namespace Tests\Unit\Actions\Vehicles;
 
 use App\Actions\Vehicles\RegisterVehicleAction;
 use App\DTOs\VehicleRegistration;
+use App\Enums\VehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Database\QueryException;
@@ -28,7 +29,7 @@ class RegisterVehicleActionTest extends TestCase
 
         $this->assertTrue($vehiculo->exists);
         $this->assertSame('ABC12D', $vehiculo->plate);
-        $this->assertSame('Bajaj Boxer CT 100', $vehiculo->model);
+        $this->assertSame(VehicleType::Motocarro, $vehiculo->type);
         $this->assertSame(2022, $vehiculo->year);
         $this->assertDatabaseCount('vehicles', 1);
         $this->assertDatabaseHas('vehicles', [
@@ -93,7 +94,7 @@ class RegisterVehicleActionTest extends TestCase
     {
         return new VehicleRegistration(
             plate: 'ABC12D',
-            model: 'Bajaj Boxer CT 100',
+            type: VehicleType::Motocarro,
             year: 2022,
         );
     }

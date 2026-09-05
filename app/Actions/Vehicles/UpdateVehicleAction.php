@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Vehicles;
 
 use App\DTOs\VehicleUpdate;
+use App\Enums\VehicleType;
 use App\Models\Vehicle;
 
 /**
@@ -26,7 +27,7 @@ final class UpdateVehicleAction
     public function handle(Vehicle $vehicle, VehicleUpdate $update): Vehicle
     {
         // Descarta también la cadena vacía, y no solo `null`: las tres columnas
-        // son NOT NULL y una moto sin placa ni modelo no le sirve al pasajero
+        // son NOT NULL y una moto sin placa ni tipo no le sirve al pasajero
         // que tiene que reconocerla. `UpdateVehicleRequest` ya lo ataja con
         // `sometimes|required`, pero esta Action es invocable desde un job o un
         // comando que no pasa por el Form Request, y su invariante propia es
@@ -34,10 +35,10 @@ final class UpdateVehicleAction
         $datos = array_filter(
             [
                 'plate' => $update->plate,
-                'model' => $update->model,
+                'type' => $update->type,
                 'year' => $update->year,
             ],
-            static fn (string|int|null $valor): bool => is_string($valor)
+            static fn (string|int|VehicleType|null $valor): bool => is_string($valor)
                 ? trim($valor) !== ''
                 : $valor !== null,
         );

@@ -15,7 +15,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * Es deliberadamente más chico que {@see UserResource}: ahí el que mira es el
  * dueño de la cuenta, acá es la contraparte del viaje. Va lo mínimo para saber
  * a quién se está esperando; el `email`, el `phone` y el `role` no tienen nada
- * que hacer del otro lado, y los datos de la moto (placa, modelo) no entran
+ * que hacer del otro lado, y los datos de la moto (placa, tipo) no entran
  * todavía porque ninguna historia los pidió.
  *
  * Sí publica el `id`, al revés que `DriverProfileResource`: es el id de `User`

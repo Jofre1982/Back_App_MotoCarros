@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Requests\Vehicles;
 
 use App\DTOs\VehicleUpdate;
+use App\Enums\VehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Enum;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
@@ -128,7 +130,7 @@ class UpdateVehicleRequest extends FormRequest
                 'regex:/^[A-Z0-9-]{5,10}$/',
                 Rule::unique('vehicles', 'plate')->ignore($this->vehicle()->getKey()),
             ],
-            'model' => ['sometimes', 'required', 'string', 'max:100'],
+            'type' => ['sometimes', 'required', new Enum(VehicleType::class)],
             // El tope es el año que viene porque los modelos se venden
             // adelantados al calendario, igual que en el alta.
             'year' => ['sometimes', 'required', 'integer', 'digits:4', 'min:1970', 'max:'.((int) date('Y') + 1)],
@@ -160,7 +162,7 @@ class UpdateVehicleRequest extends FormRequest
     {
         return new VehicleUpdate(
             plate: $this->has('plate') ? $this->string('plate')->toString() : null,
-            model: $this->has('model') ? $this->string('model')->toString() : null,
+            type: $this->has('type') ? VehicleType::from($this->string('type')->toString()) : null,
             year: $this->has('year') ? $this->integer('year') : null,
         );
     }

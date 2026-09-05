@@ -36,7 +36,7 @@ class RegisterVehicleTest extends TestCase
             ->assertExactJson([
                 'data' => [
                     'plate' => 'ABC12D',
-                    'model' => 'Bajaj Boxer CT 100',
+                    'type' => 'motocarro',
                     'year' => 2022,
                 ],
             ]);
@@ -44,7 +44,7 @@ class RegisterVehicleTest extends TestCase
         $this->assertDatabaseHas('vehicles', [
             'user_id' => $conductor->id,
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ]);
     }
@@ -182,9 +182,9 @@ class RegisterVehicleTest extends TestCase
             // servidor adivine cómo debería haberse escrito.
             'placa con espacios interiores' => [['plate' => 'ABC 12D'], 'plate'],
             'placa con símbolos' => [['plate' => 'ABC*12D'], 'plate'],
-            'sin modelo' => [['model' => null], 'model'],
-            'modelo vacío' => [['model' => ''], 'model'],
-            'modelo demasiado largo' => [['model' => str_repeat('a', 101)], 'model'],
+            'sin tipo' => [['type' => null], 'type'],
+            'tipo vacío' => [['type' => ''], 'type'],
+            'tipo inválido' => [['type' => 'automovil'], 'type'],
             'sin año' => [['year' => null], 'year'],
             'año no numérico' => [['year' => 'dos mil veintidós'], 'year'],
             'año de dos dígitos' => [['year' => 22], 'year'],
@@ -257,7 +257,7 @@ class RegisterVehicleTest extends TestCase
     {
         return [
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ];
     }

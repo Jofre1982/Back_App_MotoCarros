@@ -30,7 +30,7 @@ class ShowVehicleTest extends TestCase
         Vehicle::factory()->create([
             'user_id' => $conductor->id,
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ]);
 
@@ -40,7 +40,7 @@ class ShowVehicleTest extends TestCase
             ->assertExactJson([
                 'data' => [
                     'plate' => 'ABC12D',
-                    'model' => 'Bajaj Boxer CT 100',
+                    'type' => 'motocarro',
                     'year' => 2022,
                 ],
             ]);
@@ -67,7 +67,7 @@ class ShowVehicleTest extends TestCase
         Vehicle::factory()->create([
             'user_id' => $otro->id,
             'plate' => 'JJJ11J',
-            'model' => 'Honda CB 110',
+            'type' => 'motocarga',
             'year' => 2020,
         ]);
 
