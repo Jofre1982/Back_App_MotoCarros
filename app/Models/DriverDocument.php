@@ -16,10 +16,10 @@ use Illuminate\Support\Carbon;
 
 /**
  * Un documento subido por un conductor para su verificación (documento de
- * identidad o tarjeta de propiedad del motocarro; ver `DocumentType`).
+ * identidad, tarjeta de propiedad o foto del vehículo; ver `DocumentType`).
  *
  * `path` apunta al disco `local` —privado, nunca servido por una URL
- * pública como el disco `public`— porque son documentos de identidad.
+ * pública como el disco `public`— porque son documentos sensibles.
  *
  * @property DocumentType $type
  * @property string $path

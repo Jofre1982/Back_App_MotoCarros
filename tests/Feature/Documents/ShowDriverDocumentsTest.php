@@ -36,10 +36,10 @@ class ShowDriverDocumentsTest extends TestCase
             ->getJson(self::URI)
             ->assertOk()
             ->assertJsonPath('data.verification_status', 'pending')
-            ->assertJsonCount(2, 'data.documents');
+            ->assertJsonCount(3, 'data.documents');
 
         $tipos = collect($respuesta->json('data.documents'))->pluck('type')->all();
-        $this->assertSame(['identidad', 'tarjeta_propiedad'], $tipos);
+        $this->assertSame(['identidad', 'tarjeta_propiedad', 'foto_vehiculo'], $tipos);
 
         foreach ($respuesta->json('data.documents') as $documento) {
             $this->assertNull($documento['status']);

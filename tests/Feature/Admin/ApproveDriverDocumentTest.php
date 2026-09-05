@@ -64,6 +64,10 @@ class ApproveDriverDocumentTest extends TestCase
             'driver_profile_id' => $perfil->id,
             'type' => 'identidad',
         ]);
+        DriverDocument::factory()->approved()->create([
+            'driver_profile_id' => $perfil->id,
+            'type' => 'foto_vehiculo',
+        ]);
         $tarjeta = DriverDocument::factory()->create([
             'driver_profile_id' => $perfil->id,
             'type' => 'tarjeta_propiedad',

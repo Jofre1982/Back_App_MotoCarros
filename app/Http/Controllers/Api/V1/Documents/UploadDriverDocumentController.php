@@ -14,8 +14,8 @@ use Illuminate\Http\JsonResponse;
  * POST /api/v1/me/documents
  *
  * Sube (o reemplaza) uno de los documentos de verificación del conductor
- * autenticado: documento de identidad o tarjeta de propiedad del motocarro
- * (ver `DocumentType`).
+ * autenticado: documento de identidad, tarjeta de propiedad o foto del
+ * vehículo (ver `DocumentType`).
  */
 class UploadDriverDocumentController extends Controller
 {
