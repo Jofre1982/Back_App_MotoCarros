@@ -42,6 +42,7 @@ class ShowProfileTest extends TestCase
                     'name' => 'Ana García',
                     'email' => 'ana@example.com',
                     'phone' => '+573001234567',
+                    'phone_verified' => false,
                     'role' => 'passenger',
                 ],
             ]);
@@ -89,6 +90,7 @@ class ShowProfileTest extends TestCase
                     'name' => 'Carlos Ramírez',
                     'email' => 'carlos@example.com',
                     'phone' => '+573009876543',
+                    'phone_verified' => false,
                     'role' => 'driver',
                     'driver_profile' => [
                         'license_number' => 'LIC-445566',

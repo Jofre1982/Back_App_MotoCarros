@@ -3,11 +3,13 @@
 use App\Http\Controllers\Api\V1\Admin\ApproveDriverDocumentController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
+use App\Http\Controllers\Api\V1\Auth\ConfirmPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
+use App\Http\Controllers\Api\V1\Auth\RequestPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Documents\ShowDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Documents\UploadDriverDocumentController;
 use App\Http\Controllers\Api\V1\Drivers\ShowDriverEarningsController;
@@ -96,6 +98,22 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('me/device-token', RegisterDeviceTokenController::class)
         ->name('device-tokens.store');
+
+    // Confirmación del número de celular por SMS (historia #69). Cuelga de
+    // `me` como el token de push: no es una operación de un rol en
+    // particular. `phone-verification` es más estricto que el límite general
+    // de la API porque cada acierto le cuesta un SMS real apenas haya un
+    // proveedor conectado (ver AppServiceProvider::configureRateLimiting()).
+    Route::middleware(['auth:api', 'throttle:phone-verification'])
+        ->post('me/phone/verification', RequestPhoneVerificationController::class)
+        ->name('phone-verification.request');
+
+    // Confirmar sí se queda con el límite general: a diferencia de pedir el
+    // código, no dispara ningún SMS, y el propio código ya agota sus
+    // intentos (ver ConfirmPhoneVerificationRequest).
+    Route::middleware('auth:api')
+        ->post('me/phone/verification/confirm', ConfirmPhoneVerificationController::class)
+        ->name('phone-verification.confirm');
 
     // El vehículo del conductor cuelga de `me` porque es un sub-recurso de la
     // cuenta: se llega a él por el token, nunca por un id propio. Que solo los
