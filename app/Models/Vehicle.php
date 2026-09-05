@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\VehicleType;
 use App\Policies\VehiclePolicy;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
@@ -21,9 +22,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * más frágil de lo que conviene.
  *
  * @property int $user_id
+ * @property VehicleType $type
  * @property int $year
  */
-#[Fillable(['user_id', 'plate', 'model', 'year'])]
+#[Fillable(['user_id', 'plate', 'type', 'year'])]
 #[UsePolicy(VehiclePolicy::class)]
 class Vehicle extends Model
 {
@@ -32,6 +34,7 @@ class Vehicle extends Model
     protected function casts(): array
     {
         return [
+            'type' => VehicleType::class,
             'year' => 'integer',
         ];
     }

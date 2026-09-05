@@ -29,7 +29,7 @@ final class RegisterVehicleAction
     {
         return $driver->vehicle()->create([
             'plate' => $registration->plate,
-            'model' => $registration->model,
+            'type' => $registration->type,
             'year' => $registration->year,
         ]);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\VehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -25,12 +26,7 @@ class VehicleFactory extends Factory
             // más laxo a propósito, ver openapi.yaml— pero para los datos de
             // prueba conviene que se parezcan a los reales.
             'plate' => fake()->unique()->bothify('???##?', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
-            'model' => fake()->randomElement([
-                'Bajaj Boxer CT 100',
-                'Yamaha YBR 125',
-                'Honda CB 110',
-                'Suzuki GN 125',
-            ]),
+            'type' => fake()->randomElement(VehicleType::cases()),
             'year' => fake()->numberBetween(2010, (int) date('Y')),
         ];
     }

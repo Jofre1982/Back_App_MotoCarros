@@ -33,21 +33,21 @@ class UpdateVehicleTest extends TestCase
         Vehicle::factory()->create([
             'user_id' => $conductor->id,
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ]);
 
         $this->withToken(JWTAuth::fromUser($conductor))
             ->patchJson(self::URI, [
                 'plate' => 'XYZ98W',
-                'model' => 'Bajaj Boxer CT 100 ES',
+                'type' => 'motocarga',
                 'year' => 2023,
             ])
             ->assertOk()
             ->assertExactJson([
                 'data' => [
                     'plate' => 'XYZ98W',
-                    'model' => 'Bajaj Boxer CT 100 ES',
+                    'type' => 'motocarga',
                     'year' => 2023,
                 ],
             ]);
@@ -55,7 +55,7 @@ class UpdateVehicleTest extends TestCase
         $this->assertDatabaseHas('vehicles', [
             'user_id' => $conductor->id,
             'plate' => 'XYZ98W',
-            'model' => 'Bajaj Boxer CT 100 ES',
+            'type' => 'motocarga',
             'year' => 2023,
         ]);
     }
@@ -67,7 +67,7 @@ class UpdateVehicleTest extends TestCase
         Vehicle::factory()->create([
             'user_id' => $conductor->id,
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ]);
 
@@ -77,7 +77,7 @@ class UpdateVehicleTest extends TestCase
             ->assertExactJson([
                 'data' => [
                     'plate' => 'ABC12D',
-                    'model' => 'Bajaj Boxer CT 100',
+                    'type' => 'motocarro',
                     'year' => 2023,
                 ],
             ]);
@@ -85,7 +85,7 @@ class UpdateVehicleTest extends TestCase
         $this->assertDatabaseHas('vehicles', [
             'user_id' => $conductor->id,
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2023,
         ]);
     }
@@ -170,7 +170,7 @@ class UpdateVehicleTest extends TestCase
         $ajeno = Vehicle::factory()->create([
             'user_id' => $otro->id,
             'plate' => 'JJJ11J',
-            'model' => 'Honda CB 110',
+            'type' => 'motocarro',
             'year' => 2020,
         ]);
 
@@ -181,7 +181,7 @@ class UpdateVehicleTest extends TestCase
             ->patchJson(self::URI, [
                 'id' => $ajeno->id,
                 'user_id' => $otro->id,
-                'model' => 'Yamaha YBR 125',
+                'type' => 'motocarga',
             ])
             ->assertOk()
             ->assertJsonPath('data.plate', 'ABC12D');
@@ -189,11 +189,11 @@ class UpdateVehicleTest extends TestCase
         $this->assertDatabaseHas('vehicles', [
             'id' => $ajeno->id,
             'user_id' => $otro->id,
-            'model' => 'Honda CB 110',
+            'type' => 'motocarro',
         ]);
         $this->assertDatabaseHas('vehicles', [
             'user_id' => $conductor->id,
-            'model' => 'Yamaha YBR 125',
+            'type' => 'motocarga',
         ]);
     }
 
@@ -262,7 +262,7 @@ class UpdateVehicleTest extends TestCase
         Vehicle::factory()->create([
             'user_id' => $conductor->id,
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ]);
 
@@ -274,7 +274,7 @@ class UpdateVehicleTest extends TestCase
         $this->assertDatabaseHas('vehicles', [
             'user_id' => $conductor->id,
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ]);
     }
@@ -282,7 +282,7 @@ class UpdateVehicleTest extends TestCase
     /**
      * Un campo ausente es "no lo toques", pero uno presente no puede venir
      * vacío ni en `null`: las tres columnas son NOT NULL y un vehículo sin
-     * placa ni modelo no le sirve al pasajero que tiene que reconocerlo.
+     * placa ni tipo no le sirve al pasajero que tiene que reconocerlo.
      *
      * @return array<string, array{array<string, mixed>, string}>
      */
@@ -296,9 +296,9 @@ class UpdateVehicleTest extends TestCase
             'placa demasiado larga' => [['plate' => 'ABCDE12345F'], 'plate'],
             'placa con espacios interiores' => [['plate' => 'ABC 12D'], 'plate'],
             'placa con símbolos' => [['plate' => 'ABC*12D'], 'plate'],
-            'modelo vacío' => [['model' => ''], 'model'],
-            'modelo en null' => [['model' => null], 'model'],
-            'modelo demasiado largo' => [['model' => str_repeat('a', 101)], 'model'],
+            'tipo vacío' => [['type' => ''], 'type'],
+            'tipo en null' => [['type' => null], 'type'],
+            'tipo inválido' => [['type' => 'automovil'], 'type'],
             'año en null' => [['year' => null], 'year'],
             'año no numérico' => [['year' => 'dos mil veintidós'], 'year'],
             'año de dos dígitos' => [['year' => 22], 'year'],

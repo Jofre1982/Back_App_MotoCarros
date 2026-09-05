@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Enums\VehicleType;
+
 /**
  * Datos a corregir en la moto ya registrada de un conductor, ya validados.
  *
@@ -20,7 +22,7 @@ final readonly class VehicleUpdate
 {
     public function __construct(
         public ?string $plate = null,
-        public ?string $model = null,
+        public ?VehicleType $type = null,
         public ?int $year = null,
     ) {}
 }

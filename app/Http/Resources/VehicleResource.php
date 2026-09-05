@@ -27,7 +27,7 @@ class VehicleResource extends JsonResource
     {
         return [
             'plate' => $this->resource->plate,
-            'model' => $this->resource->model,
+            'type' => $this->resource->type->value,
             'year' => $this->resource->year,
         ];
     }

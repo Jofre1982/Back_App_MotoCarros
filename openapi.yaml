@@ -825,7 +825,7 @@ paths:
               example:
                 data:
                   plate: ABC12D
-                  model: Bajaj Boxer CT 100
+                  type: motocarro
                   year: 2022
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -903,7 +903,7 @@ paths:
               $ref: "#/components/schemas/VehicleRegistrationRequest"
             example:
               plate: ABC12D
-              model: Bajaj Boxer CT 100
+              type: motocarro
               year: 2022
       responses:
         "201":
@@ -920,7 +920,7 @@ paths:
               example:
                 data:
                   plate: ABC12D
-                  model: Bajaj Boxer CT 100
+                  type: motocarro
                   year: 2022
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -976,7 +976,7 @@ paths:
 
         Es un PATCH parcial, igual que `PATCH /me`: solo los campos presentes
         en el body se cambian, el resto conserva su valor. Un campo presente no
-        puede venir vacío — `{"model": ""}` responde 422, no borra el modelo;
+        puede venir vacío — `{"type": ""}` responde 422, no borra el tipo;
         las tres columnas son NOT NULL. La forma de no tocar un dato es no
         mandarlo.
 
@@ -1006,7 +1006,7 @@ paths:
             schema:
               $ref: "#/components/schemas/VehicleUpdateRequest"
             example:
-              model: Bajaj Boxer CT 100 ES
+              type: motocarga
               year: 2023
       responses:
         "200":
@@ -1023,7 +1023,7 @@ paths:
               example:
                 data:
                   plate: ABC12D
-                  model: Bajaj Boxer CT 100 ES
+                  type: motocarga
                   year: 2023
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -3208,7 +3208,7 @@ components:
         ahí.
       required:
         - plate
-        - model
+        - type
         - year
       properties:
         plate:
@@ -3217,13 +3217,17 @@ components:
             Placa tal como quedó guardada, en su forma canónica (mayúsculas,
             sin espacios al borde).
           example: ABC12D
-        model:
+        type:
           type: string
-          description: Modelo declarado por el conductor, texto libre.
-          example: Bajaj Boxer CT 100
+          enum: [motocarro, motocarga]
+          description: >-
+            Categoría del vehículo. El año ya identifica el modelo puntual;
+            esto es lo que importa operativamente para el servicio y para el
+            censo de vehículos y conductores.
+          example: motocarro
         year:
           type: integer
-          description: Año del modelo.
+          description: Año del vehículo.
           example: 2022
     DeviceToken:
       type: object
@@ -3520,7 +3524,7 @@ components:
         pertenece: el dueño es siempre la cuenta que envía el token.
       required:
         - plate
-        - model
+        - type
         - year
       properties:
         plate:
@@ -3542,14 +3546,14 @@ components:
             licencia.
           pattern: "^[A-Z0-9-]{5,10}$"
           example: ABC12D
-        model:
+        type:
           type: string
-          maxLength: 100
+          enum: [motocarro, motocarga]
           description: >-
-            Modelo de la moto, texto libre: no hay catálogo de marcas ni
-            modelos, y fabricar uno para un dato que hoy solo sirve para que el
-            pasajero reconozca la moto que lo recoge sería inventar un problema.
-          example: Bajaj Boxer CT 100
+            Categoría del vehículo. El año ya identifica el modelo puntual;
+            esto es lo que importa operativamente para el servicio y para el
+            censo de vehículos y conductores.
+          example: motocarro
         year:
           type: integer
           minimum: 1970
@@ -3572,14 +3576,14 @@ components:
         pueda elegir.
 
         **Opcional no es vaciable.** Un campo que viene tiene que traer un
-        valor: las tres columnas son NOT NULL, y una moto sin placa ni modelo
+        valor: las tres columnas son NOT NULL, y una moto sin placa ni tipo
         no le sirve al pasajero que tiene que reconocerla. La forma de no
         cambiar un dato es no mandarlo.
 
         Las reglas de cada campo son las mismas del alta (`plate` normalizada y
-        única, `model` texto libre, `year` de cuatro dígitos hasta el que viene)
-        — un dato corregido no puede quedar en un estado que el alta habría
-        rechazado.
+        única, `type` uno de los dos valores fijos, `year` de cuatro dígitos
+        hasta el que viene) — un dato corregido no puede quedar en un estado
+        que el alta habría rechazado.
       properties:
         plate:
           type: string
@@ -3594,12 +3598,11 @@ components:
             mismo.
           pattern: "^[A-Z0-9-]{5,10}$"
           example: ABC12D
-        model:
+        type:
           type: string
-          minLength: 1
-          maxLength: 100
-          description: Modelo de la moto, texto libre. Mismo criterio que el alta.
-          example: Bajaj Boxer CT 100 ES
+          enum: [motocarro, motocarga]
+          description: Categoría del vehículo. Mismo criterio que el alta.
+          example: motocarga
         year:
           type: integer
           minimum: 1970
@@ -3872,7 +3875,7 @@ components:
         Es deliberadamente más chico que `User`: acá el que mira es la
         contraparte del viaje, no el dueño de la cuenta. Va lo mínimo para
         saber a quién se está esperando; el teléfono y los datos de la moto
-        (placa, modelo) no entran todavía porque ninguna historia los pidió, y
+        (placa, tipo) no entran todavía porque ninguna historia los pidió, y
         publicar el contacto de una persona a la otra es una decisión de
         producto, no un detalle de serialización.
       required:

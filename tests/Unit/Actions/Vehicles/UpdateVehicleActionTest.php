@@ -6,6 +6,7 @@ namespace Tests\Unit\Actions\Vehicles;
 
 use App\Actions\Vehicles\UpdateVehicleAction;
 use App\DTOs\VehicleUpdate;
+use App\Enums\VehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -26,7 +27,7 @@ class UpdateVehicleActionTest extends TestCase
         $resultado = $this->action()->handle($vehiculo, new VehicleUpdate(year: 2023));
 
         $this->assertSame('ABC12D', $resultado->plate);
-        $this->assertSame('Bajaj Boxer CT 100', $resultado->model);
+        $this->assertSame(VehicleType::Motocarro, $resultado->type);
         $this->assertSame(2023, $resultado->year);
     }
 
@@ -45,6 +46,8 @@ class UpdateVehicleActionTest extends TestCase
     /**
      * La Action no depende de que la haya llamado el Form Request: un job o un
      * comando pueden armar el DTO a mano, y las tres columnas son NOT NULL.
+     * `type` ya no puede llegar como cadena vacía —es un `VehicleType` o
+     * `null`—, así que el caso a defender queda solo en `plate`.
      */
     public function test_ignora_los_campos_de_texto_que_vienen_vacios_en_el_dto(): void
     {
@@ -52,16 +55,14 @@ class UpdateVehicleActionTest extends TestCase
 
         $resultado = $this->action()->handle(
             $vehiculo,
-            new VehicleUpdate(plate: '   ', model: ''),
+            new VehicleUpdate(plate: '   '),
         );
 
         $this->assertSame('ABC12D', $resultado->plate);
-        $this->assertSame('Bajaj Boxer CT 100', $resultado->model);
 
         $recargado = $vehiculo->fresh();
 
         $this->assertSame('ABC12D', $recargado->plate);
-        $this->assertSame('Bajaj Boxer CT 100', $recargado->model);
     }
 
     public function test_el_dueno_no_cambia_porque_el_dto_no_lo_tiene(): void
@@ -72,10 +73,10 @@ class UpdateVehicleActionTest extends TestCase
         $vehiculo = $this->vehiculo();
         $dueno = $vehiculo->user_id;
 
-        $resultado = $this->action()->handle($vehiculo, new VehicleUpdate(model: 'Yamaha YBR 125'));
+        $resultado = $this->action()->handle($vehiculo, new VehicleUpdate(type: VehicleType::Motocarga));
 
         $this->assertSame($dueno, $resultado->user_id);
-        $this->assertDatabaseHas('vehicles', ['user_id' => $dueno, 'model' => 'Yamaha YBR 125']);
+        $this->assertDatabaseHas('vehicles', ['user_id' => $dueno, 'type' => 'motocarga']);
     }
 
     public function test_devuelve_la_instancia_con_los_datos_ya_actualizados(): void
@@ -91,11 +92,11 @@ class UpdateVehicleActionTest extends TestCase
 
     public function test_no_toca_ningun_otro_vehiculo(): void
     {
-        $ajeno = Vehicle::factory()->create(['plate' => 'JJJ11J', 'model' => 'Honda CB 110']);
+        $ajeno = Vehicle::factory()->create(['plate' => 'JJJ11J', 'type' => 'motocarro']);
 
-        $this->action()->handle($this->vehiculo(), new VehicleUpdate(model: 'Yamaha YBR 125'));
+        $this->action()->handle($this->vehiculo(), new VehicleUpdate(type: VehicleType::Motocarga));
 
-        $this->assertDatabaseHas('vehicles', ['id' => $ajeno->id, 'model' => 'Honda CB 110']);
+        $this->assertDatabaseHas('vehicles', ['id' => $ajeno->id, 'type' => 'motocarro']);
     }
 
     private function action(): UpdateVehicleAction
@@ -108,7 +109,7 @@ class UpdateVehicleActionTest extends TestCase
         return Vehicle::factory()->create([
             'user_id' => User::factory()->driver(),
             'plate' => 'ABC12D',
-            'model' => 'Bajaj Boxer CT 100',
+            'type' => 'motocarro',
             'year' => 2022,
         ]);
     }
