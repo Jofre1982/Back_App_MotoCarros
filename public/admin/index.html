@@ -102,6 +102,17 @@
   .doc-row .driver { font-weight: 600; }
   .doc-row .meta { color: var(--muted); font-size: 0.85rem; margin: 2px 0 10px; }
   .doc-row .actions { display: flex; gap: 8px; }
+  .doc-preview { margin-bottom: 10px; }
+  .doc-preview img {
+    max-width: 100%;
+    max-height: 280px;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .doc-preview .preview-loading,
+  .doc-preview .preview-error { color: var(--muted); font-size: 0.85rem; }
+  .doc-preview a { color: var(--primary); font-size: 0.9rem; }
   .empty { color: var(--muted); text-align: center; padding: 24px 0; }
   .loading { color: var(--muted); text-align: center; padding: 24px 0; }
   [hidden] { display: none !important; }
@@ -325,6 +336,11 @@
     metaLine.textContent = typeLabel + " · subido " + uploadedAt;
     li.appendChild(metaLine);
 
+    var preview = document.createElement("div");
+    preview.className = "doc-preview";
+    li.appendChild(preview);
+    loadDocumentPreview(document_.id, preview);
+
     var rowError = document.createElement("p");
     rowError.className = "error";
     rowError.hidden = true;
@@ -406,6 +422,55 @@
     return li;
   }
 
+  // Trae el archivo con el mismo `apiFetch` autenticado que el resto del
+  // panel: un <img src="/api/v1/..."> plano no puede mandar el header
+  // Authorization, así que hay que pedirlo por JS y mostrarlo como blob URL.
+  // Si es PDF (o cualquier cosa que no sea imagen), un link a abrirlo en una
+  // pestaña nueva alcanza — no hace falta un visor embebido para eso.
+  function loadDocumentPreview(documentId, container) {
+    var loading = document.createElement("p");
+    loading.className = "preview-loading";
+    loading.textContent = "Cargando vista previa...";
+    container.appendChild(loading);
+
+    apiFetch("/admin/documents/" + documentId + "/file")
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("No se pudo cargar la vista previa.");
+        }
+        var contentType = response.headers.get("Content-Type") || "";
+        return response.blob().then(function (blob) {
+          return { blob: blob, contentType: contentType };
+        });
+      })
+      .then(function (result) {
+        container.innerHTML = "";
+        var url = URL.createObjectURL(result.blob);
+        container.dataset.previewUrl = url;
+
+        if (result.contentType.indexOf("image/") === 0) {
+          var img = document.createElement("img");
+          img.src = url;
+          img.alt = "Vista previa del documento";
+          container.appendChild(img);
+        } else {
+          var link = document.createElement("a");
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = "Ver documento";
+          container.appendChild(link);
+        }
+      })
+      .catch(function () {
+        container.innerHTML = "";
+        var message = document.createElement("p");
+        message.className = "preview-error";
+        message.textContent = "No se pudo cargar la vista previa.";
+        container.appendChild(message);
+      });
+  }
+
   function reviewDocument(documentId, action, reason, row, rowError) {
     hideError(rowError);
     var buttons = row.querySelectorAll("button");
@@ -428,6 +493,10 @@
         });
       })
       .then(function () {
+        var preview = row.querySelector(".doc-preview");
+        if (preview && preview.dataset.previewUrl) {
+          URL.revokeObjectURL(preview.dataset.previewUrl);
+        }
         row.remove();
         if (documentsList.children.length === 0) {
           documentsEmpty.hidden = false;
