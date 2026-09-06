@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\V1\Rides\ShowRideController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideHistoryController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideReceiptController;
 use App\Http\Controllers\Api\V1\Rides\StartRideController;
+use App\Http\Controllers\Api\V1\Sites\ListSitesController as ListSitesForPassengerController;
 use App\Http\Controllers\Api\V1\Vehicles\RegisterVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\ShowVehicleController;
 use App\Http\Controllers\Api\V1\Vehicles\UpdateVehicleController;
@@ -260,6 +261,14 @@ Route::prefix('v1')->group(function () {
         ->get('me/earnings', ShowDriverEarningsController::class)
         ->name('drivers.earnings');
 
+    // Catálogo de sitios de solo lectura, para que el pasajero elija destino
+    // al pedir un viaje (historia #87). Cualquier cuenta autenticada puede
+    // consultarlo — administrarlo (crear/editar precios) sigue siendo
+    // exclusivo del admin, bajo `/admin/sites` (historia #85).
+    Route::middleware('auth:api')
+        ->get('sites', ListSitesForPassengerController::class)
+        ->name('sites.index');
+
     // La solicitud de viaje (historia #15). Es un recurso propio y no un
     // sub-recurso de `me`: se direcciona por su id —es el `{rideId}` del canal
     // privado `ride.{id}`— y del otro lado lo van a operar tanto el pasajero
@@ -270,11 +279,11 @@ Route::prefix('v1')->group(function () {
         ->name('rides.store');
 
     // No cuelga de `me` como el vehículo: no es un sub-recurso de la cuenta,
-    // es una consulta puntual que no persiste nada (historia #14). Exige
-    // `auth:api` igual que el resto de la API y no solo `throttle:auth`
-    // porque cada request golpea al proveedor de mapas, que se paga por
-    // consulta — dejarlo anónimo abriría la puerta a agotar la cuota del
-    // proveedor sin que haya una cuenta a la que atribuírselo.
+    // es una consulta puntual que no persiste nada (historia #14). Desde la
+    // #87 no golpea ningún proveedor externo (el precio sale del catálogo de
+    // sitios, ver CalculateSiteFareAction); sigue con `auth:api` en vez de
+    // solo `throttle:auth` para que la estimación quede atribuida a una
+    // cuenta, igual que el resto de la API.
     Route::middleware('auth:api')
         ->post('rides/estimate', EstimateRideController::class)
         ->name('rides.estimate');

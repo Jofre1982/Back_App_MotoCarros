@@ -8,19 +8,19 @@ use App\Actions\Rides\CreateRideAction;
 use App\DTOs\Coordinates;
 use App\DTOs\PushNotification;
 use App\DTOs\RideRequest;
-use App\DTOs\RouteEstimate;
+use App\Enums\PricingUnit;
 use App\Enums\RideStatus;
+use App\Enums\VehicleType;
 use App\Events\Realtime\RideRequested;
-use App\Exceptions\RouteEstimationFailed;
 use App\Models\DeviceToken;
 use App\Models\DriverProfile;
 use App\Models\Ride;
+use App\Models\Site;
+use App\Models\SiteFare;
 use App\Models\User;
-use App\Services\Maps\RouteEstimator;
 use App\Services\Realtime\PushNotificationGateway;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -32,41 +32,66 @@ class CreateRideActionTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Site $sitio;
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        Config::set('fares.currency', 'COP');
-        Config::set('fares.base', 1500);
-        Config::set('fares.per_kilometer', 800);
-        Config::set('fares.per_minute', 100);
-        Config::set('fares.per_waiting_minute', 60);
-        Config::set('fares.minimum', 3000);
-        Config::set('fares.rounding_step', 50);
+        $this->sitio = $this->siteWithFare(8850);
     }
 
-    public function test_crea_el_viaje_en_requested_con_el_trayecto_y_la_tarifa_estimados(): void
+    public function test_crea_el_viaje_en_requested_con_la_tarifa_del_sitio(): void
     {
         $pasajero = User::factory()->create();
 
-        $viaje = $this->action(new RouteEstimate(7421, 842))->handle($pasajero, $this->solicitud());
+        $viaje = $this->action()->handle($pasajero, $this->solicitud());
 
         $this->assertTrue($viaje->exists);
         $this->assertSame(RideStatus::Requested, $viaje->status);
-        $this->assertSame(7421, $viaje->estimated_distance_meters);
-        $this->assertSame(842, $viaje->estimated_duration_seconds);
+        $this->assertSame($this->sitio->id, $viaje->destination_site_id);
         $this->assertSame(8850, $viaje->estimated_fare);
         $this->assertSame('COP', $viaje->currency);
     }
 
-    public function test_guarda_el_origen_y_el_destino_recibidos(): void
+    public function test_multiplica_el_precio_por_pasajero_cuando_el_sitio_cobra_por_persona(): void
+    {
+        $sitio = $this->siteWithFare(4000, PricingUnit::PerPerson);
+
+        $viaje = $this->action()->handle(
+            User::factory()->create(),
+            $this->solicitud(destinationSiteId: $sitio->id, passengerCount: 3),
+        );
+
+        $this->assertSame(12000, $viaje->estimated_fare);
+    }
+
+    public function test_no_multiplica_el_precio_cuando_el_sitio_cobra_por_viaje(): void
+    {
+        $sitio = $this->siteWithFare(20000, PricingUnit::PerTrip);
+
+        $viaje = $this->action()->handle(
+            User::factory()->create(),
+            $this->solicitud(destinationSiteId: $sitio->id, passengerCount: 3),
+        );
+
+        $this->assertSame(20000, $viaje->estimated_fare);
+    }
+
+    public function test_guarda_el_origen_y_el_sitio_de_destino_recibidos(): void
     {
         $viaje = $this->action()->handle(User::factory()->create(), $this->solicitud());
 
         $this->assertSame(4.710989, $viaje->origin_latitude);
         $this->assertSame(-74.072092, $viaje->origin_longitude);
-        $this->assertSame(4.698, $viaje->destination_latitude);
-        $this->assertSame(-74.061, $viaje->destination_longitude);
+        $this->assertSame($this->sitio->id, $viaje->destination_site_id);
+    }
+
+    public function test_guarda_la_cantidad_de_pasajeros(): void
+    {
+        $viaje = $this->action()->handle(User::factory()->create(), $this->solicitud(passengerCount: 2));
+
+        $this->assertSame(2, $viaje->passenger_count);
     }
 
     public function test_el_pasajero_sale_del_parametro_y_no_del_dto(): void
@@ -80,51 +105,6 @@ class CreateRideActionTest extends TestCase
 
         $this->assertSame($pasajero->id, $viaje->passenger_id);
         $this->assertNull($viaje->driver_id);
-    }
-
-    public function test_estima_el_trayecto_entre_el_origen_y_el_destino_recibidos(): void
-    {
-        $estimador = new class implements RouteEstimator
-        {
-            public ?Coordinates $origin = null;
-
-            public ?Coordinates $destination = null;
-
-            public function estimate(Coordinates $origin, Coordinates $destination): RouteEstimate
-            {
-                $this->origin = $origin;
-                $this->destination = $destination;
-
-                return new RouteEstimate(1000, 120);
-            }
-        };
-
-        $this->app->instance(RouteEstimator::class, $estimador);
-        $this->app->make(CreateRideAction::class)->handle(User::factory()->create(), $this->solicitud());
-
-        $this->assertSame(4.710989, $estimador->origin?->latitude);
-        $this->assertSame(-74.061, $estimador->destination?->longitude);
-    }
-
-    public function test_no_deja_ningun_viaje_si_el_proveedor_no_entrega_una_ruta(): void
-    {
-        $estimador = new class implements RouteEstimator
-        {
-            public function estimate(Coordinates $origin, Coordinates $destination): RouteEstimate
-            {
-                throw RouteEstimationFailed::noRouteAvailable('google');
-            }
-        };
-
-        $this->app->instance(RouteEstimator::class, $estimador);
-
-        $this->expectException(RouteEstimationFailed::class);
-
-        try {
-            $this->app->make(CreateRideAction::class)->handle(User::factory()->create(), $this->solicitud());
-        } finally {
-            $this->assertDatabaseCount('rides', 0);
-        }
     }
 
     public function test_el_pasajero_con_un_viaje_activo_no_puede_abrir_otro(): void
@@ -159,6 +139,7 @@ class CreateRideActionTest extends TestCase
         Event::assertDispatched(
             RideRequested::class,
             fn (RideRequested $evento): bool => $evento->rideId === $viaje->id
+                && $evento->destinationSiteId === $this->sitio->id
                 && $evento->nearbyDriverIds === [$conductor->id],
         );
     }
@@ -236,28 +217,34 @@ class CreateRideActionTest extends TestCase
         $this->assertSame(0, $gateway->llamadas);
     }
 
-    private function action(?RouteEstimate $trayecto = null): CreateRideAction
+    private function action(): CreateRideAction
     {
-        $estimacion = $trayecto ?? new RouteEstimate(7421, 842);
-
-        $this->app->instance(RouteEstimator::class, new class($estimacion) implements RouteEstimator
-        {
-            public function __construct(private RouteEstimate $estimacion) {}
-
-            public function estimate(Coordinates $origin, Coordinates $destination): RouteEstimate
-            {
-                return $this->estimacion;
-            }
-        });
-
         return $this->app->make(CreateRideAction::class);
     }
 
-    private function solicitud(): RideRequest
+    private function solicitud(?int $destinationSiteId = null, int $passengerCount = 1): RideRequest
     {
         return new RideRequest(
             origin: new Coordinates(4.710989, -74.072092),
-            destination: new Coordinates(4.698, -74.061),
+            destinationSiteId: $destinationSiteId ?? $this->sitio->id,
+            passengerCount: $passengerCount,
         );
+    }
+
+    private function siteWithFare(
+        int $dayPrice,
+        PricingUnit $pricingUnit = PricingUnit::PerTrip,
+        ?int $nightPrice = null,
+    ): Site {
+        $site = Site::factory()->create();
+        SiteFare::factory()->create([
+            'site_id' => $site->id,
+            'vehicle_type' => VehicleType::Motocarro,
+            'pricing_unit' => $pricingUnit,
+            'day_price' => $dayPrice,
+            'night_price' => $nightPrice,
+        ]);
+
+        return $site;
     }
 }

@@ -9,7 +9,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Serializa una estimación de viaje según el schema `RideEstimate` de openapi.yaml.
+ * Serializa una estimación de viaje según el schema `RideEstimate` de
+ * openapi.yaml. Desde la historia #87 el destino es un sitio con precio
+ * fijo, no un trayecto calculado — ya no lleva `distance_meters`/
+ * `duration_seconds`.
  *
  * @property-read RideEstimate $resource
  */
@@ -21,10 +24,13 @@ class RideEstimateResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'distance_meters' => $this->resource->route->distanceMeters,
-            'duration_seconds' => $this->resource->route->durationSeconds,
-            'currency' => $this->resource->fare->currency,
-            'estimated_fare' => $this->resource->fare->total,
+            'destination' => [
+                'site_id' => $this->resource->destinationSite->id,
+                'name' => $this->resource->destinationSite->name,
+            ],
+            'passenger_count' => $this->resource->passengerCount,
+            'currency' => $this->resource->currency,
+            'estimated_fare' => $this->resource->fare,
             // No representa un cobro: el pasajero solo lo usa para decidir si
             // continúa, el monto final se recalcula al completar el viaje
             // (historia #24). Se declara acá en vez de dejar que el nombre del

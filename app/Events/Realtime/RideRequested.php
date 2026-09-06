@@ -20,8 +20,14 @@ use Illuminate\Foundation\Events\Dispatchable;
  * mismo criterio que el resto de los eventos de negocio (ver
  * .claude/STANDARDS.md).
  *
+ * El destino va como sitio (id y nombre) desde la historia #87, no como
+ * coordenadas: el conductor ya conoce los sitios del pueblo, y el nombre le
+ * dice más de un vistazo que un par de números. Lleva el nombre además del
+ * id para que el conductor no tenga que resolverlo con una consulta aparte
+ * al recibir el evento.
+ *
  * No lleva ningún dato del pasajero: un conductor decide si acepta por el
- * trayecto y la tarifa, no por quién lo pide.
+ * destino y la tarifa, no por quién lo pide.
  */
 final class RideRequested implements ShouldBroadcast
 {
@@ -34,8 +40,9 @@ final class RideRequested implements ShouldBroadcast
         public readonly int $rideId,
         public readonly float $originLatitude,
         public readonly float $originLongitude,
-        public readonly float $destinationLatitude,
-        public readonly float $destinationLongitude,
+        public readonly int $destinationSiteId,
+        public readonly string $destinationSiteName,
+        public readonly int $passengerCount,
         public readonly string $currency,
         public readonly int $estimatedFare,
         public readonly array $nearbyDriverIds,
@@ -66,7 +73,8 @@ final class RideRequested implements ShouldBroadcast
      * @return array{
      *     ride_id: int,
      *     origin: array{latitude: float, longitude: float},
-     *     destination: array{latitude: float, longitude: float},
+     *     destination: array{site_id: int, name: string},
+     *     passenger_count: int,
      *     currency: string,
      *     estimated_fare: int,
      * }
@@ -80,9 +88,10 @@ final class RideRequested implements ShouldBroadcast
                 'longitude' => $this->originLongitude,
             ],
             'destination' => [
-                'latitude' => $this->destinationLatitude,
-                'longitude' => $this->destinationLongitude,
+                'site_id' => $this->destinationSiteId,
+                'name' => $this->destinationSiteName,
             ],
+            'passenger_count' => $this->passengerCount,
             'currency' => $this->currency,
             'estimated_fare' => $this->estimatedFare,
         ];

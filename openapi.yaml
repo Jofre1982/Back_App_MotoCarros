@@ -2277,10 +2277,9 @@ paths:
                       latitude: 4.710989
                       longitude: -74.072092
                     destination:
-                      latitude: 4.698
-                      longitude: -74.061
-                    distance_meters: 7421
-                    duration_seconds: 842
+                      site_id: 1
+                      name: Casco urbano
+                    passenger_count: 1
                     currency: COP
                     estimated_fare: 8850
                     driver:
@@ -2289,7 +2288,7 @@ paths:
                     requested_at: "2026-07-31T14:03:21+00:00"
                     started_at: "2026-07-31T14:05:00+00:00"
                     completed_at: "2026-07-31T14:22:00+00:00"
-                    final_fare: 9100
+                    final_fare: 8850
                     payment:
                       status: paid
                 meta:
@@ -2427,6 +2426,59 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /sites:
+    get:
+      tags:
+        - Fares
+      operationId: listSitesForPassenger
+      summary: Listar el catálogo de sitios para elegir destino
+      description: >-
+        Lista el catálogo de sitios con sus precios, para que el pasajero
+        elija destino al pedir un viaje (historia #87). De solo lectura:
+        cualquier cuenta autenticada puede consultarlo. Administrar el
+        catálogo (crear sitios, fijar precios) sigue siendo exclusivo del
+        admin, bajo `/admin/sites` (historia #85).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sitios del catálogo, ordenados por nombre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Site"
+              example:
+                data:
+                  - id: 1
+                    name: Casco urbano
+                    fares:
+                      - vehicle_type: motocarro
+                        pricing_unit: per_person
+                        day_price: 4000
+                        night_price: 5000
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /rides:
     post:
       tags:
@@ -2434,20 +2486,25 @@ paths:
       operationId: requestRide
       summary: Solicitar un viaje
       description: >-
-        Crea la solicitud de viaje del pasajero autenticado entre dos
-        coordenadas (historia #15). El viaje nace en estado `requested` y queda
-        esperando a que un conductor lo acepte (historia #18): la API no asigna
-        conductor por su cuenta.
+        Crea la solicitud de viaje del pasajero autenticado (historia #15).
+        El viaje nace en estado `requested` y queda esperando a que un
+        conductor lo acepte (historia #18): la API no asigna conductor por
+        su cuenta.
 
         Es una operación del rol pasajero y la resuelve `RidePolicy`: una cuenta
         de conductor recibe **403**, no 422, porque no es una entrada que se
         pueda corregir mandando otros datos.
 
-        La distancia, la duración y la tarifa se calculan al crear el viaje con
-        el mismo proveedor de mapas y el mismo motor de tarifa que
-        `POST /rides/estimate`, y quedan guardadas con el viaje. `estimated_fare`
-        sigue siendo un estimado: el monto final se recalcula al completarlo
-        (historia #24) con el trayecto realmente recorrido.
+        Desde la historia #87, el destino ya no son coordenadas libres: es un
+        `destination_site_id` del catálogo de sitios (`GET /sites`), cada uno
+        con un precio fijo de pasajero por tipo de vehículo. La tarifa se fija
+        al crear el viaje con el mismo motor que `POST /rides/estimate`
+        (`CalculateSiteFareAction`), y queda guardada con el viaje —
+        multiplicada por `passenger_count` si el sitio cobra por persona, o
+        tal cual si cobra por viaje. A diferencia del motor por distancia que
+        reemplazó esta historia, `estimated_fare` y el cobro final
+        (`final_fare`, historia #24) son siempre el mismo número: no hay nada
+        que recalcular con el trayecto realmente recorrido.
 
         Un pasajero solo puede tener **un viaje activo a la vez** (`requested`,
         `accepted` o `in_progress`); pedir otro mientras tanto responde 422.
@@ -2463,9 +2520,8 @@ paths:
               origin:
                 latitude: 4.710989
                 longitude: -74.072092
-              destination:
-                latitude: 4.698
-                longitude: -74.061
+              destination_site_id: 1
+              passenger_count: 1
       responses:
         "201":
           description: El viaje quedó solicitado y espera a que un conductor lo acepte.
@@ -2486,12 +2542,11 @@ paths:
                     latitude: 4.710989
                     longitude: -74.072092
                   destination:
-                    latitude: 4.698
-                    longitude: -74.061
-                  distance_meters: 7421
-                  duration_seconds: 842
+                    site_id: 1
+                    name: Casco urbano
+                  passenger_count: 1
                   currency: COP
-                  estimated_fare: 8850
+                  estimated_fare: 4000
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
@@ -2519,10 +2574,9 @@ paths:
                 message: This action is unauthorized.
         "422":
           description: >-
-            La entrada no pasó la validación (falta una coordenada, está fuera
-            de rango, o el destino es el mismo punto que el origen), el pasajero
-            ya tiene un viaje activo, o el proveedor de mapas no encontró una
-            ruta entre origen y destino (zona sin cobertura).
+            La entrada no pasó la validación (falta un campo o está fuera de
+            rango), el sitio no existe, el sitio no tiene precio de pasajero
+            definido todavía, o el pasajero ya tiene un viaje activo.
           content:
             application/json:
               schema:
@@ -2547,23 +2601,21 @@ paths:
       operationId: estimateRide
       summary: Ver la tarifa estimada de un viaje antes de solicitarlo
       description: >-
-        Le muestra al pasajero cuánto costaría un viaje entre dos coordenadas
-        antes de pedirlo (historia #14). No crea nada: es solo una consulta
-        contra el proveedor de mapas y el motor de tarifa configurados, con la
-        misma fórmula que se usa para cobrar el viaje real. Para solicitar el
-        viaje de verdad está `POST /rides` (historia #15), que vuelve a calcular
-        estos mismos números y los guarda con el viaje.
+        Le muestra al pasajero cuánto costaría un viaje a un sitio antes de
+        pedirlo (historia #14). No crea nada: es solo una consulta contra el
+        precio fijo del sitio elegido (historia #87, `CalculateSiteFareAction`).
+        Para solicitar el viaje de verdad está `POST /rides` (historia #15),
+        que vuelve a calcular este mismo número y lo guarda con el viaje.
 
         No cuelga de `/me` como el vehículo: no es un sub-recurso de la
         cuenta, es una consulta puntual. Requiere un token vigente igual que
-        el resto de la API, y no solo el límite de tasa de los endpoints
-        anónimos, porque cada request golpea al proveedor de mapas, que se
-        paga por consulta.
+        el resto de la API.
 
         `estimated_fare` no representa un cobro: la respuesta lo marca
-        explícitamente con `is_estimate: true`. El monto final del viaje se
-        recalcula al completarlo (historia #24) con el trayecto realmente
-        recorrido, no con este estimado.
+        explícitamente con `is_estimate: true`. A diferencia del motor por
+        distancia que reemplazó esta historia, el monto final del viaje
+        (historia #24) es siempre el mismo número que este estimado — el
+        precio es fijo por sitio, no depende del trayecto recorrido.
       security:
         - bearerAuth: []
       requestBody:
@@ -2571,17 +2623,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RideEstimateRequest"
+              $ref: "#/components/schemas/RideRequest"
             example:
               origin:
                 latitude: 4.710989
                 longitude: -74.072092
-              destination:
-                latitude: 4.698
-                longitude: -74.061
+              destination_site_id: 1
+              passenger_count: 1
       responses:
         "200":
-          description: Distancia, duración y tarifa estimadas del trayecto.
+          description: Sitio de destino y tarifa estimada.
           content:
             application/json:
               schema:
@@ -2593,10 +2644,12 @@ paths:
                     $ref: "#/components/schemas/RideEstimate"
               example:
                 data:
-                  distance_meters: 7421
-                  duration_seconds: 842
+                  destination:
+                    site_id: 1
+                    name: Casco urbano
+                  passenger_count: 1
                   currency: COP
-                  estimated_fare: 8850
+                  estimated_fare: 4000
                   is_estimate: true
         "401":
           description: Falta el access token, es ilegible o ya venció.
@@ -2608,18 +2661,18 @@ paths:
                 message: Unauthenticated.
         "422":
           description: >-
-            La entrada no pasó la validación (falta una coordenada o está
-            fuera de rango), o el proveedor de mapas no encontró una ruta
-            entre origen y destino (zona sin cobertura).
+            La entrada no pasó la validación (falta un campo o está fuera de
+            rango), el sitio no existe, o el sitio no tiene precio de
+            pasajero definido todavía.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
               example:
-                message: The origin.latitude field must be between -90 and 90.
+                message: Ese sitio todavía no tiene un precio de pasajero definido.
                 errors:
-                  origin.latitude:
-                    - The origin.latitude field must be between -90 and 90.
+                  destination_site_id:
+                    - Ese sitio todavía no tiene un precio de pasajero definido.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -2682,12 +2735,11 @@ paths:
                     latitude: 4.710989
                     longitude: -74.072092
                   destination:
-                    latitude: 4.698
-                    longitude: -74.061
-                  distance_meters: 7421
-                  duration_seconds: 842
+                    site_id: 1
+                    name: Casco urbano
+                  passenger_count: 1
                   currency: COP
-                  estimated_fare: 8850
+                  estimated_fare: 4000
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
@@ -2817,12 +2869,11 @@ paths:
                     latitude: 4.710989
                     longitude: -74.072092
                   destination:
-                    latitude: 4.698
-                    longitude: -74.061
-                  distance_meters: 7421
-                  duration_seconds: 842
+                    site_id: 1
+                    name: Casco urbano
+                  passenger_count: 1
                   currency: COP
-                  estimated_fare: 8850
+                  estimated_fare: 4000
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
@@ -2926,12 +2977,11 @@ paths:
                     latitude: 4.710989
                     longitude: -74.072092
                   destination:
-                    latitude: 4.698
-                    longitude: -74.061
-                  distance_meters: 7421
-                  duration_seconds: 842
+                    site_id: 1
+                    name: Casco urbano
+                  passenger_count: 1
                   currency: COP
-                  estimated_fare: 8850
+                  estimated_fare: 4000
                   driver:
                     id: 42
                     name: Carlos Pérez
@@ -3045,12 +3095,11 @@ paths:
                     latitude: 4.710989
                     longitude: -74.072092
                   destination:
-                    latitude: 4.698
-                    longitude: -74.061
-                  distance_meters: 7421
-                  duration_seconds: 842
+                    site_id: 1
+                    name: Casco urbano
+                  passenger_count: 1
                   currency: COP
-                  estimated_fare: 8850
+                  estimated_fare: 4000
                   driver:
                     id: 42
                     name: Carlos Pérez
@@ -3164,19 +3213,18 @@ paths:
                     latitude: 4.710989
                     longitude: -74.072092
                   destination:
-                    latitude: 4.698
-                    longitude: -74.061
-                  distance_meters: 7421
-                  duration_seconds: 842
+                    site_id: 1
+                    name: Casco urbano
+                  passenger_count: 1
                   currency: COP
-                  estimated_fare: 8850
+                  estimated_fare: 4000
                   driver:
                     id: 42
                     name: Carlos Pérez
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: "2026-07-31T14:09:05+00:00"
                   completed_at: "2026-07-31T14:19:05+00:00"
-                  final_fare: 8450
+                  final_fare: 4000
                   payment:
                     status: paid
         "401":
@@ -3325,10 +3373,16 @@ paths:
       operationId: showRideReceipt
       summary: Ver el recibo de un viaje completado
       description: >-
-        Devuelve el desglose del cobro de un viaje completado (historia
-        #26): tarifa base, distancia, tiempo, espera y el monto total, para
-        que el pasajero pueda verificar cuánto se le cobró y por qué
-        concepto.
+        Devuelve el recibo del cobro de un viaje completado (historia #26):
+        el monto total y el momento en que se completó, para que el pasajero
+        pueda verificar cuánto se le cobró.
+
+        Conserva el desglose por concepto (`base_fare`, `distance_fare`,
+        `time_fare`, `waiting_fee`) del motor de tarifa por distancia que
+        usaba esta historia originalmente; desde la #87, con el precio fijo
+        por sitio, el monto completo siempre va en `base_fare` y el resto
+        queda en cero — no hay nada que desglosar por concepto cuando el
+        precio no depende del trayecto.
 
         Solo el pasajero **dueño** del viaje puede verlo: a diferencia de
         `GET /rides/{id}`, el conductor asignado también recibe **403** —el
@@ -3362,13 +3416,13 @@ paths:
                 data:
                   ride_id: 1
                   currency: COP
-                  base_fare: 1500
-                  distance_fare: 5937
-                  time_fare: 1000
+                  base_fare: 4000
+                  distance_fare: 0
+                  time_fare: 0
                   waiting_fee: 0
-                  subtotal: 8437
+                  subtotal: 4000
                   minimum_applied: false
-                  total: 8450
+                  total: 4000
                   payment_status: paid
                   completed_at: "2026-07-31T14:19:05+00:00"
         "401":
@@ -4255,38 +4309,33 @@ components:
           minimum: -180
           maximum: 180
           example: -74.072092
-    RideEstimateRequest:
-      type: object
-      description: Origen y destino entre los que se quiere estimar un viaje.
-      required:
-        - origin
-        - destination
-      properties:
-        origin:
-          $ref: "#/components/schemas/Coordinates"
-        destination:
-          $ref: "#/components/schemas/Coordinates"
     RideEstimate:
       type: object
       description: >-
-        Distancia, duración y tarifa estimadas de un trayecto entre dos
-        coordenadas, calculadas con el proveedor de mapas y la tarifa
-        vigentes.
+        Sitio de destino y tarifa estimada de un viaje, calculada con el
+        precio fijo vigente del sitio (historia #87).
       required:
-        - distance_meters
-        - duration_seconds
+        - destination
+        - passenger_count
         - currency
         - estimated_fare
         - is_estimate
       properties:
-        distance_meters:
+        destination:
+          type: object
+          required:
+            - site_id
+            - name
+          properties:
+            site_id:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: Casco urbano
+        passenger_count:
           type: integer
-          description: Distancia del trayecto, en metros.
-          example: 7421
-        duration_seconds:
-          type: integer
-          description: Duración estimada del trayecto, en segundos.
-          example: 842
+          example: 1
         currency:
           type: string
           description: Código ISO 4217 de tres letras de la moneda del monto.
@@ -4296,13 +4345,17 @@ components:
           description: >-
             Monto estimado del viaje, entero en la unidad mínima de
             `currency` (ver la nota sobre dinero en config/fares.php).
-          example: 8850
+            `day_price`/`night_price` del sitio, multiplicado por
+            `passenger_count` si cobra `per_person`.
+          example: 4000
         is_estimate:
           type: boolean
           description: >-
-            Siempre `true`: este monto no representa un cobro y puede variar
-            en el monto final, que se recalcula al completar el viaje con el
-            trayecto realmente recorrido.
+            Siempre `true`: es el mismo criterio de nombre que el resto de la
+            API para dejar explícito que este monto no representa un cobro
+            —aunque, a diferencia del motor por distancia que reemplazó esta
+            historia, acá sí es exactamente el mismo número que el cobro
+            final, porque el precio es fijo por sitio.
           example: true
     DriverEarningsSummary:
       type: object
@@ -4346,26 +4399,35 @@ components:
     RideRequest:
       type: object
       description: >-
-        Origen y destino del viaje que el pasajero quiere solicitar.
-
-        Tiene la misma forma que `RideEstimateRequest` a propósito, para que la
-        app pueda mandar el mismo cuerpo con el que estimó la tarifa. Son dos
-        schemas y no uno porque son la entrada de dos operaciones distintas y
-        pueden divergir (un método de pago o una nota para el conductor tendrían
-        sentido acá y no en la estimación).
+        Origen, sitio de destino y número de pasajeros del viaje que el
+        pasajero quiere solicitar o estimar (historia #87). Se usa tal cual
+        tanto en `POST /rides` como en `POST /rides/estimate`, para que la
+        app pueda mandar el mismo cuerpo con el que estimó la tarifa.
       required:
         - origin
-        - destination
+        - destination_site_id
+        - passenger_count
       properties:
         origin:
           $ref: "#/components/schemas/Coordinates"
-        destination:
-          $ref: "#/components/schemas/Coordinates"
+        destination_site_id:
+          type: integer
+          description: >-
+            El sitio de destino, del catálogo que devuelve `GET /sites`. Tiene
+            que tener un precio de pasajero (Motocarro) definido, o la
+            solicitud responde 422.
+          example: 1
+        passenger_count:
+          type: integer
+          description: Cuántos pasajeros van en el viaje — la capacidad de un motocarro.
+          minimum: 1
+          maximum: 3
+          example: 1
     Ride:
       type: object
       description: >-
-        Un viaje solicitado por un pasajero, con el trayecto y la tarifa que se
-        estimaron al crearlo.
+        Un viaje solicitado por un pasajero, con el sitio de destino y la
+        tarifa que se fijaron al crearlo (historia #87).
 
         No publica el `passenger_id`: el viaje se solicita siempre desde la
         cuenta que manda el token, igual que el vehículo del conductor. Sí trae
@@ -4376,8 +4438,7 @@ components:
         - status
         - origin
         - destination
-        - distance_meters
-        - duration_seconds
+        - passenger_count
         - currency
         - estimated_fare
         - driver
@@ -4409,15 +4470,21 @@ components:
         origin:
           $ref: "#/components/schemas/Coordinates"
         destination:
-          $ref: "#/components/schemas/Coordinates"
-        distance_meters:
+          type: object
+          description: El sitio de destino elegido (historia #87), no coordenadas.
+          required:
+            - site_id
+            - name
+          properties:
+            site_id:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: Casco urbano
+        passenger_count:
           type: integer
-          description: Distancia estimada del trayecto al solicitarlo, en metros.
-          example: 7421
-        duration_seconds:
-          type: integer
-          description: Duración estimada del trayecto al solicitarlo, en segundos.
-          example: 842
+          example: 1
         currency:
           type: string
           description: Código ISO 4217 de tres letras de la moneda del monto.
@@ -4425,11 +4492,12 @@ components:
         estimated_fare:
           type: integer
           description: >-
-            Monto estimado del viaje al solicitarlo, entero en la unidad mínima
-            de `currency` (ver la nota sobre dinero en config/fares.php). No es
-            un cobro: el monto final se recalcula al completar el viaje con el
-            trayecto realmente recorrido.
-          example: 8850
+            Monto del viaje al solicitarlo, entero en la unidad mínima de
+            `currency` (ver la nota sobre dinero en config/fares.php): el
+            precio fijo del sitio, multiplicado por `passenger_count` si
+            cobra por persona. Es siempre igual a `final_fare` una vez el
+            viaje se completa — el precio no depende del trayecto recorrido.
+          example: 4000
         driver:
           allOf:
             - $ref: "#/components/schemas/RideDriver"
@@ -4475,11 +4543,11 @@ components:
           nullable: true
           description: >-
             Monto final del viaje, entero en la unidad mínima de `currency`,
-            recalculado al completarlo (historia #24) con el trayecto
-            realmente recorrido en vez del estimado al solicitarlo. Es
-            `null` mientras el viaje no esté `completed`. No es en sí mismo
-            el resultado del cobro —eso lo publica `payment`—, solo el monto
-            que corresponde cobrar.
+            fijado al completarlo (historia #24). Desde la historia #87 es
+            siempre igual a `estimated_fare` — el precio es fijo por sitio,
+            no depende del trayecto recorrido. Es `null` mientras el viaje no
+            esté `completed`. No es en sí mismo el resultado del cobro —eso
+            lo publica `payment`—, solo el monto que corresponde cobrar.
           example: null
         payment:
           allOf:
@@ -4545,8 +4613,13 @@ components:
     RideReceipt:
       type: object
       description: >-
-        El recibo de un viaje completado (historia #26): el desglose que
-        produjo el cobro publicado en `Ride.payment` / `Ride.final_fare`.
+        El recibo de un viaje completado (historia #26): el monto cobrado,
+        publicado también en `Ride.payment` / `Ride.final_fare`.
+
+        Conserva el desglose por concepto (`base_fare`, `distance_fare`,
+        `time_fare`, `waiting_fee`) de cuando el motor de tarifa era por
+        distancia; desde la historia #87, con el precio fijo por sitio, el
+        monto completo siempre va en `base_fare` y el resto queda en cero.
 
         A diferencia de `Payment` embebido en `Ride`, acá sí repite
         `currency` y `total`: este objeto es el recurso principal de la
@@ -4576,43 +4649,50 @@ components:
         base_fare:
           type: integer
           description: >-
-            Lo que cuesta el viaje antes de moverse, entero en la unidad
-            mínima de `currency` (ver config/fares.php).
-          example: 1500
+            Entero en la unidad mínima de `currency` (ver config/fares.php).
+            Desde la historia #87 lleva el precio fijo completo del sitio de
+            destino — no solo un cargo por arrancar.
+          example: 4000
         distance_fare:
           type: integer
-          description: Cargo por la distancia realmente recorrida.
-          example: 5937
+          description: >-
+            Cargo por distancia recorrida. Siempre 0 desde la historia #87:
+            el precio es fijo por sitio, no depende del trayecto.
+          example: 0
         time_fare:
           type: integer
-          description: Cargo por el tiempo en ruta realmente transcurrido.
-          example: 1000
+          description: >-
+            Cargo por tiempo en ruta. Siempre 0 desde la historia #87, mismo
+            motivo que `distance_fare`.
+          example: 0
         waiting_fee:
           type: integer
           description: >-
             Cargo por espera solicitada por el pasajero con el viaje ya
-            aceptado, fuera de la duración del trayecto. Hoy siempre vale 0:
+            aceptado, fuera de la duración del trayecto. Siempre vale 0:
             ninguna historia implementada todavía registra tiempo de espera.
           example: 0
         subtotal:
           type: integer
           description: >-
             Suma de `base_fare`, `distance_fare`, `time_fare` y
-            `waiting_fee`, antes de aplicar el piso mínimo y el redondeo.
-          example: 8437
+            `waiting_fee` — desde la historia #87, siempre igual a
+            `base_fare` y a `total`.
+          example: 4000
         minimum_applied:
           type: boolean
           description: >-
             `true` cuando `subtotal` no llegaba al mínimo configurado y
             `total` quedó determinado por ese piso en vez de la suma de
-            conceptos.
+            conceptos. Siempre `false` desde la historia #87: el precio fijo
+            por sitio no tiene un mínimo que aplicar.
           example: false
         total:
           type: integer
           description: >-
             Monto cobrado, entero en la unidad mínima de `currency`. Es el
             mismo valor que `Ride.final_fare` para este viaje.
-          example: 8450
+          example: 4000
         payment_status:
           type: string
           description: Resultado del cobro, mismo significado que `Payment.status`.

@@ -18,9 +18,12 @@ use Illuminate\Support\Carbon;
 /**
  * Un viaje solicitado por un pasajero.
  *
- * Guarda el trayecto y la tarifa que se estimaron al crearlo: el pasajero
- * aceptó esos números, así que son parte del viaje y no algo que se recalcule
- * al consultarlo. El cobro final se resuelve al completarlo (historia #24).
+ * Guarda el sitio de destino y la tarifa que se fijaron al crearlo: el
+ * pasajero aceptó esos números, así que son parte del viaje y no algo que se
+ * recalcule al consultarlo. El cobro final se resuelve al completarlo
+ * (historia #24) — y desde la historia #87 es siempre igual a
+ * `estimated_fare`, porque el precio es fijo por sitio y no depende de la
+ * distancia/tiempo realmente recorridos.
  *
  * `active_passenger_id` y `active_driver_id` no aparecen acá a propósito: son
  * columnas generadas por la base (ver las migraciones) y escribirlas desde la
@@ -34,10 +37,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $driver_id
  * @property float $origin_latitude
  * @property float $origin_longitude
- * @property float $destination_latitude
- * @property float $destination_longitude
- * @property int $estimated_distance_meters
- * @property int $estimated_duration_seconds
+ * @property int $destination_site_id
+ * @property int $passenger_count
  * @property int $estimated_fare
  * @property Carbon|null $started_at
  * @property Carbon|null $completed_at
@@ -52,10 +53,8 @@ use Illuminate\Support\Carbon;
     'final_fare',
     'origin_latitude',
     'origin_longitude',
-    'destination_latitude',
-    'destination_longitude',
-    'estimated_distance_meters',
-    'estimated_duration_seconds',
+    'destination_site_id',
+    'passenger_count',
     'currency',
     'estimated_fare',
 ])]
@@ -70,15 +69,23 @@ class Ride extends Model
             'status' => RideStatus::class,
             'origin_latitude' => 'float',
             'origin_longitude' => 'float',
-            'destination_latitude' => 'float',
-            'destination_longitude' => 'float',
-            'estimated_distance_meters' => 'integer',
-            'estimated_duration_seconds' => 'integer',
+            'passenger_count' => 'integer',
             'estimated_fare' => 'integer',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'final_fare' => 'integer',
         ];
+    }
+
+    /**
+     * El sitio elegido como destino (historia #87). Ver `SiteFare` para el
+     * precio que se le fijó a este viaje.
+     *
+     * @return BelongsTo<Site, $this>
+     */
+    public function destinationSite(): BelongsTo
+    {
+        return $this->belongsTo(Site::class, 'destination_site_id');
     }
 
     /**
