@@ -7,7 +7,9 @@ namespace App\Http\Requests\Rides;
 use App\DTOs\Coordinates;
 use App\DTOs\RideRequest;
 use App\Enums\RideStatus;
+use App\Http\Requests\Concerns\ValidatesRideDestination;
 use App\Models\Ride;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -17,6 +19,8 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class CreateRideRequest extends FormRequest
 {
+    use ValidatesRideDestination;
+
     /**
      * Solicitar un viaje es una operación del rol pasajero: lo decide
      * `RidePolicy`, no un `isPassenger()` suelto acá.
@@ -32,11 +36,13 @@ class CreateRideRequest extends FormRequest
     }
 
     /**
-     * Los límites de latitud/longitud repiten los que ya valida el constructor
-     * de `Coordinates`, igual que en la estimación: acá el rechazo llega como un
-     * 422 por campo y no como la `InvalidArgumentException` del DTO.
+     * El límite de latitud/longitud del origen repite el que ya valida el
+     * constructor de `Coordinates`, igual que en la estimación: acá el
+     * rechazo llega como un 422 por campo y no como la
+     * `InvalidArgumentException` del DTO. El destino ya no es un punto libre
+     * (historia #87): ver `ValidatesRideDestination`.
      *
-     * @return array<string, array<int, string>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
@@ -44,52 +50,19 @@ class CreateRideRequest extends FormRequest
             'origin' => ['required', 'array'],
             'origin.latitude' => ['required', 'numeric', 'between:-90,90'],
             'origin.longitude' => ['required', 'numeric', 'between:-180,180'],
-            'destination' => ['required', 'array'],
-            'destination.latitude' => ['required', 'numeric', 'between:-90,90'],
-            'destination.longitude' => ['required', 'numeric', 'between:-180,180'],
+            ...$this->destinationRules(),
         ];
     }
 
     /**
-     * Las dos reglas que no dependen de un campo suelto.
-     *
-     * Ambas corren antes de que el controller invoque al proveedor de mapas, que
-     * se paga por consulta: un viaje que se va a rechazar no debería gastar una.
-     *
      * @return array<int, callable>
      */
     public function after(): array
     {
         return [
-            $this->rejectRepeatedPoint(...),
+            $this->rejectSiteWithoutMotocarroFare(...),
             $this->rejectSecondActiveRide(...),
         ];
-    }
-
-    /**
-     * Un viaje que empieza y termina en el mismo punto no es un viaje: el
-     * proveedor de mapas devolvería un trayecto de cero metros y el pasajero
-     * pagaría la tarifa mínima por quedarse donde está.
-     *
-     * La comparación es por igualdad exacta y no por cercanía: "demasiado cerca
-     * para pedir un viaje" es una decisión de producto con un umbral que alguien
-     * tiene que fijar, y no es lo que pide la historia.
-     */
-    private function rejectRepeatedPoint(Validator $validator): void
-    {
-        if ($validator->errors()->isNotEmpty()) {
-            return;
-        }
-
-        $sameLatitude = $this->float('origin.latitude') === $this->float('destination.latitude');
-        $sameLongitude = $this->float('origin.longitude') === $this->float('destination.longitude');
-
-        if ($sameLatitude && $sameLongitude) {
-            $validator->errors()->add(
-                'destination',
-                'El destino no puede ser el mismo punto que el origen.',
-            );
-        }
     }
 
     /**
@@ -127,6 +100,12 @@ class CreateRideRequest extends FormRequest
         }
     }
 
+    public function destinationSite(): Site
+    {
+        /** @var Site */
+        return Site::query()->findOrFail($this->destinationSiteId());
+    }
+
     /**
      * Traduce la entrada validada al DTO que consume la Action, que no conoce
      * HTTP (ver .claude/STANDARDS.md).
@@ -138,10 +117,8 @@ class CreateRideRequest extends FormRequest
                 latitude: $this->float('origin.latitude'),
                 longitude: $this->float('origin.longitude'),
             ),
-            destination: new Coordinates(
-                latitude: $this->float('destination.latitude'),
-                longitude: $this->float('destination.longitude'),
-            ),
+            destinationSiteId: $this->destinationSiteId(),
+            passengerCount: $this->passengerCount(),
         );
     }
 }

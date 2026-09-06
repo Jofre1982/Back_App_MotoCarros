@@ -47,7 +47,7 @@ class ShowRideHistoryController extends Controller
         $relacion = $usuario->isDriver() ? $usuario->driverRides() : $usuario->rides();
 
         $viajes = $relacion
-            ->with('driver')
+            ->with('driver', 'destinationSite')
             ->latest()
             ->paginate($perPage)
             ->withQueryString();
