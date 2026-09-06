@@ -1754,6 +1754,302 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/cargo-job-types:
+    get:
+      tags:
+        - Fares
+      operationId: listCargoJobTypes
+      summary: Listar el catálogo de tipos de acarreo
+      description: >-
+        Lista el catálogo de tipos de trabajo de Motocarga (ej. "Acarreo",
+        "Escombro") con su precio fijo, para que un administrador lo
+        gestione desde el panel (historia técnica #86). A diferencia del
+        precio de pasajero por sitio (#85), este precio depende de qué se
+        transporta y no de a dónde va.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Tipos de acarreo, ordenados por nombre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CargoJobType"
+              example:
+                data:
+                  - id: 1
+                    name: Acarreo
+                    price: 20000
+                  - id: 2
+                    name: Escombro
+                    price: 40000
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+    post:
+      tags:
+        - Fares
+      operationId: createCargoJobType
+      summary: Crear un tipo de acarreo
+      description: >-
+        Crea un tipo de trabajo de Motocarga con su precio fijo (historia
+        técnica #86).
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - price
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                  example: Trasteo
+                price:
+                  type: integer
+                  minimum: 0
+                  example: 20000
+            example:
+              name: Trasteo
+              price: 20000
+      responses:
+        "201":
+          description: Tipo de acarreo creado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CargoJobType"
+              example:
+                data:
+                  id: 3
+                  name: Trasteo
+                  price: 20000
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: Falta un campo requerido, ya existe un tipo con ese nombre, o el precio es negativo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The name has already been taken.
+                errors:
+                  name:
+                    - The name has already been taken.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /admin/cargo-job-types/{cargoJobType}:
+    patch:
+      tags:
+        - Fares
+      operationId: updateCargoJobType
+      summary: Ajustar el precio de un tipo de acarreo
+      description: >-
+        Ajusta el precio de un tipo de acarreo ya creado (historia técnica
+        #86). Solo el precio es editable: el nombre identifica el tipo de
+        trabajo.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cargoJobType
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - price
+              properties:
+                price:
+                  type: integer
+                  minimum: 0
+                  example: 25000
+            example:
+              price: 25000
+      responses:
+        "200":
+          description: Tipo de acarreo con el precio ya actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CargoJobType"
+              example:
+                data:
+                  id: 1
+                  name: Acarreo
+                  price: 25000
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un tipo de acarreo con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\CargoJobType] 1
+        "422":
+          description: Falta el precio, o es negativo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The price field must be at least 0.
+                errors:
+                  price:
+                    - The price field must be at least 0.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+    delete:
+      tags:
+        - Fares
+      operationId: deleteCargoJobType
+      summary: Borrar un tipo de acarreo
+      description: >-
+        Borra un tipo de acarreo del catálogo (historia técnica #86).
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cargoJobType
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "204":
+          description: Tipo de acarreo borrado. Sin cuerpo.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un tipo de acarreo con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\CargoJobType] 1
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /me/availability:
     patch:
       tags:
@@ -3623,6 +3919,27 @@ components:
           type: string
           format: date-time
           example: "2026-09-04T15:00:00.000000Z"
+    CargoJobType:
+      type: object
+      description: >-
+        Un tipo de trabajo de Motocarga con precio fijo, ej. "Acarreo",
+        "Escombro" (historia técnica #86). A diferencia del precio de
+        pasajero por sitio (historia #85), este precio depende de qué se
+        transporta y no de a dónde va.
+      required:
+        - id
+        - name
+        - price
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Acarreo
+        price:
+          type: integer
+          example: 20000
     LoginRequest:
       type: object
       description: >-

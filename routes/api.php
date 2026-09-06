@@ -1,9 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\ApproveDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\CreateCargoJobTypeController;
+use App\Http\Controllers\Api\V1\Admin\DeleteCargoJobTypeController;
+use App\Http\Controllers\Api\V1\Admin\ListCargoJobTypesController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
 use App\Http\Controllers\Api\V1\Admin\ShowDriverDocumentFileController;
+use App\Http\Controllers\Api\V1\Admin\UpdateCargoJobTypeController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
@@ -210,6 +214,28 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:api')
             ->post('documents/{document}/reject', RejectDriverDocumentController::class)
             ->name('documents.reject');
+
+        // Catálogo de tipos de acarreo de Motocarga (historia técnica #86):
+        // a diferencia del precio de pasajero por sitio, este precio
+        // depende de qué se transporta (ej. "Trasteo", "Escombro") y no de
+        // a dónde va — así lo describió el dueño del producto. Mismo
+        // criterio de autorización que sites (CargoJobTypePolicy, solo
+        // `admin`).
+        Route::middleware('auth:api')
+            ->get('cargo-job-types', ListCargoJobTypesController::class)
+            ->name('cargo-job-types.index');
+
+        Route::middleware('auth:api')
+            ->post('cargo-job-types', CreateCargoJobTypeController::class)
+            ->name('cargo-job-types.store');
+
+        Route::middleware('auth:api')
+            ->patch('cargo-job-types/{cargoJobType}', UpdateCargoJobTypeController::class)
+            ->name('cargo-job-types.update');
+
+        Route::middleware('auth:api')
+            ->delete('cargo-job-types/{cargoJobType}', DeleteCargoJobTypeController::class)
+            ->name('cargo-job-types.destroy');
     });
 
     // Historial de viajes de la cuenta autenticada: los que pidió, si es
