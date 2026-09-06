@@ -116,6 +116,19 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
+     * El código de recuperación de contraseña vigente de esta cuenta, si hay
+     * uno. Uno a uno: `password_reset_codes.user_id` es único, y pedir un
+     * código nuevo reemplaza el que hubiera — mismo criterio que
+     * `phoneVerificationCode()`.
+     *
+     * @return HasOne<PasswordResetCode, $this>
+     */
+    public function passwordResetCode(): HasOne
+    {
+        return $this->hasOne(PasswordResetCode::class);
+    }
+
+    /**
      * Identificador que viaja en el claim `sub` del JWT.
      */
     public function getJWTIdentifier(): mixed

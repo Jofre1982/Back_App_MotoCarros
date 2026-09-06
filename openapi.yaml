@@ -214,6 +214,166 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /auth/password/forgot:
+    post:
+      tags:
+        - Auth
+      operationId: requestPasswordReset
+      summary: Pedir un código para recuperar mi contraseña
+      description: >-
+        Genera un código de recuperación de contraseña y lo envía por SMS al
+        celular dado, si tiene cuenta. Pedir uno nuevo reemplaza el anterior:
+        nunca hay dos códigos vigentes a la vez para la misma cuenta, mismo
+        criterio que `POST /me/phone/verification`.
+
+        No requiere autenticación —quien lo llama no puede iniciar sesión,
+        por eso está pidiendo recuperar el acceso—, y por eso responde
+        **204 sin importar si el celular tiene cuenta o no**: distinguir
+        ambos casos convertiría al endpoint en un oráculo para averiguar qué
+        números de celular están registrados en MotoYa.
+
+        Límite de tasa más estricto que el general de auth (3 cada 10
+        minutos, por IP): cada acierto le va a costar un SMS real apenas
+        haya un proveedor conectado.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+              properties:
+                phone:
+                  type: string
+                  example: "+573001234567"
+            example:
+              phone: "+573001234567"
+      responses:
+        "204":
+          description: >-
+            Solicitud procesada. No indica si el celular tiene cuenta: si la
+            tiene, el código ya se envió por SMS.
+        "422":
+          description: El celular no tiene forma de celular.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The phone field is required.
+                errors:
+                  phone:
+                    - The phone field is required.
+        "429":
+          description: >-
+            Se superó el límite de 3 solicitudes cada 10 minutos para esta IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /auth/password/reset:
+    post:
+      tags:
+        - Auth
+      operationId: confirmPasswordReset
+      summary: Confirmar la recuperación de mi contraseña
+      description: >-
+        Confirma el código pedido en `POST /auth/password/forgot` y cambia la
+        contraseña de la cuenta. Si el código es correcto, no venció, y no se
+        agotaron los intentos, la respuesta deja la cuenta autenticada —misma
+        forma que el login— para no obligar a volver a escribir la
+        contraseña recién elegida.
+
+        Todas las razones por las que un código no se acepta —celular sin
+        cuenta, sin recuperación pendiente, venció, se agotaron los
+        intentos, o el valor no coincide— responden 422 bajo la misma clave
+        `code`, mismo criterio que `POST /me/phone/verification/confirm` y
+        por el mismo motivo que el 204 de `POST /auth/password/forgot`: un
+        celular sin cuenta no puede distinguirse de uno con cuenta pero sin
+        código pendiente.
+
+        La contraseña nueva pasa por la misma política que el registro (al
+        menos 8 caracteres, con letras y números).
+
+        No requiere autenticación, y por eso comparte con el resto de
+        endpoints anónimos de auth el límite de 10 requests por minuto e IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+                - code
+                - password
+              properties:
+                phone:
+                  type: string
+                  example: "+573001234567"
+                code:
+                  type: string
+                  example: "482913"
+                password:
+                  type: string
+                  example: nuevaClave2026
+            example:
+              phone: "+573001234567"
+              code: "482913"
+              password: nuevaClave2026
+      responses:
+        "200":
+          description: Contraseña cambiada; sesión iniciada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthenticatedUser"
+              example:
+                data:
+                  user:
+                    id: 1
+                    name: Ana García
+                    email: ana@example.com
+                    phone: "+573001234567"
+                    phone_verified: true
+                    role: passenger
+                  token:
+                    access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
+                    token_type: bearer
+                    expires_in: 900
+        "422":
+          description: >-
+            El código no es correcto, venció, se agotaron los intentos, no
+            hay ninguna recuperación pendiente, el celular no tiene forma de
+            celular, o la contraseña no cumple la política mínima.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: El código no es correcto.
+                errors:
+                  code:
+                    - El código no es correcto.
+        "429":
+          description: >-
+            Se superó el límite de intentos por minuto para esta IP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /auth/register/driver:
     post:
       tags:
