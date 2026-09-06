@@ -1911,7 +1911,7 @@ paths:
         vehículo dos veces no falla, reemplaza el precio anterior.
 
         `night_price` es opcional: hoy solo el sitio "Casco urbano" tiene
-        recargo nocturno (desde las 10pm). Un sitio sin `night_price` cobra
+        recargo nocturno (de 10pm a 5am). Un sitio sin `night_price` cobra
         siempre `day_price`, sin importar la hora.
 
         Requiere un token vigente y rol `admin`.

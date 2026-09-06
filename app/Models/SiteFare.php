@@ -45,13 +45,18 @@ class SiteFare extends Model
 
     /**
      * El monto que corresponde cobrar a la hora `$at`: el recargo nocturno
-     * (desde las 10pm) solo aplica si el sitio tiene uno definido — hoy solo
-     * el "Casco urbano" lo tiene. Un sitio sin `night_price` cobra siempre el
-     * precio de día, sin importar la hora.
+     * (de 10pm a 5am, confirmado con el dueño del producto) solo aplica si
+     * el sitio tiene uno definido — hoy solo el "Casco urbano" lo tiene. Un
+     * sitio sin `night_price` cobra siempre el precio de día, sin importar
+     * la hora.
+     *
+     * La ventana cruza medianoche (22:00 → 05:00 del día siguiente), así que
+     * no alcanza una sola comparación de `hour`: son dos tramos del mismo
+     * reloj de 24h.
      */
     public function priceAt(Carbon $at): int
     {
-        if ($this->night_price !== null && $at->hour >= 22) {
+        if ($this->night_price !== null && ($at->hour >= 22 || $at->hour < 5)) {
             return $this->night_price;
         }
 
