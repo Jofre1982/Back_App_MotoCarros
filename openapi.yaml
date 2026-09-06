@@ -1321,6 +1321,84 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/documents/{document}/file:
+    get:
+      tags:
+        - Documents
+      operationId: showDriverDocumentFile
+      summary: Ver el archivo de un documento de verificación
+      description: >-
+        Devuelve el archivo (imagen o PDF) de un documento de verificación,
+        para que un administrador lo vea antes de aprobar o rechazar
+        (historia técnica #78) — por ejemplo, comparar la foto del vehículo
+        contra la tarjeta de propiedad antes de decidir.
+
+        A diferencia del resto de la API, esta respuesta **no** es JSON: el
+        cuerpo es el archivo tal cual, con su `Content-Type` real
+        (`image/jpeg`, `image/png` o `application/pdf`) y
+        `Content-Disposition: inline`, para poder embeberlo directo en un
+        `<img>` o abrirlo en una pestaña sin forzar una descarga.
+
+        Misma autorización que aprobar/rechazar: requiere un token vigente y
+        rol `admin`. No depende de que el documento esté en un estado
+        particular — se puede ver el archivo de un documento ya revisado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: document
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 10
+      responses:
+        "200":
+          description: El archivo del documento.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un documento con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\DriverDocument] 10
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /admin/documents/{document}/approve:
     post:
       tags:
@@ -3349,8 +3427,8 @@ components:
       description: >-
         Un documento de verificación tal como lo ve un administrador: a
         diferencia de `DriverDocument`, sí lleva `id` (es por lo que se lo
-        referencia en `/admin/documents/{document}/approve|reject`) y a qué
-        conductor pertenece.
+        referencia en `/admin/documents/{document}/file|approve|reject`) y a
+        qué conductor pertenece.
       required:
         - id
         - driver

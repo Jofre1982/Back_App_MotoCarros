@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Admin\ApproveDriverDocumentController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\ShowDriverDocumentFileController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
@@ -176,6 +177,14 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:api')
             ->get('documents', ListDriverDocumentsController::class)
             ->name('documents.index');
+
+        // Vista previa del archivo antes de aprobar/rechazar (historia
+        // técnica #78). Va antes de `approve`/`reject` en el listado nada
+        // más por orden de lectura: las tres rutas no compiten entre sí, cada
+        // una tiene su propio sufijo estático.
+        Route::middleware('auth:api')
+            ->get('documents/{document}/file', ShowDriverDocumentFileController::class)
+            ->name('documents.file');
 
         Route::middleware('auth:api')
             ->post('documents/{document}/approve', ApproveDriverDocumentController::class)
