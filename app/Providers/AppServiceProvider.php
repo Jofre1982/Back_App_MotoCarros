@@ -192,6 +192,12 @@ class AppServiceProvider extends ServiceProvider
      * el endpoint exige `auth:api`): cada acierto le cuesta un SMS real a
      * MotoYa apenas haya un proveedor conectado (historia #69), así que el
      * límite general de 60/min dejaría pedir 60 códigos en un minuto.
+     *
+     * `password-reset` es el mismo caso que `phone-verification` —cada
+     * acierto cuesta un SMS real— pero por IP en vez de por usuario: pedir
+     * un código de recuperación es, por diseño, anónimo (`auth/password/forgot`
+     * no exige `auth:api`, porque quien lo llama todavía no puede iniciar
+     * sesión), así que no hay un usuario autenticado del que colgar el límite.
      */
     private function configureRateLimiting(): void
     {
@@ -209,6 +215,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for(
             'phone-verification',
             fn (Request $request) => Limit::perMinutes(10, 3)->by((string) $request->user()?->getAuthIdentifier()),
+        );
+
+        RateLimiter::for(
+            'password-reset',
+            fn (Request $request) => Limit::perMinutes(10, 3)->by((string) $request->ip()),
         );
     }
 }

@@ -4,12 +4,14 @@ use App\Http\Controllers\Api\V1\Admin\ApproveDriverDocumentController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
 use App\Http\Controllers\Api\V1\Admin\ShowDriverDocumentFileController;
+use App\Http\Controllers\Api\V1\Auth\ConfirmPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RefreshTokenController;
 use App\Http\Controllers\Api\V1\Auth\RegisterDriverController;
 use App\Http\Controllers\Api\V1\Auth\RegisterPassengerController;
+use App\Http\Controllers\Api\V1\Auth\RequestPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\RequestPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Documents\ShowDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Documents\UploadDriverDocumentController;
@@ -61,7 +63,22 @@ Route::prefix('v1')->group(function () {
             Route::post('refresh', RefreshTokenController::class)->name('refresh');
             Route::post('register/driver', RegisterDriverController::class)->name('register.driver');
             Route::post('register/passenger', RegisterPassengerController::class)->name('register.passenger');
+            // Confirmar el código no cuesta un SMS por intento —a diferencia
+            // de pedirlo—, así que le alcanza con el mismo limitador anónimo
+            // que el resto de este grupo; adivinar el código además está
+            // acotado aparte por `max_attempts` en `ConfirmPasswordResetRequest`.
+            Route::post('password/reset', ConfirmPasswordResetController::class)->name('password.reset');
         });
+
+        // Pedir un código sí cuesta un SMS real apenas haya un proveedor
+        // conectado, mismo motivo por el que `me/phone/verification` lleva
+        // `throttle:phone-verification` en vez del límite general de la API.
+        // Ese limitador no sirve acá porque clasifica por usuario autenticado
+        // y este endpoint es anónimo — `password-reset` es su equivalente
+        // por IP (ver AppServiceProvider::configureRateLimiting()).
+        Route::middleware('throttle:password-reset')
+            ->post('password/forgot', RequestPasswordResetController::class)
+            ->name('password.forgot');
 
         // El cierre de sesión, en cambio, exige un token vigente, así que se
         // queda con el limitador general de la API (60/min por usuario). Bajo
