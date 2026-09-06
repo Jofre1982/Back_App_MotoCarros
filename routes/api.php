@@ -1,8 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\ApproveDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\CreateSiteController;
+use App\Http\Controllers\Api\V1\Admin\DeleteSiteController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
+use App\Http\Controllers\Api\V1\Admin\ListSitesController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\SetSiteFareController;
 use App\Http\Controllers\Api\V1\Admin\ShowDriverDocumentFileController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPhoneVerificationController;
@@ -210,6 +214,30 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:api')
             ->post('documents/{document}/reject', RejectDriverDocumentController::class)
             ->name('documents.reject');
+
+        // Catálogo de sitios y sus precios fijos de pasajero (historia
+        // técnica #85). Reemplaza, sitio por sitio, la fórmula por distancia
+        // de CalculateFareAction — ver #87 para el consumo real desde la
+        // creación del viaje, que todavía no existe. Autorización (solo
+        // `admin`) en SitePolicy, mismo criterio que los documentos.
+        Route::middleware('auth:api')
+            ->get('sites', ListSitesController::class)
+            ->name('sites.index');
+
+        Route::middleware('auth:api')
+            ->post('sites', CreateSiteController::class)
+            ->name('sites.store');
+
+        // PUT y no PATCH: fija el precio completo de ese
+        // (sitio, vehicle_type) de una vez — no hay campos parciales que
+        // conservar, a diferencia de PATCH /me.
+        Route::middleware('auth:api')
+            ->put('sites/{site}/fare', SetSiteFareController::class)
+            ->name('sites.fare.set');
+
+        Route::middleware('auth:api')
+            ->delete('sites/{site}', DeleteSiteController::class)
+            ->name('sites.destroy');
     });
 
     // Historial de viajes de la cuenta autenticada: los que pidió, si es
