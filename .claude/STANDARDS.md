@@ -879,6 +879,29 @@ no `float`/`double`.
 promociones; y los endpoints que consumen este cálculo, que son las historias de tarifa
 estimada (#14) y pago del viaje (#25).
 
+## Calificaciones de viaje: suspendidas y removidas del código (2026-09-07)
+
+**Las historias #27 (calificar al conductor) y #28 (calificar al pasajero) están
+pausadas por decisión de producto.** No implementar ninguna de las dos sin que el
+usuario lo pida explícitamente de nuevo, aunque los issues de GitHub sigan abiertos o
+tengan la etiqueta `agent-in-progress` — esa etiqueta quedó desactualizada la última vez
+y fue la causa de que se reimplementara #28 sin necesidad.
+
+- **#27 llegó a fusionarse a `main`** (endpoints `POST /rides/{id}/rate-driver` y
+  `POST /rides/{id}/rate-passenger`, Actions, Policies, Form Requests, API Resource,
+  tests) y **se revirtió del código** en esta misma sesión, junto con la
+  implementación de #28 que nunca se había subido.
+- **La tabla `ride_ratings` se dejó intacta en la base de datos** (la migración
+  `2026_08_01_150000_create_ride_ratings_table.php` no se tocó): si en producción ya
+  se había escrito alguna fila antes de revertir el código, ese dato no se perdió,
+  solo quedó inaccesible desde la API porque no hay Model, Action, Controller ni ruta
+  que la lean. `App\Enums\RatedRole` sí se borró junto con el resto del código.
+- Antes de retomar cualquiera de las dos historias, confirmar con el usuario el
+  alcance vigente: la razón de la suspensión no quedó documentada en ningún lado
+  verificable (la conversación donde se decidió se perdió), así que no asumir que el
+  diseño anterior (una calificación de 1 a 5 + comentario opcional, por dirección)
+  sigue siendo el que se quiere.
+
 ## Pendiente de decidir (no bloquea empezar)
 
 - Nada pendiente por ahora.
