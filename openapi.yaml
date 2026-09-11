@@ -2161,6 +2161,440 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/sites:
+    get:
+      tags:
+        - Fares
+      operationId: listSites
+      summary: Listar el catálogo de sitios y sus precios
+      description: >-
+        Lista el catálogo de sitios (destinos con nombre) con sus precios
+        fijos de pasajero, para que un administrador lo gestione desde el
+        panel (historia técnica #85). Reemplaza, sitio por sitio, la fórmula
+        por distancia de `CalculateFareAction` — ver la historia #87 (todavía
+        sin implementar) para el consumo real desde la creación del viaje.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sitios del catálogo, ordenados por nombre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Site"
+              example:
+                data:
+                  - id: 1
+                    name: Casco urbano
+                    fares:
+                      - vehicle_type: motocarro
+                        pricing_unit: per_person
+                        day_price: 4000
+                        night_price: 5000
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+    post:
+      tags:
+        - Fares
+      operationId: createSite
+      summary: Crear un sitio en el catálogo
+      description: >-
+        Crea un sitio nuevo, sin precios todavía (historia técnica #85). El
+        admin los fija aparte con `PUT /admin/sites/{site}/fare`, uno por
+        tipo de vehículo.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                  example: Vitina
+            example:
+              name: Vitina
+      responses:
+        "201":
+          description: Sitio creado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Site"
+              example:
+                data:
+                  id: 2
+                  name: Vitina
+                  fares: []
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: Falta el nombre, o ya existe un sitio con ese nombre.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The name has already been taken.
+                errors:
+                  name:
+                    - The name has already been taken.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /admin/sites/{site}/fare:
+    put:
+      tags:
+        - Fares
+      operationId: setSiteFare
+      summary: Fijar el precio de pasajero de un sitio
+      description: >-
+        Fija (o reemplaza) el precio fijo de pasajero de un sitio para un
+        tipo de vehículo (historia técnica #85). Es un upsert por
+        `(site, vehicle_type)`: el admin lo va a usar seguido para ajustar
+        montos (alza de gasolina, demanda), así que mandar el mismo tipo de
+        vehículo dos veces no falla, reemplaza el precio anterior.
+
+        `night_price` es opcional: hoy solo el sitio "Casco urbano" tiene
+        recargo nocturno (de 10pm a 5am). Un sitio sin `night_price` cobra
+        siempre `day_price`, sin importar la hora.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: site
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - vehicle_type
+                - pricing_unit
+                - day_price
+              properties:
+                vehicle_type:
+                  type: string
+                  enum: [motocarro, motocarga]
+                  example: motocarro
+                pricing_unit:
+                  type: string
+                  enum: [per_person, per_trip]
+                  example: per_person
+                day_price:
+                  type: integer
+                  minimum: 0
+                  example: 4000
+                night_price:
+                  type: integer
+                  minimum: 0
+                  nullable: true
+                  example: 5000
+            example:
+              vehicle_type: motocarro
+              pricing_unit: per_person
+              day_price: 4000
+              night_price: 5000
+      responses:
+        "200":
+          description: Sitio con el precio ya actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Site"
+              example:
+                data:
+                  id: 1
+                  name: Casco urbano
+                  fares:
+                    - vehicle_type: motocarro
+                      pricing_unit: per_person
+                      day_price: 4000
+                      night_price: 5000
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un sitio con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\Site] 1
+        "422":
+          description: Falta un campo requerido, o un precio es negativo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The day price field must be at least 0.
+                errors:
+                  day_price:
+                    - The day price field must be at least 0.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /admin/sites/{site}:
+    delete:
+      tags:
+        - Fares
+      operationId: deleteSite
+      summary: Borrar un sitio del catálogo
+      description: >-
+        Borra un sitio con todos sus precios (historia técnica #85). No
+        queda ningún precio huérfano: `site_fares.site_id` tiene
+        `cascadeOnDelete`.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: site
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "204":
+          description: Sitio borrado. Sin cuerpo.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un sitio con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\Site] 1
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /me/availability:
+    patch:
+      tags:
+        - Drivers
+      operationId: updateDriverAvailability
+      summary: Marcar disponibilidad y ubicación del conductor
+      description: >-
+        Marca al conductor autenticado disponible o no disponible para recibir
+        solicitudes de viaje nuevas cerca de su ubicación (historia #17), y
+        opcionalmente actualiza esa ubicación.
+
+        Cuelga de `/me` y no lleva id, igual que `/me/vehicle`: se llega al
+        perfil por el token, nunca por un id propio, así que estructuralmente
+        no existe forma de tocar la disponibilidad de otro conductor.
+
+        `latitude`/`longitude` son obligatorias cuando `is_available` es
+        `true`: sin una ubicación conocida, el conductor no entraría en
+        ninguna búsqueda por radio y marcarse disponible no tendría efecto.
+        Son opcionales al marcarse no disponible.
+
+        Mientras está disponible, un conductor recibe por el canal privado
+        `driver.{id}` un evento `ride.requested` por cada viaje nuevo dentro
+        del radio configurado (`RIDES_NEARBY_RADIUS_METERS`), y un evento
+        `ride.unavailable` cuando alguno de esos viajes lo acepta otro
+        conductor.
+
+        Requiere un token vigente y rol `driver`: una cuenta de pasajero
+        recibe 403. Un conductor que todavía no tiene perfil creado recibe
+        404.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriverAvailabilityRequest"
+            example:
+              is_available: true
+              latitude: 4.710989
+              longitude: -74.072092
+      responses:
+        "200":
+          description: Disponibilidad (y ubicación, si vino) actualizadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverProfile"
+              example:
+                data:
+                  license_number: LIC-445566
+                  is_available: true
+                  latitude: 4.710989
+                  longitude: -74.072092
+                  location_updated_at: "2026-07-31T10:04:05-05:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no es de conductor. Marcar disponibilidad no
+            es algo que un pasajero pueda hacer con otros datos, así que no es
+            un 422.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: >-
+            La cuenta es de conductor pero todavía no tiene un perfil
+            registrado, así que no hay recurso que actualizar.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No tienes un perfil de conductor; regístrate como conductor antes de marcarte disponible.
+        "422":
+          description: >-
+            La entrada no pasó la validación: falta `is_available`, o falta
+            `latitude`/`longitude` (u otra fuera de rango) al marcarse
+            disponible.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The latitude field is required when is available is true.
+                errors:
+                  latitude:
+                    - The latitude field is required when is available is true.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /me/rides:
     get:
       tags:
@@ -3822,6 +4256,61 @@ components:
         price:
           type: integer
           example: 20000
+    Site:
+      type: object
+      description: >-
+        Un destino con nombre (historia técnica #85), con sus precios fijos
+        de pasajero por tipo de vehículo. Reemplaza, sitio por sitio, la
+        fórmula por distancia — ver la historia #87 (todavía sin
+        implementar) para cómo lo va a elegir el pasajero al pedir un viaje.
+      required:
+        - id
+        - name
+        - fares
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Casco urbano
+        fares:
+          type: array
+          items:
+            $ref: "#/components/schemas/SiteFare"
+    SiteFare:
+      type: object
+      description: >-
+        El precio fijo de pasajero de un sitio, para un tipo de vehículo. Un
+        sitio tiene a lo sumo un precio de Motocarro y uno de Motocarga.
+        `night_price` es opcional: solo lo tienen los sitios con recargo
+        nocturno (hoy, únicamente "Casco urbano") — sin él, el sitio cobra
+        siempre `day_price`, sin importar la hora.
+      required:
+        - vehicle_type
+        - pricing_unit
+        - day_price
+        - night_price
+      properties:
+        vehicle_type:
+          type: string
+          enum: [motocarro, motocarga]
+          example: motocarro
+        pricing_unit:
+          type: string
+          description: >-
+            `per_person`: se cobra por cada pasajero. `per_trip`: un monto
+            único sin importar cuántos vayan (ej. un viaje a una comunidad
+            cuesta lo mismo con uno o con los tres cupos ocupados).
+          enum: [per_person, per_trip]
+          example: per_person
+        day_price:
+          type: integer
+          example: 4000
+        night_price:
+          type: integer
+          nullable: true
+          example: 5000
     LoginRequest:
       type: object
       description: >-
