@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Payments;
 
+use App\Actions\Fares\ResolveSiteFarePriceAction;
 use App\DTOs\FareBreakdown;
 use App\DTOs\FareSchedule;
 use App\Enums\PricingUnit;
@@ -30,7 +31,10 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  */
 final readonly class CalculateSiteFareAction
 {
-    public function __construct(private FareSchedule $schedule) {}
+    public function __construct(
+        private FareSchedule $schedule,
+        private ResolveSiteFarePriceAction $resolvePrice,
+    ) {}
 
     /**
      * @throws ModelNotFoundException si el sitio no tiene un precio definido
@@ -46,7 +50,7 @@ final readonly class CalculateSiteFareAction
             ->where('vehicle_type', $vehicleType)
             ->firstOrFail();
 
-        $unitPrice = $siteFare->priceAt(now());
+        $unitPrice = $this->resolvePrice->handle($siteFare, now());
         $total = $siteFare->pricing_unit === PricingUnit::PerPerson
             ? $unitPrice * $passengerCount
             : $unitPrice;
