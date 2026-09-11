@@ -28,9 +28,10 @@ class ShowRideController extends Controller
 {
     public function __invoke(ShowRideRequest $request, Ride $ride): RideResource
     {
-        // La relación se pide explícitamente en vez de dejar que el Resource
-        // la cargue sola al serializar: es la única consulta extra de este
-        // endpoint y así queda a la vista de quien lea el controller.
-        return new RideResource($ride->loadMissing('driver'));
+        // Las relaciones se piden explícitamente en vez de dejar que el
+        // Resource las cargue solas al serializar: son las únicas consultas
+        // extra de este endpoint y así quedan a la vista de quien lea el
+        // controller.
+        return new RideResource($ride->loadMissing('driver', 'destinationSite'));
     }
 }

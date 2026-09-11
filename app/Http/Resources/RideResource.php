@@ -18,6 +18,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * cuenta que manda el token. Sí publica al conductor asignado, que es la única
  * de las dos partes que el otro lado no conoce de antemano (historia #21).
  *
+ * `destination` es un sitio (id y nombre) desde la historia #87, no
+ * coordenadas — quien construya este recurso debe precargar
+ * `destinationSite`, igual que ya hace con `driver`/`payment`.
+ *
  * @property-read Ride $resource
  */
 class RideResource extends JsonResource
@@ -35,11 +39,10 @@ class RideResource extends JsonResource
                 'longitude' => $this->resource->origin_longitude,
             ],
             'destination' => [
-                'latitude' => $this->resource->destination_latitude,
-                'longitude' => $this->resource->destination_longitude,
+                'site_id' => $this->resource->destinationSite->id,
+                'name' => $this->resource->destinationSite->name,
             ],
-            'distance_meters' => $this->resource->estimated_distance_meters,
-            'duration_seconds' => $this->resource->estimated_duration_seconds,
+            'passenger_count' => $this->resource->passenger_count,
             'currency' => $this->resource->currency,
             'estimated_fare' => $this->resource->estimated_fare,
             // Presente siempre, aunque valga `null`, por el mismo motivo que

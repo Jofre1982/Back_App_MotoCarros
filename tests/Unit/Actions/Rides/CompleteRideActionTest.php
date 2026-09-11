@@ -14,7 +14,6 @@ use App\Models\User;
 use App\Services\Payments\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
 
 /**
@@ -23,19 +22,6 @@ use Tests\TestCase;
 class CompleteRideActionTest extends TestCase
 {
     use RefreshDatabase;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        Config::set('fares.currency', 'COP');
-        Config::set('fares.base', 1500);
-        Config::set('fares.per_kilometer', 800);
-        Config::set('fares.per_minute', 100);
-        Config::set('fares.per_waiting_minute', 60);
-        Config::set('fares.minimum', 3000);
-        Config::set('fares.rounding_step', 50);
-    }
 
     public function test_pasa_el_viaje_a_completed(): void
     {
@@ -59,34 +45,34 @@ class CompleteRideActionTest extends TestCase
         $this->assertTrue(Carbon::now()->equalTo($viaje->completed_at));
     }
 
-    public function test_recalcula_la_tarifa_con_la_distancia_estimada_y_la_duracion_real(): void
+    /**
+     * Desde la historia #87 el precio es fijo por sitio: no hay nada que
+     * recalcular con el trayecto realmente recorrido, `final_fare` siempre
+     * queda igual a `estimated_fare`.
+     */
+    public function test_el_cobro_final_es_igual_al_estimado(): void
     {
-        Carbon::setTestNow('2026-07-31 14:09:05');
-        $viaje = $this->viajeEnCurso(distanciaMetros: 7421);
-
-        // 600 segundos reales, no los 842 estimados al pedir el viaje.
-        Carbon::setTestNow('2026-07-31 14:19:05');
+        $viaje = $this->viajeEnCurso(tarifaEstimada: 20000);
 
         $this->app->make(CompleteRideAction::class)->handle($viaje);
 
-        // base 1500 + distancia round(7421*800/1000)=5937 + tiempo
-        // round(600*100/60)=1000 = 8437, redondeado hacia arriba a 8450.
-        $this->assertSame(8450, $viaje->refresh()->final_fare);
+        $this->assertSame(20000, $viaje->refresh()->final_fare);
     }
 
-    public function test_una_distancia_recorrida_distinta_cambia_la_tarifa(): void
+    /**
+     * Aunque pase mucho tiempo entre `started_at` y que el conductor lo
+     * complete, el cobro no cambia — a diferencia del motor por distancia
+     * que reemplazó esta historia.
+     */
+    public function test_el_tiempo_transcurrido_no_cambia_el_cobro(): void
     {
         Carbon::setTestNow('2026-07-31 14:09:05');
-        $viaje = $this->viajeEnCurso(distanciaMetros: 1000);
+        $viaje = $this->viajeEnCurso(tarifaEstimada: 4000);
 
-        Carbon::setTestNow('2026-07-31 14:11:05'); // 120 segundos despues
-
+        Carbon::setTestNow('2026-07-31 16:45:00');
         $this->app->make(CompleteRideAction::class)->handle($viaje);
 
-        // base 1500 + distancia round(1000*800/1000)=800 + tiempo
-        // round(120*100/60)=200 = 2500, bajo el mínimo (3000): se aplica el
-        // piso y se redondea a 3000.
-        $this->assertSame(3000, $viaje->refresh()->final_fare);
+        $this->assertSame(4000, $viaje->refresh()->final_fare);
     }
 
     public function test_no_toca_al_conductor_asignado(): void
@@ -107,7 +93,7 @@ class CompleteRideActionTest extends TestCase
     {
         // Sin bindear un fake, resuelve `NullPaymentGateway` (ver
         // AppServiceProvider), que da el cobro por exitoso.
-        $viaje = $this->viajeEnCurso(distanciaMetros: 1000);
+        $viaje = $this->viajeEnCurso();
 
         $this->app->make(CompleteRideAction::class)->handle($viaje);
 
@@ -121,7 +107,7 @@ class CompleteRideActionTest extends TestCase
         // Historia #25, criterio de aceptación: un fallo en el procesamiento
         // del cobro deja el viaje `completed` con el pago en `failed`, sin
         // bloquear la finalización.
-        $viaje = $this->viajeEnCurso(distanciaMetros: 1000);
+        $viaje = $this->viajeEnCurso();
 
         $this->app->instance(PaymentGateway::class, new class implements PaymentGateway
         {
@@ -140,12 +126,12 @@ class CompleteRideActionTest extends TestCase
         $this->assertSame(PaymentStatus::Failed, $pago->status);
     }
 
-    private function viajeEnCurso(int $distanciaMetros = 7421): Ride
+    private function viajeEnCurso(int $tarifaEstimada = 7450): Ride
     {
         return Ride::factory()->create([
             'status' => RideStatus::InProgress,
             'driver_id' => User::factory()->driver(),
-            'estimated_distance_meters' => $distanciaMetros,
+            'estimated_fare' => $tarifaEstimada,
             'started_at' => now(),
         ]);
     }

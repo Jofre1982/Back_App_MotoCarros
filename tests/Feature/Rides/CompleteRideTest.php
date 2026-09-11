@@ -18,10 +18,10 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  * Contrato de POST /api/v1/rides/{id}/complete — ver openapi.yaml.
  *
  * Historia #24: el conductor que ya inició el viaje lo marca como
- * completado al llegar al destino. Cierra el ciclo de vida del viaje y
- * recalcula la tarifa final con el trayecto realmente recorrido. También
- * dispara su cobro (historia #25, `ChargeRideAction`), publicado en
- * `data.payment`.
+ * completado al llegar al destino. Cierra el ciclo de vida del viaje y fija
+ * la tarifa final — desde la historia #87, siempre igual a la estimada,
+ * porque el precio es fijo por sitio. También dispara su cobro (historia
+ * #25, `ChargeRideAction`), publicado en `data.payment`.
  *
  * Completar publica el cambio de estado hacia el pasajero (historia #21); lo
  * que sale por el canal se prueba en `RideStatusChangedTest`. Acá el trait
@@ -86,25 +86,25 @@ class CompleteRideTest extends TestCase
         $this->assertNotNull($viaje->refresh()->completed_at);
     }
 
-    public function test_recalcula_la_tarifa_final_con_el_trayecto_realmente_recorrido(): void
+    /**
+     * Desde la historia #87 el precio es fijo por sitio: no hay trayecto que
+     * recalcular, `final_fare` siempre queda igual a `estimated_fare`, sin
+     * importar cuánto haya durado el viaje.
+     */
+    public function test_el_cobro_final_es_igual_al_estimado(): void
     {
         Carbon::setTestNow('2026-07-31 14:09:05');
         $conductor = User::factory()->driver()->create();
-        $viaje = $this->viajeEnCursoPor($conductor, distanciaMetros: 7421);
+        $viaje = $this->viajeEnCursoPor($conductor, tarifaEstimada: 20000);
 
-        // 600 segundos de viaje real, distintos de los 842 estimados al
-        // pedirlo: lo que se cobra tiene que salir de este número, no de
-        // `estimated_fare`.
         Carbon::setTestNow('2026-07-31 14:19:05');
 
         $respuesta = $this->withToken(JWTAuth::fromUser($conductor))
             ->postJson($this->uri($viaje))
             ->assertOk();
 
-        // base 1500 + distancia round(7421*800/1000)=5937 + tiempo
-        // round(600*100/60)=1000 = 8437, redondeado hacia arriba a 8450.
-        $respuesta->assertJsonPath('data.final_fare', 8450);
-        $this->assertSame(8450, $viaje->refresh()->final_fare);
+        $respuesta->assertJsonPath('data.final_fare', 20000);
+        $this->assertSame(20000, $viaje->refresh()->final_fare);
     }
 
     public function test_el_viaje_aun_no_completado_publica_completed_at_y_final_fare_nulos(): void
@@ -230,12 +230,12 @@ class CompleteRideTest extends TestCase
         ]);
     }
 
-    private function viajeEnCursoPor(User $conductor, int $distanciaMetros = 7421): Ride
+    private function viajeEnCursoPor(User $conductor, int $tarifaEstimada = 7450): Ride
     {
         return Ride::factory()->create([
             'status' => RideStatus::InProgress,
             'driver_id' => $conductor->id,
-            'estimated_distance_meters' => $distanciaMetros,
+            'estimated_fare' => $tarifaEstimada,
             'started_at' => now(),
         ]);
     }

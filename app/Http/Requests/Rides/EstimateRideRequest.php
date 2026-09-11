@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Requests\Rides;
 
 use App\DTOs\Coordinates;
+use App\Http\Requests\Concerns\ValidatesRideDestination;
+use App\Models\Site;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -12,6 +14,8 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class EstimateRideRequest extends FormRequest
 {
+    use ValidatesRideDestination;
+
     /**
      * Cualquier cuenta autenticada puede pedir un estimado: no hay ninguna
      * decisión de negocio que resolver acá, la ruta ya exige `auth:api`.
@@ -22,12 +26,13 @@ class EstimateRideRequest extends FormRequest
     }
 
     /**
-     * Los límites de latitud/longitud repiten los que ya valida el
+     * El límite de latitud/longitud del origen repite el que ya valida el
      * constructor de `Coordinates`, a propósito: acá el rechazo llega como un
-     * 422 por campo, no como la `InvalidArgumentException` que lanzaría el DTO
-     * si se lo dejara validar a él.
+     * 422 por campo, no como la `InvalidArgumentException` que lanzaría el
+     * DTO si se lo dejara validar a él. El destino ya no es un punto libre
+     * (historia #87): ver `ValidatesRideDestination`.
      *
-     * @return array<string, array<int, string>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
@@ -35,9 +40,17 @@ class EstimateRideRequest extends FormRequest
             'origin' => ['required', 'array'],
             'origin.latitude' => ['required', 'numeric', 'between:-90,90'],
             'origin.longitude' => ['required', 'numeric', 'between:-180,180'],
-            'destination' => ['required', 'array'],
-            'destination.latitude' => ['required', 'numeric', 'between:-90,90'],
-            'destination.longitude' => ['required', 'numeric', 'between:-180,180'],
+            ...$this->destinationRules(),
+        ];
+    }
+
+    /**
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [
+            $this->rejectSiteWithoutMotocarroFare(...),
         ];
     }
 
@@ -49,11 +62,9 @@ class EstimateRideRequest extends FormRequest
         );
     }
 
-    public function destination(): Coordinates
+    public function destinationSite(): Site
     {
-        return new Coordinates(
-            latitude: $this->float('destination.latitude'),
-            longitude: $this->float('destination.longitude'),
-        );
+        /** @var Site */
+        return Site::query()->findOrFail($this->destinationSiteId());
     }
 }

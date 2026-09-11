@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace App\Actions\Rides;
 
-use App\Actions\Payments\CalculateFareAction;
+use App\Actions\Payments\CalculateSiteFareAction;
 use App\DTOs\Coordinates;
 use App\DTOs\PushNotification;
 use App\DTOs\RideRequest;
 use App\Enums\RideStatus;
+use App\Enums\VehicleType;
 use App\Events\Realtime\RideRequested;
-use App\Exceptions\RouteEstimationFailed;
 use App\Models\DeviceToken;
 use App\Models\Ride;
+use App\Models\Site;
 use App\Models\User;
-use App\Services\Maps\RouteEstimator;
 use App\Services\Realtime\NearbyDriverFinder;
 use App\Services\Realtime\PushNotificationGateway;
 
@@ -25,16 +25,14 @@ use App\Services\Realtime\PushNotificationGateway;
  * el viaje sea siempre de quien invoca el caso de uso (el usuario que resolvió
  * el guard) y nunca de lo que venga en la entrada.
  *
- * El trayecto y la tarifa se calculan acá y se guardan con el viaje, con el
- * mismo estimador y el mismo motor que usa `POST /rides/estimate`: si cada lado
- * calculara lo suyo, el pasajero podría ver un número antes de pedir el viaje y
- * otro después de pedirlo. Quedan guardados en vez de recalcularse al consultar
- * el viaje porque es el número que el pasajero aceptó —y porque cada consulta al
- * proveedor de mapas se paga.
+ * La tarifa se calcula acá y se guarda con el viaje, con el mismo motor que
+ * usa `POST /rides/estimate` (`CalculateSiteFareAction`, historia #87): si
+ * cada lado calculara lo suyo, el pasajero podría ver un número antes de
+ * pedir el viaje y otro después de pedirlo. Queda guardada en vez de
+ * recalcularse al consultar el viaje porque es el número que el pasajero
+ * aceptó.
  *
- * No hay transacción: se escribe una sola fila. Y si el proveedor no entrega una
- * ruta, la excepción sale antes del INSERT, así que tampoco queda un viaje sin
- * tarifa —que además dejaría al pasajero con un activo que no llegó a pedir.
+ * No hay transacción: se escribe una sola fila.
  *
  * Al final avisa a los conductores cercanos disponibles (historia #17): quién
  * es "cercano" lo resuelve `NearbyDriverFinder`, y si no hay ninguno no se
@@ -50,40 +48,33 @@ use App\Services\Realtime\PushNotificationGateway;
 final readonly class CreateRideAction
 {
     public function __construct(
-        private RouteEstimator $routeEstimator,
-        private CalculateFareAction $calculateFare,
+        private CalculateSiteFareAction $calculateFare,
         private NearbyDriverFinder $nearbyDrivers,
         private PushNotificationGateway $pushGateway,
     ) {}
 
-    /**
-     * @throws RouteEstimationFailed si el proveedor de mapas no encuentra una
-     *                               ruta entre el origen y el destino.
-     */
     public function handle(User $passenger, RideRequest $request): Ride
     {
-        $route = $this->routeEstimator->estimate($request->origin, $request->destination);
-        $fare = $this->calculateFare->handle($route);
+        $site = Site::query()->findOrFail($request->destinationSiteId);
+        $fare = $this->calculateFare->handle($site, VehicleType::Motocarro, $request->passengerCount);
 
         $ride = Ride::create([
             'passenger_id' => $passenger->getKey(),
             'status' => RideStatus::Requested,
             'origin_latitude' => $request->origin->latitude,
             'origin_longitude' => $request->origin->longitude,
-            'destination_latitude' => $request->destination->latitude,
-            'destination_longitude' => $request->destination->longitude,
-            'estimated_distance_meters' => $route->distanceMeters,
-            'estimated_duration_seconds' => $route->durationSeconds,
+            'destination_site_id' => $site->getKey(),
+            'passenger_count' => $request->passengerCount,
             'currency' => $fare->currency,
             'estimated_fare' => $fare->total,
         ]);
 
-        $this->notifyNearbyDrivers($ride, $request->origin);
+        $this->notifyNearbyDrivers($ride, $request->origin, $site);
 
         return $ride;
     }
 
-    private function notifyNearbyDrivers(Ride $ride, Coordinates $origin): void
+    private function notifyNearbyDrivers(Ride $ride, Coordinates $origin, Site $site): void
     {
         $driverIds = $this->nearbyDrivers->near($origin);
 
@@ -95,8 +86,9 @@ final readonly class CreateRideAction
             rideId: $ride->id,
             originLatitude: $ride->origin_latitude,
             originLongitude: $ride->origin_longitude,
-            destinationLatitude: $ride->destination_latitude,
-            destinationLongitude: $ride->destination_longitude,
+            destinationSiteId: $site->getKey(),
+            destinationSiteName: $site->name,
+            passengerCount: $ride->passenger_count,
             currency: $ride->currency,
             estimatedFare: $ride->estimated_fare,
             nearbyDriverIds: $driverIds,
