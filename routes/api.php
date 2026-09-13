@@ -25,6 +25,12 @@ use App\Http\Controllers\Api\V1\Documents\ShowDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Documents\UploadDriverDocumentController;
 use App\Http\Controllers\Api\V1\Drivers\ShowDriverEarningsController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverAvailabilityController;
+use App\Http\Controllers\Api\V1\Drivers\UpdateDriverErrandAvailabilityController;
+use App\Http\Controllers\Api\V1\Errands\AcceptErrandController;
+use App\Http\Controllers\Api\V1\Errands\CompleteErrandController;
+use App\Http\Controllers\Api\V1\Errands\CreateErrandController;
+use App\Http\Controllers\Api\V1\Errands\ListErrandsController;
+use App\Http\Controllers\Api\V1\Errands\ShowErrandPhotoController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
 use App\Http\Controllers\Api\V1\Realtime\RegisterDeviceTokenController;
@@ -175,6 +181,15 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me/availability', UpdateDriverAvailabilityController::class)
         ->name('drivers.availability');
+
+    // Disponibilidad para tomar mandados (historia #92): pool separado del
+    // de viajes de arriba, así que es su propia ruta y no un campo más de
+    // `PATCH /me/availability` — un conductor puede tener cualquier
+    // combinación de las dos. Mismo criterio de "se llega por el token" y
+    // misma autorización (`DriverProfilePolicy::updateAvailability()`).
+    Route::middleware('auth:api')
+        ->patch('me/availability/errands', UpdateDriverErrandAvailabilityController::class)
+        ->name('drivers.availability.errands');
 
     // Documentos de verificación del conductor: documento de identidad
     // (cédula, cédula de extranjería o PTP) y tarjeta de propiedad del
@@ -383,4 +398,35 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->get('rides/{ride}/receipt', ShowRideReceiptController::class)
         ->name('rides.receipt');
+
+    // Mandados / servicio a domicilio (historia #92): un pasajero pide que
+    // un conductor recoja algo en un punto libre y lo entregue en un sitio
+    // del catálogo. Recurso propio y no sub-recurso de `me`, mismo criterio
+    // que `rides`: se direcciona por su id (aceptar, completar, ver la
+    // foto) y del otro lado lo operan dos cuentas distintas.
+    Route::middleware('auth:api')
+        ->post('errands', CreateErrandController::class)
+        ->name('errands.store');
+
+    // Sin matching automático ni aviso push (fuera de alcance de #92): el
+    // conductor busca los mandados disponibles acá. Solo ve algo si además
+    // está disponible para mandados — ver `ListErrandsController`.
+    Route::middleware('auth:api')
+        ->get('errands', ListErrandsController::class)
+        ->name('errands.index');
+
+    Route::middleware('auth:api')
+        ->post('errands/{errand}/accept', AcceptErrandController::class)
+        ->name('errands.accept');
+
+    Route::middleware('auth:api')
+        ->post('errands/{errand}/complete', CompleteErrandController::class)
+        ->name('errands.complete');
+
+    // La foto es opcional al pedir el mandado; este endpoint la sirve para
+    // quienes participan de él (pasajero dueño y conductor asignado), mismo
+    // mecanismo que `admin/documents/{document}/file`.
+    Route::middleware('auth:api')
+        ->get('errands/{errand}/photo', ShowErrandPhotoController::class)
+        ->name('errands.photo');
 });

@@ -16,13 +16,14 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property bool $is_available
+ * @property bool $is_available_for_errands
  * @property float|null $latitude
  * @property float|null $longitude
  * @property Carbon|null $location_updated_at
  * @property int $cancellation_count
  * @property DriverVerificationStatus $verification_status
  */
-#[Fillable(['user_id', 'license_number', 'is_available', 'latitude', 'longitude', 'location_updated_at'])]
+#[Fillable(['user_id', 'license_number', 'is_available', 'is_available_for_errands', 'latitude', 'longitude', 'location_updated_at'])]
 #[UsePolicy(DriverProfilePolicy::class)]
 class DriverProfile extends Model
 {
@@ -32,6 +33,7 @@ class DriverProfile extends Model
     {
         return [
             'is_available' => 'boolean',
+            'is_available_for_errands' => 'boolean',
             'latitude' => 'float',
             'longitude' => 'float',
             'location_updated_at' => 'datetime',
