@@ -2050,117 +2050,6 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
-  /me/availability:
-    patch:
-      tags:
-        - Drivers
-      operationId: updateDriverAvailability
-      summary: Marcar disponibilidad y ubicación del conductor
-      description: >-
-        Marca al conductor autenticado disponible o no disponible para recibir
-        solicitudes de viaje nuevas cerca de su ubicación (historia #17), y
-        opcionalmente actualiza esa ubicación.
-
-        Cuelga de `/me` y no lleva id, igual que `/me/vehicle`: se llega al
-        perfil por el token, nunca por un id propio, así que estructuralmente
-        no existe forma de tocar la disponibilidad de otro conductor.
-
-        `latitude`/`longitude` son obligatorias cuando `is_available` es
-        `true`: sin una ubicación conocida, el conductor no entraría en
-        ninguna búsqueda por radio y marcarse disponible no tendría efecto.
-        Son opcionales al marcarse no disponible.
-
-        Mientras está disponible, un conductor recibe por el canal privado
-        `driver.{id}` un evento `ride.requested` por cada viaje nuevo dentro
-        del radio configurado (`RIDES_NEARBY_RADIUS_METERS`), y un evento
-        `ride.unavailable` cuando alguno de esos viajes lo acepta otro
-        conductor.
-
-        Requiere un token vigente y rol `driver`: una cuenta de pasajero
-        recibe 403. Un conductor que todavía no tiene perfil creado recibe
-        404.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateDriverAvailabilityRequest"
-            example:
-              is_available: true
-              latitude: 4.710989
-              longitude: -74.072092
-      responses:
-        "200":
-          description: Disponibilidad (y ubicación, si vino) actualizadas.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - data
-                properties:
-                  data:
-                    $ref: "#/components/schemas/DriverProfile"
-              example:
-                data:
-                  license_number: LIC-445566
-                  is_available: true
-                  latitude: 4.710989
-                  longitude: -74.072092
-                  location_updated_at: "2026-07-31T10:04:05-05:00"
-        "401":
-          description: Falta el access token, es ilegible o ya venció.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-              example:
-                message: Unauthenticated.
-        "403":
-          description: >-
-            La cuenta autenticada no es de conductor. Marcar disponibilidad no
-            es algo que un pasajero pueda hacer con otros datos, así que no es
-            un 422.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-              example:
-                message: This action is unauthorized.
-        "404":
-          description: >-
-            La cuenta es de conductor pero todavía no tiene un perfil
-            registrado, así que no hay recurso que actualizar.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-              example:
-                message: No tienes un perfil de conductor; regístrate como conductor antes de marcarte disponible.
-        "422":
-          description: >-
-            La entrada no pasó la validación: falta `is_available`, o falta
-            `latitude`/`longitude` (u otra fuera de rango) al marcarse
-            disponible.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-              example:
-                message: The latitude field is required when is available is true.
-                errors:
-                  latitude:
-                    - The latitude field is required when is available is true.
-        "429":
-          description: Se superó el límite general de la API para este usuario.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-              example:
-                message: Too Many Attempts.
   /admin/sites:
     get:
       tags:
@@ -2541,6 +2430,7 @@ paths:
                 data:
                   license_number: LIC-445566
                   is_available: true
+                  is_available_for_errands: false
                   latitude: 4.710989
                   longitude: -74.072092
                   location_updated_at: "2026-07-31T10:04:05-05:00"
@@ -2587,6 +2477,100 @@ paths:
                 errors:
                   latitude:
                     - The latitude field is required when is available is true.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /me/availability/errands:
+    patch:
+      tags:
+        - Drivers
+      operationId: updateDriverErrandAvailability
+      summary: Marcar disponibilidad del conductor para mandados
+      description: >-
+        Marca al conductor autenticado disponible o no disponible para tomar
+        mandados (historia #92) — pool independiente del de
+        `PATCH /me/availability` (viajes de pasajero): un conductor puede
+        tener cualquier combinación de las dos.
+
+        A diferencia de la disponibilidad de viajes, no lleva ubicación: no
+        hay matching por cercanía para mandados, el conductor los busca en
+        `GET /errands`.
+
+        Requiere un token vigente y rol `driver`: una cuenta de pasajero
+        recibe 403. Un conductor que todavía no tiene perfil creado recibe
+        404.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDriverErrandAvailabilityRequest"
+            example:
+              is_available_for_errands: true
+      responses:
+        "200":
+          description: Disponibilidad para mandados actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DriverProfile"
+              example:
+                data:
+                  license_number: LIC-445566
+                  is_available: false
+                  is_available_for_errands: true
+                  latitude: null
+                  longitude: null
+                  location_updated_at: null
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es de conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: >-
+            La cuenta es de conductor pero todavía no tiene un perfil
+            registrado, así que no hay recurso que actualizar.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No tienes un perfil de conductor; regístrate como conductor antes de marcarte disponible.
+        "422":
+          description: "La entrada no pasó la validación: falta `is_available_for_errands`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The is available for errands field is required.
+                errors:
+                  is_available_for_errands:
+                    - The is available for errands field is required.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -3879,6 +3863,512 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /errands:
+    post:
+      tags:
+        - Errands
+      operationId: requestErrand
+      summary: Pedir un mandado
+      description: >-
+        Crea la solicitud de mandado del pasajero autenticado (historia #92):
+        un conductor recoge algo en un punto libre y lo entrega en un sitio
+        del catálogo.
+
+        Sin tarifa fija: el precio se negocia con el conductor por fuera del
+        sistema y queda en `null` hasta que uno lo acepta con
+        `POST /errands/{id}/accept`. Sin matching automático ni aviso push
+        (fuera de alcance de #92): el mandado espera a que un conductor
+        disponible para mandados lo encuentre en `GET /errands`.
+
+        La foto es opcional y no bloquea el pedido; cuando se manda, la
+        request va como `multipart/form-data` en vez de JSON.
+
+        Es una operación del rol pasajero, mismo criterio que
+        `POST /rides`: una cuenta de conductor recibe **403**.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - description
+                - origin
+                - destination_site_id
+              properties:
+                description:
+                  type: string
+                  maxLength: 500
+                  example: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+                origin:
+                  $ref: "#/components/schemas/Coordinates"
+                destination_site_id:
+                  type: integer
+                  description: El sitio de entrega, del catálogo que devuelve `GET /sites`.
+                  example: 1
+            example:
+              description: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+              origin:
+                latitude: 4.710989
+                longitude: -74.072092
+              destination_site_id: 1
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - description
+                - origin
+                - destination_site_id
+              properties:
+                description:
+                  type: string
+                  maxLength: 500
+                  example: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+                origin:
+                  $ref: "#/components/schemas/Coordinates"
+                destination_site_id:
+                  type: integer
+                  example: 1
+                photo:
+                  type: string
+                  format: binary
+                  description: Foto opcional de lo que hay que recoger (jpg/jpeg/png, hasta 5 MB).
+      responses:
+        "201":
+          description: El mandado quedó solicitado y espera a que un conductor lo acepte.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Errand"
+              example:
+                data:
+                  id: 1
+                  status: requested
+                  description: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+                  has_photo: false
+                  photo_url: null
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    site_id: 1
+                    name: Casco urbano
+                  driver: null
+                  agreed_price: null
+                  requested_at: "2026-09-13T14:03:21+00:00"
+                  completed_at: null
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta no es de pasajero. Pedir un mandado es una operación
+            del rol pasajero.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: >-
+            La entrada no pasó la validación (falta un campo o está fuera de
+            rango), el sitio no existe, o la foto no es una imagen de hasta
+            5 MB.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The description field is required.
+                errors:
+                  description:
+                    - The description field is required.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+    get:
+      tags:
+        - Errands
+      operationId: listErrands
+      summary: Ver los mandados disponibles para aceptar
+      description: >-
+        Lista los mandados en `requested` para que un conductor los acepte
+        (historia #92). Solo devuelve algo si el conductor autenticado está
+        disponible **para mandados** — pool separado del de viajes de
+        pasajero (`PATCH /me/availability/errands`): un conductor disponible
+        solo para viajes recibe una lista vacía, no un error.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: >-
+            Mandados disponibles, ordenados del más antiguo al más nuevo.
+            Lista vacía si no hay ninguno o si el conductor no está
+            disponible para mandados.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Errand"
+              example:
+                data:
+                  - id: 1
+                    status: requested
+                    description: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+                    has_photo: false
+                    photo_url: null
+                    origin:
+                      latitude: 4.710989
+                      longitude: -74.072092
+                    destination:
+                      site_id: 1
+                      name: Casco urbano
+                    driver: null
+                    agreed_price: null
+                    requested_at: "2026-09-13T14:03:21+00:00"
+                    completed_at: null
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es de un conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /errands/{id}/accept:
+    post:
+      tags:
+        - Errands
+      operationId: acceptErrand
+      summary: Aceptar un mandado disponible
+      description: >-
+        Asigna el mandado al conductor autenticado mientras sigue en
+        `requested`, con el precio que negoció con el pasajero por fuera del
+        sistema (historia #92). Dos conductores pueden intentar aceptar el
+        mismo mandado casi al mismo tiempo: solo el primero en llegar lo
+        consigue, y el resto recibe **409**, mismo criterio que
+        `POST /rides/{id}/accept`.
+
+        Solo un conductor puede aceptar mandados: un pasajero recibe **403**.
+        No hace falta estar marcado disponible para mandados para aceptar
+        uno puntual: esa disponibilidad solo decide qué se ve en
+        `GET /errands`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del mandado a aceptar.
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - agreed_price
+              properties:
+                agreed_price:
+                  type: integer
+                  minimum: 1
+                  description: Precio negociado con el pasajero, entero en la unidad mínima de la moneda.
+                  example: 15000
+            example:
+              agreed_price: 15000
+      responses:
+        "200":
+          description: El mandado quedó asignado al conductor autenticado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Errand"
+              example:
+                data:
+                  id: 1
+                  status: accepted
+                  description: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+                  has_photo: false
+                  photo_url: null
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    site_id: 1
+                    name: Casco urbano
+                  driver:
+                    id: 42
+                    name: Carlos Pérez
+                  agreed_price: 15000
+                  requested_at: "2026-09-13T14:03:21+00:00"
+                  completed_at: null
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es de un conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún mandado con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Errand] 1."
+        "409":
+          description: >-
+            El mandado ya no está disponible: otro conductor lo aceptó
+            primero.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este mandado ya no está disponible.
+        "422":
+          description: Falta `agreed_price`, o no es un entero positivo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The agreed price field is required.
+                errors:
+                  agreed_price:
+                    - The agreed price field is required.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /errands/{id}/complete:
+    post:
+      tags:
+        - Errands
+      operationId: completeErrand
+      summary: Completar un mandado aceptado
+      description: >-
+        Marca como completado el mandado que el conductor autenticado ya
+        había aceptado (historia #92). No dispara ningún cobro: el precio
+        (`agreed_price`) ya quedó fijado al aceptar, y no hay pasarela de
+        pago para mandados.
+
+        Solo el conductor **asignado a ese mandado** puede completarlo:
+        cualquier otra cuenta recibe **403**. Que el mandado no esté
+        `accepted` es en cambio **422**, mismo criterio que
+        `POST /rides/{id}/complete`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del mandado a completar.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El mandado quedó completado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Errand"
+              example:
+                data:
+                  id: 1
+                  status: completed
+                  description: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+                  has_photo: false
+                  photo_url: null
+                  origin:
+                    latitude: 4.710989
+                    longitude: -74.072092
+                  destination:
+                    site_id: 1
+                    name: Casco urbano
+                  driver:
+                    id: 42
+                    name: Carlos Pérez
+                  agreed_price: 15000
+                  requested_at: "2026-09-13T14:03:21+00:00"
+                  completed_at: "2026-09-13T14:40:00+00:00"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no es el conductor asignado a este
+            mandado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún mandado con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: "No query results for model [App\\Models\\Errand] 1."
+        "422":
+          description: El mandado no está `accepted`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Solo se puede completar un mandado que esté aceptado.
+                errors:
+                  errand:
+                    - Solo se puede completar un mandado que esté aceptado.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /errands/{id}/photo:
+    get:
+      tags:
+        - Errands
+      operationId: showErrandPhoto
+      summary: Ver la foto adjunta a un mandado
+      description: >-
+        Sirve la foto que el pasajero adjuntó al pedir el mandado (historia
+        #92), para quienes participan de él: el pasajero dueño y el
+        conductor asignado. Mismo mecanismo que
+        `GET /admin/documents/{document}/file` — el archivo vive en
+        almacenamiento privado, esta es la única forma de leerlo.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del mandado.
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El archivo de la foto (imagen).
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: >-
+            La cuenta autenticada no participa de este mandado (no es el
+            pasajero dueño ni el conductor asignado).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe ningún mandado con ese id, o no tiene foto adjunta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este mandado no tiene una foto adjunta.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
 components:
   securitySchemes:
     bearerAuth:
@@ -3981,6 +4471,7 @@ components:
       required:
         - license_number
         - is_available
+        - is_available_for_errands
         - latitude
         - longitude
         - location_updated_at
@@ -4001,6 +4492,13 @@ components:
             #17). `false` por defecto: recién registrado, ningún conductor
             está trabajando todavía.
           example: true
+        is_available_for_errands:
+          type: boolean
+          description: >-
+            Si el conductor está marcado como disponible para tomar mandados
+            (historia #92). Pool independiente de `is_available`: un conductor
+            puede tener cualquier combinación de las dos. `false` por defecto.
+          example: false
         latitude:
           type: number
           format: double
@@ -4053,6 +4551,20 @@ components:
           minimum: -180
           maximum: 180
           example: -74.072092
+    UpdateDriverErrandAvailabilityRequest:
+      type: object
+      description: >-
+        Disponibilidad que el conductor autenticado publica para tomar
+        mandados (historia #92) — pool independiente del de
+        `UpdateDriverAvailabilityRequest`. Sin ubicación: no hay matching por
+        cercanía para mandados, el conductor los busca en `GET /errands`.
+      required:
+        - is_available_for_errands
+      properties:
+        is_available_for_errands:
+          type: boolean
+          description: Si el conductor puede tomar mandados en este momento.
+          example: true
     Profile:
       description: >-
         Cuenta autenticada vista por su dueño. Es el schema `User` más lo que
@@ -5047,6 +5559,111 @@ components:
         auth:
           type: string
           description: "Firma HMAC del par `socket_id:channel_name`, en formato `<app_key>:<hmac>`."
+    Errand:
+      type: object
+      description: >-
+        Un mandado (servicio a domicilio) pedido por un pasajero (historia
+        #92): un conductor recoge algo en un punto libre y lo entrega en un
+        sitio del catálogo.
+
+        No tiene tarifa fija como `Ride`: `agreed_price` nace en `null` y lo
+        fija el conductor al aceptar, porque el precio se negocia con el
+        pasajero por fuera del sistema.
+      required:
+        - id
+        - status
+        - description
+        - has_photo
+        - photo_url
+        - origin
+        - destination
+        - driver
+        - agreed_price
+        - requested_at
+        - completed_at
+      properties:
+        id:
+          type: integer
+          description: >-
+            Identificador del mandado. Es el que se usa para aceptarlo,
+            completarlo y pedir su foto.
+          example: 1
+        status:
+          type: string
+          description: >-
+            Estado del mandado. Nace en `requested`; el resto de los valores
+            los producen aceptar y completar. Más corto que `Ride.status`: no
+            hay `in_progress` ni `cancelled` (fuera de alcance de #92).
+          enum:
+            - requested
+            - accepted
+            - completed
+          example: requested
+        description:
+          type: string
+          description: Descripción libre de qué hay que recoger, tal como la escribió el pasajero.
+          example: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
+        has_photo:
+          type: boolean
+          description: Si el pasajero adjuntó una foto al pedirlo. La foto es opcional.
+          example: false
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+          description: >-
+            URL para pedir la foto (`GET /errands/{id}/photo`), o `null` si
+            `has_photo` es `false`. Solo la pueden pedir el pasajero dueño y
+            el conductor asignado.
+          example: null
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination:
+          type: object
+          description: >-
+            El sitio de entrega (historia #85). A diferencia del origen, no es
+            un punto libre: sale del mismo catálogo que usa `Ride.destination`.
+          required:
+            - site_id
+            - name
+          properties:
+            site_id:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: Casco urbano
+        driver:
+          allOf:
+            - $ref: "#/components/schemas/RideDriver"
+          nullable: true
+          description: >-
+            El conductor asignado, o `null` mientras nadie lo haya aceptado.
+            Reutiliza el mismo schema que `Ride.driver`: es la misma
+            necesidad, saber a quién se está esperando. Campo siempre
+            presente, mismo criterio que `Ride.driver`.
+        agreed_price:
+          type: integer
+          nullable: true
+          description: >-
+            Precio que el conductor negoció con el pasajero por fuera del
+            sistema, entero en la unidad mínima de la moneda. `null` hasta
+            que un conductor acepta el mandado; no hay tarifa fija (historia
+            #92).
+          example: null
+        requested_at:
+          type: string
+          format: date-time
+          description: Momento en que se creó la solicitud.
+          example: "2026-09-13T14:03:21+00:00"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Momento en que el conductor marcó el mandado como completado.
+            `null` mientras no esté `completed`.
+          example: null
     Error:
       type: object
       description: Formato de error de la API (exception handler de Laravel).

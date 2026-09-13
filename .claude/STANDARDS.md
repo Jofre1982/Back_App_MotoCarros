@@ -902,6 +902,64 @@ y fue la causa de que se reimplementara #28 sin necesidad.
   diseño anterior (una calificación de 1 a 5 + comentario opcional, por dirección)
   sigue siendo el que se quiere.
 
+## Servicio de mandados (decidido en #92)
+
+`POST /api/v1/errands` crea un mandado: el pasajero pide que un conductor recoja algo
+en un punto libre y lo entregue en un sitio del catálogo (historia #92, resuelve la
+tarea de descubrimiento #88). Es un módulo nuevo (`Errand`), no una variante de `Ride`:
+el flujo de precio y de disponibilidad de conductor difiere lo suficiente como para
+que forzarlo dentro del dominio de viajes hubiera complicado ambos.
+
+- **Sin tarifa fija ni matching automático, a diferencia de los viajes de pasajero.**
+  El precio (`agreed_price`) lo negocian pasajero y conductor por fuera del sistema
+  (llamada, chat) y el conductor lo registra manualmente al aceptar
+  (`POST /errands/{id}/accept`); nace en `null` y no hay nada que recalcular al
+  completarlo, ni pasarela de pago que disparar. No hay aviso push ni evento
+  `RideRequested`-like a conductores cercanos: el conductor busca los mandados
+  disponibles en `GET /errands`. Ambas exclusiones son del alcance de la propia
+  historia, no un recorte de implementación.
+- **Recogida libre, entrega por sitio del catálogo — combinación deliberada.** El
+  origen es un punto GPS libre, igual que el origen de un viaje de pasajero: el
+  conductor tiene que encontrar al pasajero donde esté. El destino, en cambio, es un
+  `destination_site_id` del mismo catálogo de `sites` que usa `Ride` (#85) — pero solo
+  reutiliza el sitio como referencia geográfica, no su `SiteFare`: un mandado no
+  exige que el sitio tenga precio de pasajero definido, porque no cobra por sitio.
+- **Foto opcional, expuesta como `has_photo`/`photo_url`, nunca la ruta de disco.**
+  Se guarda en el disco `local` (privado), mismo mecanismo que
+  `driver_documents.path`. `GET /errands/{id}/photo` la sirve (streaming, mismo
+  patrón que `GET /admin/documents/{document}/file`) solo a quienes participan del
+  mandado — pasajero dueño y conductor asignado —, resuelto en
+  `ErrandPolicy::view()`. Pedir la foto de un mandado sin foto es **404**, no un
+  error de permisos.
+- **Pool de conductores separado del de viajes, columna y Action propias.** Un
+  conductor tiene `is_available_for_errands` en `driver_profiles`, independiente de
+  `is_available` (viajes): puede tener cualquier combinación de las dos. Se marca con
+  `PATCH /me/availability/errands` (`UpdateDriverErrandAvailabilityAction`) y no
+  agregando un campo más a `PATCH /me/availability`, precisamente para que sean
+  ajustables por separado. A diferencia de esa ruta, no lleva ubicación: no hay
+  matching por cercanía para mandados.
+- **`GET /errands` filtra por disponibilidad en la Action, no en la Policy.**
+  `ErrandPolicy::viewAny()` solo exige rol conductor — el permiso de usar el
+  endpoint no depende de si el conductor optó por ver mandados. Un conductor
+  disponible únicamente para viajes, o sin perfil creado, recibe **una lista
+  vacía**, no 403: tiene el permiso, solo no activó esa cola. Aceptar un mandado
+  puntual (`accept()`) tampoco exige esa disponibilidad, mismo criterio que
+  `RidePolicy::accept()` no exigir que el conductor esté `is_available`: la
+  disponibilidad decide qué se le muestra, no qué le está permitido operar si ya
+  conoce el id.
+- **Aceptar usa lock + transacción, igual que `AcceptRideAction`.** Dos conductores
+  pueden intentar aceptar el mismo mandado casi al mismo tiempo; el segundo recibe
+  **409** vía `ErrandNoLongerAvailableException`, no un error de permisos ni de
+  validación.
+- **Ciclo de vida más corto que `Ride`, a propósito.** `ErrandStatus` solo tiene
+  `requested`, `accepted` y `completed` — sin `in_progress` (nada que marcar "en
+  curso": no hay tracking de ubicación ni evento de estado en tiempo real para
+  mandados) ni `cancelled` (fuera del alcance que pidió la historia).
+
+Queda **fuera** de #92: tarifa fija o calculada para mandados; matching automático o
+aviso push a conductores cercanos; recogida por sitio del catálogo (hoy solo punto
+libre); cancelar un mandado; y un recibo con el mismo detalle que el de viajes (#26).
+
 ## Pendiente de decidir (no bloquea empezar)
 
 - Nada pendiente por ahora.

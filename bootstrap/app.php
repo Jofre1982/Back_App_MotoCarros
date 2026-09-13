@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\Auth\InvalidCredentialsException;
+use App\Exceptions\Errands\ErrandNoLongerAvailableException;
 use App\Exceptions\Rides\RideNoLongerAvailableException;
 use App\Exceptions\RouteEstimationFailed;
 use Illuminate\Auth\AuthenticationException;
@@ -114,6 +115,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // disponible y que la petición llegó al servidor.
         $exceptions->render(
             fn (RideNoLongerAvailableException $e) => new JsonResponse(
+                ['message' => $e->getMessage()],
+                JsonResponse::HTTP_CONFLICT,
+            ),
+        );
+
+        // Mismo criterio que arriba, para el mandado que un conductor
+        // intentó aceptar (historia #92).
+        $exceptions->render(
+            fn (ErrandNoLongerAvailableException $e) => new JsonResponse(
                 ['message' => $e->getMessage()],
                 JsonResponse::HTTP_CONFLICT,
             ),

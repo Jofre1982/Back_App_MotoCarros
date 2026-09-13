@@ -36,6 +36,10 @@ class DriverProfileResource extends JsonResource
             // para que el cliente no tenga que distinguir "sin ubicación
             // todavía" de "esta respuesta no trae el campo".
             'is_available' => $this->resource->is_available,
+            // Pool separado del de viajes (historia #92): no depende de
+            // `is_available` ni comparte ubicación, ver
+            // UpdateDriverErrandAvailabilityAction.
+            'is_available_for_errands' => $this->resource->is_available_for_errands,
             'latitude' => $this->resource->latitude,
             'longitude' => $this->resource->longitude,
             'location_updated_at' => $this->resource->location_updated_at?->toIso8601String(),

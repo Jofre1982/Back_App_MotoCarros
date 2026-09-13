@@ -99,6 +99,9 @@ class ShowProfileTest extends TestCase
                         // campo viaja siempre presente, aunque no aplique
                         // todavía.
                         'is_available' => false,
+                        // Historia #92: pool de disponibilidad independiente
+                        // del de arriba, mismo criterio de "siempre presente".
+                        'is_available_for_errands' => false,
                         'latitude' => null,
                         'longitude' => null,
                         'location_updated_at' => null,
