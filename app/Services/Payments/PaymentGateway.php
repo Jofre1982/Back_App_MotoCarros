@@ -11,10 +11,13 @@ use App\Models\Ride;
  * Contrato con el proveedor de pago que procesa el cobro de un viaje.
  *
  * `ChargeRideAction` depende de esta interfaz y nunca de una implementación
- * concreta, mismo criterio que `RouteEstimator`: qué proveedor de pago se usa
- * (efectivo conciliado aparte, tarjeta, billetera) no está decidido todavía
- * (ver "Fuera de alcance" de la historia #25), y el punto de integración
- * tiene que poder cambiar sin tocar `ChargeRideAction` ni `CompleteRideAction`.
+ * concreta, mismo criterio que `RouteEstimator`. **El cobro es siempre en
+ * efectivo, decisión confirmada de producto** (no una integración pendiente
+ * de decidir): el dinero cambia de manos entre pasajero y conductor fuera
+ * del sistema, y esta interfaz solo existe para que `ChargeRideAction`
+ * tenga un punto único donde registrar que el viaje quedó cobrado. Si algún
+ * día se agrega un medio de pago electrónico, el punto de integración puede
+ * cambiar sin tocar `ChargeRideAction` ni `CompleteRideAction`.
  */
 interface PaymentGateway
 {

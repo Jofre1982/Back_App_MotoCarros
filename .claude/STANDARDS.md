@@ -879,6 +879,23 @@ no `float`/`double`.
 promociones; y los endpoints que consumen este cálculo, que son las historias de tarifa
 estimada (#14) y pago del viaje (#25).
 
+## Cobro del viaje: siempre en efectivo (confirmado 2026-09-13)
+
+**El pago es siempre en efectivo, entre pasajero y conductor, fuera del sistema.** No
+es una integración de proveedor de pago pendiente de decidir (como decía la nota
+original de la historia #25) — es la decisión de producto confirmada. Por eso
+`App\Services\Payments\NullPaymentGateway` (el binding de
+`PaymentGateway` en `AppServiceProvider::registerPaymentGateway()`) no es un
+placeholder temporal: es la implementación correcta y final mientras el negocio siga
+cobrando así. `ChargeRideAction` y el schema `Payment` existen para que el viaje
+quede con un registro de "cobro procesado", no porque haya dinero moviéndose por la
+API. Si en el futuro se agrega un medio de pago electrónico, es una decisión nueva y
+el punto de cambio es ese binding, no `ChargeRideAction` ni `CompleteRideAction`.
+
+Mismo motivo por el que **los mandados (historia #92) no tienen tarifa fija ni cobro
+en el sistema**: el precio se acuerda entre pasajero y conductor antes de aceptar, y
+se paga en efectivo igual que un viaje.
+
 ## Calificaciones de viaje: suspendidas y removidas del código (2026-09-07)
 
 **Las historias #27 (calificar al conductor) y #28 (calificar al pasajero) están
@@ -901,6 +918,12 @@ y fue la causa de que se reimplementara #28 sin necesidad.
   verificable (la conversación donde se decidió se perdió), así que no asumir que el
   diseño anterior (una calificación de 1 a 5 + comentario opcional, por dirección)
   sigue siendo el que se quiere.
+- **Motivo de la suspensión (confirmado 2026-09-13):** todavía no se conoce el
+  alcance real de la app — hoy está pensada para una población pequeña donde
+  pasajeros y conductores ya se conocen entre sí, un contexto donde una calificación
+  formal no tiene el mismo valor que en una ciudad grande con desconocidos. No es un
+  rechazo permanente a la funcionalidad, es que diseñarla bien depende de saber a qué
+  escala va a operar la app.
 
 ## Servicio de mandados (decidido en #92)
 

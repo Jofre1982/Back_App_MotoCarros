@@ -67,10 +67,12 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Proveedor de pago que procesa el cobro de un viaje completado (historia
-     * #25). Todavía no hay un proveedor real decidido —ver "Fuera de
-     * alcance" en el issue—, así que apunta a `NullPaymentGateway`, que da
-     * todo cobro por exitoso. Cambiar de proveedor real es reemplazar este
-     * binding, mismo criterio que `registerRouteEstimator()`.
+     * #25). El cobro es siempre en efectivo —decisión confirmada de
+     * producto, no una integración pendiente—, así que apunta a
+     * `NullPaymentGateway`, que da todo cobro por exitoso sin tocar ningún
+     * proveedor externo. Si algún día se agrega un medio de pago
+     * electrónico, cambiarlo es reemplazar este binding, mismo criterio que
+     * `registerRouteEstimator()`.
      */
     private function registerPaymentGateway(): void
     {
