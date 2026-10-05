@@ -6,11 +6,20 @@ deployment:
     - export APPROOT=$(pwd)
     - export DEPLOYPATH=/home/motocar1/public_html
     - export COMPOSER_HOME="${HOME}/.composer"
-    # PHP del account (el proyecto requiere >= 8.3). Toma el primero que exista.
-    - export PHP=$( for v in ea-php83 ea-php84; do [ -x /opt/cpanel/$v/root/usr/bin/php ] && echo /opt/cpanel/$v/root/usr/bin/php && break; done )
 
-    # 1) Dependencias de produccion dentro del repo (composer que trae cPanel).
-    - /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+    # PHP del account (el proyecto requiere >= 8.3). Toma el primero que exista.
+    - export PHP=$( for v in ea-php83 ea-php84 ea-php85; do [ -x /opt/cpanel/$v/root/usr/bin/php ] && echo /opt/cpanel/$v/root/usr/bin/php && break; done )
+    - if [ -z "$PHP" ]; then export PHP=$(command -v php); fi
+    - echo "Usando PHP=$PHP" && $PHP -v
+
+    # Composer no viene preinstalado en este hosting: lo instalamos en ~/bin la 1a vez.
+    - mkdir -p "$HOME/bin"
+    - if [ ! -f "$HOME/bin/composer" ]; then curl -sS https://getcomposer.org/installer -o "$HOME/composer-setup.php" && $PHP "$HOME/composer-setup.php" --install-dir="$HOME/bin" --filename=composer && rm -f "$HOME/composer-setup.php"; fi
+    - export COMPOSER="$HOME/bin/composer"
+    - $PHP "$COMPOSER" --version
+
+    # 1) Dependencias de produccion dentro del repo.
+    - $PHP "$COMPOSER" install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
     # 2) Migraciones + caches de Laravel (se corren desde el repo = APPROOT).
     - $PHP artisan migrate --force
