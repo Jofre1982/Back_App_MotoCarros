@@ -2,8 +2,9 @@
 deployment:
   tasks:
     - export COMPOSER_HOME="${HOME}/.composer"
+    - export DEPLOYPATH=/home/motocar1/public_html
     - /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
     - /usr/local/bin/php artisan migrate --force
     - /usr/local/bin/php artisan optimize
     - /usr/local/bin/php artisan storage:link
-    - /bin/cp -R public/. "${HOME}/public_html"
+    - /bin/cp -R public/. "${DEPLOYPATH}"
