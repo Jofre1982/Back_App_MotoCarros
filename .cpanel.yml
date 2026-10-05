@@ -25,6 +25,12 @@ deployment:
     - $PHP "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress --no-scripts
     - $PHP artisan package:discover --ansi || echo "WARN package-discover fallo, se continua"
 
+    # Generar APP_KEY y JWT_SECRET en el servidor SOLO si estan vacios en .env.
+    # Asi los secretos nunca pasan por git ni se escriben a mano, y no se
+    # regeneran en cada deploy (eso invalidaria tokens/datos cifrados).
+    - if [ -f "$APPROOT/.env" ] && ! grep -q "^APP_KEY=." "$APPROOT/.env"; then $PHP artisan key:generate --force || echo "WARN no se pudo generar APP_KEY"; fi
+    - if [ -f "$APPROOT/.env" ] && ! grep -q "^JWT_SECRET=." "$APPROOT/.env"; then $PHP artisan jwt:secret --force || echo "WARN no se pudo generar JWT_SECRET"; fi
+
     # 2) Migraciones + caches de Laravel (NO bloqueantes mientras MySQL/.env
     #    aun no estan listos: si fallan, se registra el aviso y el deploy sigue).
     #    Ojo YAML: no usar ': ' (dos puntos + espacio) dentro de los echo.
