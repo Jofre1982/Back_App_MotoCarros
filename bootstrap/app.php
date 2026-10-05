@@ -12,6 +12,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
@@ -24,6 +25,18 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Health check de la raiz. Va en `then` (sin el grupo `web`) a
+        // proposito: no arranca sesion ni toca la BD, asi responde aunque la
+        // base de datos este caida o sin migrar. El `/up` de arriba es el
+        // health nativo; este, ademas, orienta a quien entra al dominio hacia
+        // donde vive la API.
+        then: function (): void {
+            Route::get('/', fn () => new JsonResponse([
+                'app' => config('app.name'),
+                'status' => 'ok',
+                'api' => url('/api/v1'),
+            ]));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Sin esto el grupo `api` se queda solo con SubstituteBindings y ningún
