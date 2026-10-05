@@ -15,11 +15,12 @@ deployment:
     # Composer no viene preinstalado en este hosting: lo instalamos en ~/bin la 1a vez.
     - mkdir -p "$HOME/bin"
     - if [ ! -f "$HOME/bin/composer" ]; then curl -sS --connect-timeout 20 --max-time 120 https://getcomposer.org/installer -o "$HOME/composer-setup.php" && $PHP "$HOME/composer-setup.php" --install-dir="$HOME/bin" --filename=composer && rm -f "$HOME/composer-setup.php"; fi
-    - export COMPOSER="$HOME/bin/composer"
-    - $PHP "$COMPOSER" --version
+    # Ojo: NO usar la variable COMPOSER (composer la reserva como ruta al composer.json).
+    - export COMPOSER_BIN="$HOME/bin/composer"
+    - $PHP "$COMPOSER_BIN" --version
 
     # 1) Dependencias de produccion dentro del repo.
-    - $PHP "$COMPOSER" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
+    - $PHP "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
 
     # 2) Migraciones + caches de Laravel (se corren desde el repo = APPROOT).
     - $PHP artisan migrate --force
