@@ -20,7 +20,10 @@ deployment:
     - $PHP "$COMPOSER_BIN" --version
 
     # 1) Dependencias de produccion dentro del repo.
-    - $PHP "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
+    #    --no-scripts: proc_open esta deshabilitado en este hosting, asi que composer
+    #    no puede lanzar el subproceso de package:discover. Lo corremos nosotros abajo.
+    - $PHP "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress --no-scripts
+    - $PHP artisan package:discover --ansi || echo "WARN: package:discover fallo; se continua."
 
     # 2) Migraciones + caches de Laravel (NO bloqueantes mientras MySQL/.env
     #    aun no estan listos: si fallan, se registra el aviso y el deploy sigue).
