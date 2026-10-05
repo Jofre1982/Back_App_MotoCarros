@@ -31,11 +31,13 @@ deployment:
     - if [ -f "$APPROOT/.env" ] && ! grep -q "^APP_KEY=." "$APPROOT/.env"; then $PHP artisan key:generate --force || echo "WARN no se pudo generar APP_KEY"; fi
     - if [ -f "$APPROOT/.env" ] && ! grep -q "^JWT_SECRET=." "$APPROOT/.env"; then $PHP artisan jwt:secret --force || echo "WARN no se pudo generar JWT_SECRET"; fi
 
-    # Limpiar caches ANTES de migrar. Si un deploy anterior cacheo la config
-    # (p.ej. apuntando a sqlite cuando aun no existia el .env), migrate y el
-    # resto de comandos usarian esa config vieja en vez del .env actual. Esto
-    # obliga a leer el .env real (MySQL) en las tareas de abajo.
-    - $PHP artisan optimize:clear || echo "WARN optimize-clear fallo, se continua"
+    # Limpiar SOLO la config cacheada ANTES de migrar. Si un deploy anterior
+    # cacheo la config (p.ej. apuntando a sqlite cuando aun no existia el .env),
+    # migrate usaria esa config vieja en vez del .env actual. Se usa
+    # config:clear y no optimize:clear a proposito: este ultimo tambien intenta
+    # vaciar la tabla `cache`, que en el primer deploy aun no existe y ensucia
+    # el log con un FAIL inofensivo.
+    - $PHP artisan config:clear || echo "WARN config-clear fallo, se continua"
 
     # 2) Migraciones + caches de Laravel (NO bloqueantes mientras MySQL/.env
     #    aun no estan listos: si fallan, se registra el aviso y el deploy sigue).
