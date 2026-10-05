@@ -22,9 +22,10 @@ deployment:
     # 1) Dependencias de produccion dentro del repo.
     - $PHP "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
 
-    # 2) Migraciones + caches de Laravel (se corren desde el repo = APPROOT).
-    - $PHP artisan migrate --force
-    - $PHP artisan optimize
+    # 2) Migraciones + caches de Laravel (NO bloqueantes mientras MySQL/.env
+    #    aun no estan listos: si fallan, se registra el aviso y el deploy sigue).
+    - $PHP artisan migrate --force || echo "WARN: migrate fallo (MySQL/.env aun no listos); se continua."
+    - $PHP artisan optimize || echo "WARN: optimize fallo; se continua."
 
     # 3) Publicar SOLO el front controller (contenido de public/) en el DocumentRoot.
     - /bin/cp -R "${APPROOT}/public/." "${DEPLOYPATH}/"
