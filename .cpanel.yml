@@ -1,10 +1,22 @@
 ---
 deployment:
   tasks:
-    - export COMPOSER_HOME="${HOME}/.composer"
+    # APPROOT = carpeta del checkout del repo (cPanel corre las tareas desde aqui).
+    # El codigo de Laravel (vendor, bootstrap, storage, .env) vive aqui, NO en public_html.
+    - export APPROOT=$(pwd)
     - export DEPLOYPATH=/home/motocar1/public_html
+    - export COMPOSER_HOME="${HOME}/.composer"
+
+    # 1) Dependencias de produccion dentro del repo.
     - /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+    # 2) Migraciones + caches de Laravel (se corren desde el repo = APPROOT).
     - /usr/local/bin/php artisan migrate --force
     - /usr/local/bin/php artisan optimize
-    - /usr/local/bin/php artisan storage:link
-    - /bin/cp -R public/. "${DEPLOYPATH}"
+
+    # 3) Publicar SOLO el front controller (contenido de public/) en el DocumentRoot.
+    - /bin/cp -R "${APPROOT}/public/." "${DEPLOYPATH}/"
+
+    # 4) Reescribir el index.php copiado para que apunte al codigo real del repo
+    #    en vez de usar rutas relativas (__DIR__/../ que no existen en public_html).
+    - /bin/sed -i "s#__DIR__\.'/\.\./#'${APPROOT}/#g" "${DEPLOYPATH}/index.php"
