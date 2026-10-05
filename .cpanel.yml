@@ -6,13 +6,15 @@ deployment:
     - export APPROOT=$(pwd)
     - export DEPLOYPATH=/home/motocar1/public_html
     - export COMPOSER_HOME="${HOME}/.composer"
+    # PHP del account (el proyecto requiere >= 8.3). Toma el primero que exista.
+    - export PHP=$( for v in ea-php83 ea-php84; do [ -x /opt/cpanel/$v/root/usr/bin/php ] && echo /opt/cpanel/$v/root/usr/bin/php && break; done )
 
-    # 1) Dependencias de produccion dentro del repo.
-    - /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+    # 1) Dependencias de produccion dentro del repo (composer que trae cPanel).
+    - /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
     # 2) Migraciones + caches de Laravel (se corren desde el repo = APPROOT).
-    - /usr/local/bin/php artisan migrate --force
-    - /usr/local/bin/php artisan optimize
+    - $PHP artisan migrate --force
+    - $PHP artisan optimize
 
     # 3) Publicar SOLO el front controller (contenido de public/) en el DocumentRoot.
     - /bin/cp -R "${APPROOT}/public/." "${DEPLOYPATH}/"
