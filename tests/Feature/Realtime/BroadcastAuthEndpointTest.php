@@ -44,12 +44,12 @@ class BroadcastAuthEndpointTest extends TestCase
     private const SOCKET_ID = '123456.789012';
 
     /**
-     * Espejo de `REVERB_APP_KEY` en phpunit.xml: Reverb antepone la clave de la
-     * aplicación a la firma que devuelve.
+     * Espejo de `REVERB_APP_KEY` (y `PUSHER_APP_KEY`) en phpunit.xml: el
+     * broadcaster antepone la clave de la aplicación a la firma que devuelve.
      */
     private const APP_KEY = 'motoya-testing-key';
 
-    /** Espejo de `REVERB_APP_SECRET` en phpunit.xml: con él se firma el HMAC. */
+    /** Espejo de `REVERB_APP_SECRET` (y `PUSHER_APP_SECRET`) en phpunit.xml: con él se firma el HMAC. */
     private const APP_SECRET = 'motoya-testing-secret';
 
     private const CONEXION = 'BROADCAST_CONNECTION';
@@ -58,13 +58,27 @@ class BroadcastAuthEndpointTest extends TestCase
 
     protected function setUp(): void
     {
-        $original = $_SERVER[self::CONEXION] ?? false;
+        // PHPUnit fija las <env> de phpunit.xml en $_ENV y putenv(), no en
+        // $_SERVER. Leer solo $_SERVER daba `false` y el tearDown borraba la
+        // variable: el siguiente boot la cargaba desde `.env`, phpdotenv la
+        // marcaba como suya y desde ahí la repisaba en cada test posterior.
+        $original = $_SERVER[self::CONEXION] ?? $_ENV[self::CONEXION] ?? getenv(self::CONEXION);
         $this->conexionOriginal = is_string($original) ? $original : false;
 
-        $_SERVER[self::CONEXION] = $_ENV[self::CONEXION] = 'reverb';
-        putenv(self::CONEXION.'=reverb');
+        $_SERVER[self::CONEXION] = $_ENV[self::CONEXION] = $this->conexion();
+        putenv(self::CONEXION.'='.$this->conexion());
 
         parent::setUp();
+    }
+
+    /**
+     * Broadcaster contra el que corren los tests. Reverb es el de desarrollo;
+     * PusherBroadcastAuthEndpointTest repite toda la suite con `pusher`, que
+     * es el de producción.
+     */
+    protected function conexion(): string
+    {
+        return 'reverb';
     }
 
     protected function tearDown(): void

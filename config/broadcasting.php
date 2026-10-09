@@ -8,8 +8,9 @@ return [
     |--------------------------------------------------------------------------
     |
     | Servidor al que se publican los eventos que implementan ShouldBroadcast.
-    | En cualquier entorno donde el tiempo real importe esto es "reverb" (ver
-    | .claude/STANDARDS.md, "Tiempo real: Laravel Reverb"); "log" y "null"
+    | En desarrollo local es "reverb"; en producción es "pusher", porque el
+    | hosting compartido (cPanel) no puede mantener vivo un servidor de
+    | WebSockets (ver .claude/STANDARDS.md, "Tiempo real"). "log" y "null"
     | quedan para desarrollo sin servidor de WebSockets y para la suite de
     | tests, que no debe abrir conexiones.
     |
@@ -22,13 +23,11 @@ return [
     | Conexiones
     |--------------------------------------------------------------------------
     |
-    | Solo están las conexiones que este proyecto usa. Las de Pusher y Ably que
-    | trae el framework por defecto se omiten a propósito: el proveedor está
-    | decidido y dejarlas acá solo agrega variables de entorno que nadie
-    | configura (mismo criterio que la limpieza de scaffolding en
-    | .claude/STANDARDS.md). Reverb habla el protocolo de Pusher, así que si
-    | alguna vez se migra a Pusher u otro proveedor compatible, es agregar la
-    | conexión acá y cambiar BROADCAST_CONNECTION.
+    | Solo están las conexiones que este proyecto usa (la de Ably del skeleton
+    | se omite a propósito, mismo criterio que la limpieza de scaffolding en
+    | .claude/STANDARDS.md). Reverb habla el protocolo de Pusher, así que pasar
+    | de una a otra es cambiar BROADCAST_CONNECTION: los eventos, los canales y
+    | la ruta de autorización son los mismos.
     |
     */
 
@@ -49,6 +48,23 @@ return [
                 'port' => env('REVERB_PORT', 443),
                 'scheme' => env('REVERB_SCHEME', 'https'),
                 'useTLS' => env('REVERB_SCHEME', 'https') === 'https',
+            ],
+            'client_options' => [
+                // Opciones de Guzzle: https://docs.guzzlephp.org/en/stable/request-options.html
+            ],
+        ],
+
+        'pusher' => [
+            'driver' => 'pusher',
+            'key' => env('PUSHER_APP_KEY'),
+            'secret' => env('PUSHER_APP_SECRET'),
+            'app_id' => env('PUSHER_APP_ID'),
+            'options' => [
+                // Pusher enruta por cluster (us2, mt1, sa1...): tiene que ser
+                // el mismo de la app en el dashboard y el mismo que configura
+                // el SDK de la app móvil.
+                'cluster' => env('PUSHER_APP_CLUSTER'),
+                'useTLS' => true,
             ],
             'client_options' => [
                 // Opciones de Guzzle: https://docs.guzzlephp.org/en/stable/request-options.html

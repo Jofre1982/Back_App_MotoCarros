@@ -436,12 +436,27 @@ cliente renueva y vuelve a suscribirse.
 
 ### Configuración
 
-- `config/broadcasting.php` solo declara las conexiones que se usan (`reverb`, `log`,
-  `null`); las de Pusher y Ably del skeleton se quitaron, mismo criterio que el resto
-  del scaffolding sin usar.
+- `config/broadcasting.php` solo declara las conexiones que se usan (`reverb`,
+  `pusher`, `log`, `null`); la de Ably del skeleton se quitó, mismo criterio que el
+  resto del scaffolding sin usar.
+- **Producción usa Pusher, no Reverb.** El hosting de producción es cPanel compartido
+  (sin shell, sin procesos persistentes, sin puertos propios ni proxy de WebSockets),
+  donde `reverb:start` no puede quedar corriendo. Reverb habla el protocolo de Pusher,
+  así que el cambio es solo `BROADCAST_CONNECTION=pusher` + `PUSHER_APP_ID`,
+  `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, `PUSHER_APP_CLUSTER` en el `.env` del
+  servidor: eventos, canales, `broadcastAs()` y `POST /api/v1/broadcasting/auth` no
+  cambian. La app móvil usa el SDK de Pusher con la key y el cluster (nunca el secret)
+  y ese mismo endpoint como `authEndpoint`. Reverb sigue siendo el servidor de
+  desarrollo local (`composer dev`) y la opción si producción se muda a un VPS.
+- En producción `QUEUE_CONNECTION=sync`: los eventos `ShouldBroadcast` salen por la
+  cola y en cPanel no hay worker persistente, así que con `database` se quedarían en
+  la tabla `jobs`. Con `sync` se publican a Pusher dentro de la request (una llamada
+  HTTP saliente). El código no cambia: los eventos siguen siendo `ShouldBroadcast` para
+  que, con un worker real, vuelvan a salir de la request sin tocar nada.
 - Variables en `.env.example` (`REVERB_APP_ID`, `REVERB_APP_KEY`, `REVERB_APP_SECRET`,
   `REVERB_HOST`, `REVERB_PORT`, `REVERB_SCHEME`, `REVERB_SERVER_HOST`,
-  `REVERB_SERVER_PORT`). Las credenciales de la aplicación Reverb no tienen default:
+  `REVERB_SERVER_PORT`, y las `PUSHER_APP_*` de arriba). Las credenciales de Reverb y
+  Pusher no tienen default:
   son un secreto por entorno igual que `JWT_SECRET`, y se generan con
   `php artisan reverb:install`.
 - La suite de tests corre con `BROADCAST_CONNECTION=null` (`phpunit.xml`): ningún test
@@ -458,7 +473,8 @@ cliente renueva y vuelve a suscribirse.
   del `.env` de cada máquina — en CI, `.env` sale de `.env.example`. Fijar una variable
   desde `setUp()` solo funciona si ya está declarada en `phpunit.xml` (ese es el caso de
   `BROADCAST_CONNECTION`): al no entrar nunca en el conjunto *loaded*, nadie la repisa.
-  Las credenciales `REVERB_APP_*` de prueba están en `phpunit.xml` por esta razón.
+  Las credenciales `REVERB_APP_*` y `PUSHER_APP_*` de prueba están en `phpunit.xml`
+  por esta razón.
 - Prueba de concepto: con `php artisan reverb:start` corriendo y un cliente suscrito a
   `private-driver.{id}`, `php artisan realtime:ping <id> "<mensaje>"` recorre la cadena
   completa (autorización del canal, publicación y entrega). El evento
