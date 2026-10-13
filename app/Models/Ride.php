@@ -33,13 +33,16 @@ use Illuminate\Support\Carbon;
  * el de la columna (ver .claude/STANDARDS.md).
  *
  * @property RideStatus $status
+ * @property RideMode $mode
  * @property int $passenger_id
  * @property int|null $driver_id
  * @property float $origin_latitude
  * @property float $origin_longitude
- * @property int $destination_site_id
+ * @property int|null $destination_site_id
+ * @property string|null $destination_text
  * @property int $passenger_count
- * @property int $estimated_fare
+ * @property int|null $estimated_fare
+ * @property int|null $agreed_price
  * @property Carbon|null $started_at
  * @property Carbon|null $completed_at
  * @property int|null $final_fare
