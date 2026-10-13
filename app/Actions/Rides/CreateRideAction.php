@@ -8,6 +8,7 @@ use App\Actions\Payments\CalculateSiteFareAction;
 use App\DTOs\Coordinates;
 use App\DTOs\PushNotification;
 use App\DTOs\RideRequest;
+use App\Enums\RideMode;
 use App\Enums\RideStatus;
 use App\Enums\VehicleType;
 use App\Events\Realtime\RideRequested;
@@ -55,12 +56,24 @@ final readonly class CreateRideAction
 
     public function handle(User $passenger, RideRequest $request): Ride
     {
+        $ride = $request->mode === RideMode::PickupOnly
+            ? $this->createPickupOnly($passenger, $request)
+            : $this->createFromCatalog($passenger, $request);
+
+        $this->notifyNearbyDrivers($ride, $request->origin);
+
+        return $ride;
+    }
+
+    private function createFromCatalog(User $passenger, RideRequest $request): Ride
+    {
         $site = Site::query()->findOrFail($request->destinationSiteId);
         $fare = $this->calculateFare->handle($site, VehicleType::Motocarro, $request->passengerCount);
 
-        $ride = Ride::create([
+        return Ride::create([
             'passenger_id' => $passenger->getKey(),
             'status' => RideStatus::Requested,
+            'mode' => RideMode::Catalog,
             'origin_latitude' => $request->origin->latitude,
             'origin_longitude' => $request->origin->longitude,
             'destination_site_id' => $site->getKey(),
@@ -68,13 +81,29 @@ final readonly class CreateRideAction
             'currency' => $fare->currency,
             'estimated_fare' => $fare->total,
         ]);
-
-        $this->notifyNearbyDrivers($ride, $request->origin, $site);
-
-        return $ride;
     }
 
-    private function notifyNearbyDrivers(Ride $ride, Coordinates $origin, Site $site): void
+    /**
+     * Viaje solo recogida (historia #95): sin sitio y sin tarifa. La moneda
+     * sí se fija ya, la misma de las tarifas, para que `agreed_price` tenga
+     * con qué leerse en cuanto el conductor lo registre.
+     */
+    private function createPickupOnly(User $passenger, RideRequest $request): Ride
+    {
+        return Ride::create([
+            'passenger_id' => $passenger->getKey(),
+            'status' => RideStatus::Requested,
+            'mode' => RideMode::PickupOnly,
+            'origin_latitude' => $request->origin->latitude,
+            'origin_longitude' => $request->origin->longitude,
+            'destination_text' => $request->destinationText,
+            'passenger_count' => $request->passengerCount,
+            'currency' => config()->string('fares.currency'),
+            'estimated_fare' => null,
+        ]);
+    }
+
+    private function notifyNearbyDrivers(Ride $ride, Coordinates $origin): void
     {
         $driverIds = $this->nearbyDrivers->near($origin);
 
@@ -82,16 +111,20 @@ final readonly class CreateRideAction
             return;
         }
 
+        $site = $ride->destinationSite;
+
         RideRequested::dispatch(
             rideId: $ride->id,
             originLatitude: $ride->origin_latitude,
             originLongitude: $ride->origin_longitude,
-            destinationSiteId: $site->getKey(),
-            destinationSiteName: $site->name,
+            destinationSiteId: $site?->getKey(),
+            destinationSiteName: $site?->name,
             passengerCount: $ride->passenger_count,
             currency: $ride->currency,
             estimatedFare: $ride->estimated_fare,
             nearbyDriverIds: $driverIds,
+            mode: $ride->mode,
+            destinationText: $ride->destination_text,
         );
 
         $this->sendPushToNearbyDrivers($driverIds);

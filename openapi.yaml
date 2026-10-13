@@ -2673,6 +2673,9 @@ paths:
                     passenger_count: 1
                     currency: COP
                     estimated_fare: 8850
+                    mode: catalog
+                    destination_text: null
+                    agreed_price: null
                     driver:
                       id: 5
                       name: Carlos Pérez
@@ -2899,6 +2902,20 @@ paths:
 
         Un pasajero solo puede tener **un viaje activo a la vez** (`requested`,
         `accepted` o `in_progress`); pedir otro mientras tanto responde 422.
+
+        **Viaje solo recogida (historia #95).** Con `mode: pickup_only` el
+        pasajero marca solo el punto de recogida y escribe a dónde va en
+        `destination_text` (texto libre, obligatorio, máximo 255 caracteres;
+        vacío o solo espacios responde 422). No lleva `destination_site_id`
+        ni tarifa: el viaje nace con `destination: null`,
+        `estimated_fare: null` y `agreed_price: null`, y el precio lo
+        registra el conductor al aceptarlo (`POST /rides/{id}/accept` con
+        `agreed_price`). Sin `mode`, o con `mode: catalog`, el viaje es el
+        de siempre con destino del catálogo.
+
+        Los conductores cercanos reciben `ride.requested` igual que con un
+        viaje de catálogo, con `mode`, `destination: null`,
+        `destination_text` y `estimated_fare: null` (precio a acordar).
       security:
         - bearerAuth: []
       requestBody:
@@ -2906,7 +2923,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RideRequest"
+              $ref: "#/components/schemas/CreateRideRequest"
             example:
               origin:
                 latitude: 4.710989
@@ -2938,6 +2955,9 @@ paths:
                   passenger_count: 1
                   currency: COP
                   estimated_fare: 4000
+                  mode: catalog
+                  destination_text: null
+                  agreed_price: null
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
@@ -2967,7 +2987,8 @@ paths:
           description: >-
             La entrada no pasó la validación (falta un campo o está fuera de
             rango), el sitio no existe, el sitio no tiene precio de pasajero
-            definido todavía, o el pasajero ya tiene un viaje activo.
+            definido todavía, el viaje solo recogida no trae
+            `destination_text`, o el pasajero ya tiene un viaje activo.
           content:
             application/json:
               schema:
@@ -3053,8 +3074,10 @@ paths:
         "422":
           description: >-
             La entrada no pasó la validación (falta un campo o está fuera de
-            rango), el sitio no existe, o el sitio no tiene precio de
-            pasajero definido todavía.
+            rango), el sitio no existe, el sitio no tiene precio de
+            pasajero definido todavía, o se pidió estimar un viaje
+            `pickup_only` (no tiene estimado: el precio se acuerda con el
+            conductor).
           content:
             application/json:
               schema:
@@ -3131,6 +3154,9 @@ paths:
                   passenger_count: 1
                   currency: COP
                   estimated_fare: 4000
+                  mode: catalog
+                  destination_text: null
+                  agreed_price: null
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
@@ -3265,6 +3291,9 @@ paths:
                   passenger_count: 1
                   currency: COP
                   estimated_fare: 4000
+                  mode: catalog
+                  destination_text: null
+                  agreed_price: null
                   driver: null
                   requested_at: "2026-07-31T14:03:21+00:00"
                   started_at: null
@@ -3338,6 +3367,13 @@ paths:
         Que el conductor ya tenga un viaje propio activo (`accepted` o
         `in_progress`) es en cambio **422**, porque el permiso lo tiene y lo
         que le falta es terminar o cancelar el que ya tiene.
+
+        Un viaje **solo recogida** (`mode: pickup_only`, historia #95) se
+        acepta registrando el precio que el conductor acordó con el
+        pasajero en `agreed_price` (entero ≥ 1, en la unidad mínima de
+        `currency`); sin él, o con un valor menor que 1, responde **422**.
+        Mismo patrón que `POST /errands/{id}/accept`. Un viaje de catálogo
+        no lo necesita: si se manda, se ignora — su precio ya es el del sitio.
       security:
         - bearerAuth: []
       parameters:
@@ -3348,6 +3384,13 @@ paths:
           schema:
             type: integer
           example: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptRideRequest"
+            example: {}
       responses:
         "200":
           description: El viaje quedó asignado al conductor autenticado.
@@ -3373,6 +3416,9 @@ paths:
                   passenger_count: 1
                   currency: COP
                   estimated_fare: 4000
+                  mode: catalog
+                  destination_text: null
+                  agreed_price: null
                   driver:
                     id: 42
                     name: Carlos Pérez
@@ -3416,7 +3462,9 @@ paths:
               example:
                 message: Este viaje ya no está disponible.
         "422":
-          description: El conductor autenticado ya tiene un viaje propio activo.
+          description: >-
+            El conductor autenticado ya tiene un viaje propio activo, o el
+            viaje es solo recogida y falta `agreed_price` o es menor que 1.
           content:
             application/json:
               schema:
@@ -3491,6 +3539,9 @@ paths:
                   passenger_count: 1
                   currency: COP
                   estimated_fare: 4000
+                  mode: catalog
+                  destination_text: null
+                  agreed_price: null
                   driver:
                     id: 42
                     name: Carlos Pérez
@@ -3609,6 +3660,9 @@ paths:
                   passenger_count: 1
                   currency: COP
                   estimated_fare: 4000
+                  mode: catalog
+                  destination_text: null
+                  agreed_price: null
                   driver:
                     id: 42
                     name: Carlos Pérez
@@ -5230,6 +5284,16 @@ components:
         - destination_site_id
         - passenger_count
       properties:
+        mode:
+          type: string
+          enum:
+            - catalog
+            - pickup_only
+          description: >-
+            Opcional. En la estimación solo vale `catalog`: un viaje
+            `pickup_only` (historia #95) no tiene estimado — su precio se
+            acuerda con el conductor —, y pedirlo responde 422.
+          example: catalog
         origin:
           $ref: "#/components/schemas/Coordinates"
         destination_site_id:
@@ -5245,11 +5309,70 @@ components:
           minimum: 1
           maximum: 3
           example: 1
+    CreateRideRequest:
+      type: object
+      description: >-
+        Cuerpo de `POST /rides`. Con `mode: catalog` (o sin `mode`) es el
+        mismo `RideRequest` de la estimación: `destination_site_id` y
+        `passenger_count` son obligatorios. Con `mode: pickup_only`
+        (historia #95) el destino es `destination_text` y no se manda
+        `destination_site_id`.
+      required:
+        - origin
+        - passenger_count
+      properties:
+        mode:
+          type: string
+          enum:
+            - catalog
+            - pickup_only
+          default: catalog
+          description: >-
+            `catalog`: destino del catálogo con precio fijo. `pickup_only`:
+            solo punto de recogida, destino en texto libre y precio acordado
+            con el conductor al aceptar.
+          example: catalog
+        origin:
+          $ref: "#/components/schemas/Coordinates"
+        destination_site_id:
+          type: integer
+          description: >-
+            Obligatorio con `mode: catalog`; no se usa con `pickup_only`. Ver
+            `RideRequest`.
+          example: 1
+        destination_text:
+          type: string
+          maxLength: 255
+          description: >-
+            Obligatorio con `mode: pickup_only`: a dónde va el pasajero, con
+            sus palabras (p. ej. "al hospital"). Se guarda sin espacios al
+            inicio ni al final.
+          example: Casa de mi mamá, barrio La Esperanza
+        passenger_count:
+          type: integer
+          minimum: 1
+          maximum: 3
+          example: 1
+    AcceptRideRequest:
+      type: object
+      description: >-
+        Cuerpo de `POST /rides/{id}/accept`. Vacío para un viaje de
+        catálogo; con `agreed_price` para uno solo recogida (historia #95).
+      properties:
+        agreed_price:
+          type: integer
+          minimum: 1
+          description: >-
+            Precio acordado con el pasajero, entero en la unidad mínima de
+            `currency`. Obligatorio solo si el viaje es `pickup_only`.
+          example: 5000
     Ride:
       type: object
       description: >-
         Un viaje solicitado por un pasajero, con el sitio de destino y la
-        tarifa que se fijaron al crearlo (historia #87).
+        tarifa que se fijaron al crearlo (historia #87), o —si es solo
+        recogida (historia #95)— con el destino en texto libre y el precio
+        que acordó el conductor al aceptarlo.
 
         No publica el `passenger_id`: el viaje se solicita siempre desde la
         cuenta que manda el token, igual que el vehículo del conductor. Sí trae
@@ -5258,11 +5381,14 @@ components:
       required:
         - id
         - status
+        - mode
         - origin
         - destination
+        - destination_text
         - passenger_count
         - currency
         - estimated_fare
+        - agreed_price
         - driver
         - requested_at
         - started_at
@@ -5289,11 +5415,25 @@ components:
             - completed
             - cancelled
           example: requested
+        mode:
+          type: string
+          enum:
+            - catalog
+            - pickup_only
+          description: >-
+            `catalog`: destino del catálogo con precio fijo (historia #87).
+            `pickup_only`: destino en texto libre y precio acordado con el
+            conductor (historia #95).
+          example: catalog
         origin:
           $ref: "#/components/schemas/Coordinates"
         destination:
           type: object
-          description: El sitio de destino elegido (historia #87), no coordenadas.
+          nullable: true
+          description: >-
+            El sitio de destino elegido (historia #87), no coordenadas. Es
+            `null` en un viaje `pickup_only`, cuyo destino es
+            `destination_text`.
           required:
             - site_id
             - name
@@ -5304,6 +5444,13 @@ components:
             name:
               type: string
               example: Casco urbano
+        destination_text:
+          type: string
+          nullable: true
+          description: >-
+            A dónde va el pasajero, escrito por él, en un viaje
+            `pickup_only`. `null` en un viaje de catálogo.
+          example: null
         passenger_count:
           type: integer
           example: 1
@@ -5311,9 +5458,21 @@ components:
           type: string
           description: Código ISO 4217 de tres letras de la moneda del monto.
           example: COP
+        agreed_price:
+          type: integer
+          nullable: true
+          description: >-
+            Precio que el conductor registró al aceptar un viaje
+            `pickup_only` (historia #95). `null` mientras nadie lo acepte, y
+            siempre `null` en un viaje de catálogo. Al completarse, es el
+            `final_fare` del viaje.
+          example: null
         estimated_fare:
           type: integer
+          nullable: true
           description: >-
+            `null` en un viaje `pickup_only`: no hay estimado, el precio es
+            `agreed_price`. En un viaje de catálogo:
             Monto del viaje al solicitarlo, entero en la unidad mínima de
             `currency` (ver la nota sobre dinero en config/fares.php): el
             precio fijo del sitio, multiplicado por `passenger_count` si
@@ -5367,7 +5526,8 @@ components:
             Monto final del viaje, entero en la unidad mínima de `currency`,
             fijado al completarlo (historia #24). Desde la historia #87 es
             siempre igual a `estimated_fare` — el precio es fijo por sitio,
-            no depende del trayecto recorrido. Es `null` mientras el viaje no
+            no depende del trayecto recorrido —, o a `agreed_price` en un
+            viaje `pickup_only` (historia #95). Es `null` mientras el viaje no
             esté `completed`. No es en sí mismo el resultado del cobro —eso
             lo publica `payment`—, solo el monto que corresponde cobrar.
           example: null

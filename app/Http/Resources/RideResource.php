@@ -34,17 +34,26 @@ class RideResource extends JsonResource
         return [
             'id' => $this->resource->id,
             'status' => $this->resource->status->value,
+            'mode' => $this->resource->mode->value,
             'origin' => [
                 'latitude' => $this->resource->origin_latitude,
                 'longitude' => $this->resource->origin_longitude,
             ],
-            'destination' => [
-                'site_id' => $this->resource->destinationSite->id,
-                'name' => $this->resource->destinationSite->name,
-            ],
+            // `null` en un viaje solo recogida (historia #95): su destino es
+            // `destination_text`, escrito por el pasajero.
+            'destination' => $this->resource->destinationSite === null
+                ? null
+                : [
+                    'site_id' => $this->resource->destinationSite->id,
+                    'name' => $this->resource->destinationSite->name,
+                ],
+            'destination_text' => $this->resource->destination_text,
             'passenger_count' => $this->resource->passenger_count,
             'currency' => $this->resource->currency,
             'estimated_fare' => $this->resource->estimated_fare,
+            // El precio que registró el conductor al aceptar un viaje solo
+            // recogida; `null` antes de eso y siempre en uno de catálogo.
+            'agreed_price' => $this->resource->agreed_price,
             // Presente siempre, aunque valga `null`, por el mismo motivo que
             // `started_at`: el contrato lo declara obligatorio y nullable para
             // que el cliente no distinga "todavía no hay conductor" de "esta

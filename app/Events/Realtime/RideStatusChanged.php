@@ -36,6 +36,7 @@ final class RideStatusChanged implements ShouldBroadcast
         public readonly int $rideId,
         public readonly RideStatus $status,
         public readonly ?int $driverId,
+        public readonly ?int $agreedPrice = null,
     ) {}
 
     public function broadcastOn(): PrivateChannel
@@ -61,6 +62,10 @@ final class RideStatusChanged implements ShouldBroadcast
         return [
             'status' => $this->status->value,
             'driver_id' => $this->driverId,
+            // Historia #95: el pasajero de un viaje solo recogida se entera
+            // del precio acordado en el mismo aviso de que lo aceptaron.
+            // `null` en un viaje de catálogo.
+            'agreed_price' => $this->agreedPrice,
         ];
     }
 }

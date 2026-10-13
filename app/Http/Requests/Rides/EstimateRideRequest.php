@@ -37,6 +37,9 @@ class EstimateRideRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Un viaje solo recogida (historia #95) no tiene estimado: el
+            // precio se acuerda con el conductor al aceptar.
+            'mode' => ['sometimes', 'string', 'in:catalog'],
             'origin' => ['required', 'array'],
             'origin.latitude' => ['required', 'numeric', 'between:-90,90'],
             'origin.longitude' => ['required', 'numeric', 'between:-180,180'],
@@ -66,5 +69,15 @@ class EstimateRideRequest extends FormRequest
     {
         /** @var Site */
         return Site::query()->findOrFail($this->destinationSiteId());
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'mode.in' => 'Un viaje solo recogida no tiene estimado: el precio lo acuerdas con el conductor.',
+        ];
     }
 }

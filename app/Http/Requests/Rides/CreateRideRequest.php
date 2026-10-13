@@ -6,6 +6,7 @@ namespace App\Http\Requests\Rides;
 
 use App\DTOs\Coordinates;
 use App\DTOs\RideRequest;
+use App\Enums\RideMode;
 use App\Enums\RideStatus;
 use App\Http\Requests\Concerns\ValidatesRideDestination;
 use App\Models\Ride;
@@ -13,6 +14,7 @@ use App\Models\Site;
 use App\Models\User;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Entrada de POST /api/v1/rides — ver openapi.yaml.
@@ -46,12 +48,37 @@ class CreateRideRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $rules = [
+            'mode' => ['sometimes', 'string', Rule::enum(RideMode::class)],
             'origin' => ['required', 'array'],
             'origin.latitude' => ['required', 'numeric', 'between:-90,90'],
             'origin.longitude' => ['required', 'numeric', 'between:-180,180'],
-            ...$this->destinationRules(),
         ];
+
+        // Viaje solo recogida (historia #95): el destino es texto libre y no
+        // hay sitio. El `TrimStrings` global ya convierte "   " en `null`, así
+        // que `required` rechaza también el texto hecho solo de espacios.
+        if ($this->mode() === RideMode::PickupOnly) {
+            return [
+                ...$rules,
+                'destination_text' => ['required', 'string', 'max:255'],
+                'passenger_count' => ['required', 'integer', 'between:1,3'],
+            ];
+        }
+
+        return [...$rules, ...$this->destinationRules()];
+    }
+
+    /**
+     * La modalidad pedida, o `Catalog` si no viene (los clientes anteriores a
+     * la historia #95 no la mandan) o no es válida — en ese caso la regla
+     * `mode` ya responde 422.
+     */
+    public function mode(): RideMode
+    {
+        $mode = $this->input('mode');
+
+        return (is_string($mode) ? RideMode::tryFrom($mode) : null) ?? RideMode::Catalog;
     }
 
     /**
@@ -59,6 +86,10 @@ class CreateRideRequest extends FormRequest
      */
     public function after(): array
     {
+        if ($this->mode() === RideMode::PickupOnly) {
+            return [$this->rejectSecondActiveRide(...)];
+        }
+
         return [
             $this->rejectSiteWithoutMotocarroFare(...),
             $this->rejectSecondActiveRide(...),
@@ -112,11 +143,17 @@ class CreateRideRequest extends FormRequest
      */
     public function toRideRequest(): RideRequest
     {
+        $origin = new Coordinates(
+            latitude: $this->float('origin.latitude'),
+            longitude: $this->float('origin.longitude'),
+        );
+
+        if ($this->mode() === RideMode::PickupOnly) {
+            return RideRequest::pickupOnly($origin, $this->string('destination_text')->toString(), $this->passengerCount());
+        }
+
         return new RideRequest(
-            origin: new Coordinates(
-                latitude: $this->float('origin.latitude'),
-                longitude: $this->float('origin.longitude'),
-            ),
+            origin: $origin,
             destinationSiteId: $this->destinationSiteId(),
             passengerCount: $this->passengerCount(),
         );

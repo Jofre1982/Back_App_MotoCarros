@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\RideMode;
 use App\Enums\RideStatus;
 use App\Models\Ride;
 use App\Models\Site;
@@ -41,5 +42,24 @@ class RideFactory extends Factory
             // salga del motor de tarifa (ver config/fares.php).
             'estimated_fare' => fake()->numberBetween(60, 600) * 50,
         ];
+    }
+
+    /**
+     * Viaje "solo recogida" (historia #95): sin sitio ni estimado, con el
+     * destino escrito por el pasajero.
+     */
+    public function pickupOnly(): static
+    {
+        return $this->state(fn (): array => [
+            'mode' => RideMode::PickupOnly,
+            'destination_site_id' => null,
+            'destination_text' => fake()->randomElement([
+                'Al hospital',
+                'Casa de mi mamá, barrio La Esperanza',
+                'El puerto, frente a la lancha',
+            ]),
+            'estimated_fare' => null,
+            'agreed_price' => null,
+        ]);
     }
 }

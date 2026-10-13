@@ -56,11 +56,16 @@ class RequestRideTest extends TestCase
             'data' => [
                 'id' => $viaje->id,
                 'status' => 'requested',
+                // Historia #95: sin `mode` el viaje es de catálogo, sin
+                // destino escrito ni precio acordado.
+                'mode' => 'catalog',
                 'origin' => ['latitude' => 4.710989, 'longitude' => -74.072092],
                 'destination' => ['site_id' => $this->sitio->id, 'name' => $this->sitio->name],
+                'destination_text' => null,
                 'passenger_count' => 1,
                 'currency' => 'COP',
                 'estimated_fare' => 8850,
+                'agreed_price' => null,
                 // Todavía no lo aceptó nadie, y el campo viaja igual por el
                 // mismo motivo que `started_at`: el schema `Ride` lo declara
                 // obligatorio y nullable (historia #21).

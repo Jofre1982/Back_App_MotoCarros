@@ -42,7 +42,7 @@ final readonly class StartRideAction
         // aceptaron: que arrancó es justo lo que cambia su pantalla, y desde
         // acá empieza además a llegarle la ubicación del conductor
         // (historias #20 y #21).
-        RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id);
+        RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id, $ride->agreed_price);
 
         return $ride;
     }
