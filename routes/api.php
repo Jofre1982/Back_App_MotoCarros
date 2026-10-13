@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Admin\DeleteSiteController;
 use App\Http\Controllers\Api\V1\Admin\ListCargoJobTypesController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Admin\ListSitesController;
+use App\Http\Controllers\Api\V1\Admin\ListUsersController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
 use App\Http\Controllers\Api\V1\Admin\SetSiteFareController;
 use App\Http\Controllers\Api\V1\Admin\ShowDriverDocumentFileController;
@@ -214,6 +215,12 @@ Route::prefix('v1')->group(function () {
     // `admin`) vive en `DriverDocumentPolicy::reviewAny()`/`review()`, no acá
     // — mismo criterio que el resto de la API.
     Route::prefix('admin')->name('admin.')->group(function () {
+        // Cuentas registradas, para el panel (historia #97). Autorización
+        // (solo `admin`) en UserPolicy, mismo criterio que los documentos.
+        Route::middleware('auth:api')
+            ->get('users', ListUsersController::class)
+            ->name('users.index');
+
         Route::middleware('auth:api')
             ->get('documents', ListDriverDocumentsController::class)
             ->name('documents.index');

@@ -2050,6 +2050,158 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/users:
+    get:
+      tags:
+        - Admin
+      operationId: listUsers
+      summary: Listar los usuarios registrados
+      description: >-
+        Lista las cuentas registradas para el panel de administrador
+        (historia #97), de la más reciente a la más antigua, paginadas de a
+        50. Se puede filtrar por `role` y buscar por nombre, email o
+        teléfono con `search`. `meta.totals` trae cuántas cuentas hay por
+        rol en total (sin filtros), para el resumen del panel.
+
+        Nunca expone contraseñas ni tokens. Requiere un token vigente y rol
+        `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          required: false
+          description: Solo las cuentas de este rol.
+          schema:
+            type: string
+            enum:
+              - passenger
+              - driver
+              - admin
+          example: driver
+        - name: search
+          in: query
+          required: false
+          description: Coincidencia parcial con el nombre, el email o el teléfono.
+          schema:
+            type: string
+            maxLength: 100
+          example: Carlos
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        "200":
+          description: Una página de usuarios, del más reciente al más antiguo.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - meta
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminUser"
+                  meta:
+                    type: object
+                    required:
+                      - current_page
+                      - last_page
+                      - per_page
+                      - total
+                      - totals
+                    properties:
+                      current_page:
+                        type: integer
+                        example: 1
+                      last_page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 50
+                      total:
+                        type: integer
+                        description: Cuántas cuentas cumplen los filtros pedidos.
+                        example: 1
+                      totals:
+                        type: object
+                        description: Cuántas cuentas hay por rol, sin filtros.
+                        required:
+                          - passenger
+                          - driver
+                          - admin
+                        properties:
+                          passenger:
+                            type: integer
+                            example: 12
+                          driver:
+                            type: integer
+                            example: 4
+                          admin:
+                            type: integer
+                            example: 1
+              example:
+                data:
+                  - id: 42
+                    name: Carlos Pérez
+                    email: carlos@example.com
+                    phone: "+573001234567"
+                    phone_verified: true
+                    role: driver
+                    driver_verification_status: verified
+                    registered_at: "2026-10-13T14:03:21+00:00"
+                meta:
+                  current_page: 1
+                  last_page: 1
+                  per_page: 50
+                  total: 1
+                  totals:
+                    passenger: 12
+                    driver: 4
+                    admin: 1
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: "`role` no es uno de los valores permitidos, o `search` es demasiado largo."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: El rol seleccionado no es válido.
+                errors:
+                  role:
+                    - El rol seleccionado no es válido.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /admin/sites:
     get:
       tags:
@@ -5366,6 +5518,56 @@ components:
             Precio acordado con el pasajero, entero en la unidad mínima de
             `currency`. Obligatorio solo si el viaje es `pickup_only`.
           example: 5000
+    AdminUser:
+      type: object
+      description: >-
+        Una cuenta vista desde el panel de administrador (historia #97). Más
+        amplia que `User`: trae la fecha de registro y, para un conductor, el
+        estado de verificación de sus documentos. Nunca la contraseña.
+      required:
+        - id
+        - name
+        - email
+        - phone
+        - phone_verified
+        - role
+        - driver_verification_status
+        - registered_at
+      properties:
+        id:
+          type: integer
+          example: 42
+        name:
+          type: string
+          example: Carlos Pérez
+        email:
+          type: string
+          format: email
+          example: carlos@example.com
+        phone:
+          type: string
+          example: "+573001234567"
+        phone_verified:
+          type: boolean
+          example: true
+        role:
+          type: string
+          enum:
+            - passenger
+            - driver
+            - admin
+          example: driver
+        driver_verification_status:
+          type: string
+          nullable: true
+          description: >-
+            Estado de verificación del perfil de conductor. `null` si la
+            cuenta no tiene perfil de conductor.
+          example: verified
+        registered_at:
+          type: string
+          format: date-time
+          example: "2026-10-13T14:03:21+00:00"
     Ride:
       type: object
       description: >-

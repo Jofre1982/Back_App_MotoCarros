@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\UserRole;
+use App\Policies\UserPolicy;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -20,6 +22,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property Carbon|null $phone_verified_at
  */
 #[Fillable(['name', 'email', 'phone', 'password', 'role'])]
+#[UsePolicy(UserPolicy::class)]
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<UserFactory> */
@@ -36,6 +39,9 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
+    /**
+     * @return HasOne<DriverProfile, $this>
+     */
     public function driverProfile(): HasOne
     {
         return $this->hasOne(DriverProfile::class);
