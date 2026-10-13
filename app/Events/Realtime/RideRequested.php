@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Events\Realtime;
 
+use App\Enums\RideMode;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -40,12 +41,14 @@ final class RideRequested implements ShouldBroadcast
         public readonly int $rideId,
         public readonly float $originLatitude,
         public readonly float $originLongitude,
-        public readonly int $destinationSiteId,
-        public readonly string $destinationSiteName,
+        public readonly ?int $destinationSiteId,
+        public readonly ?string $destinationSiteName,
         public readonly int $passengerCount,
         public readonly string $currency,
-        public readonly int $estimatedFare,
+        public readonly ?int $estimatedFare,
         public readonly array $nearbyDriverIds,
+        public readonly RideMode $mode = RideMode::Catalog,
+        public readonly ?string $destinationText = null,
     ) {}
 
     /**
@@ -87,10 +90,17 @@ final class RideRequested implements ShouldBroadcast
                 'latitude' => $this->originLatitude,
                 'longitude' => $this->originLongitude,
             ],
-            'destination' => [
-                'site_id' => $this->destinationSiteId,
-                'name' => $this->destinationSiteName,
-            ],
+            // Historia #95: en un viaje solo recogida no hay sitio —el
+            // destino es `destination_text`— ni estimado: el precio se
+            // acuerda con el pasajero al aceptar.
+            'mode' => $this->mode->value,
+            'destination' => $this->destinationSiteId === null
+                ? null
+                : [
+                    'site_id' => $this->destinationSiteId,
+                    'name' => $this->destinationSiteName,
+                ],
+            'destination_text' => $this->destinationText,
             'passenger_count' => $this->passengerCount,
             'currency' => $this->currency,
             'estimated_fare' => $this->estimatedFare,

@@ -135,4 +135,19 @@ class CompleteRideActionTest extends TestCase
             'started_at' => now(),
         ]);
     }
+
+    public function test_el_cobro_final_de_un_viaje_solo_recogida_es_el_precio_acordado(): void
+    {
+        $viaje = Ride::factory()->pickupOnly()->create([
+            'status' => RideStatus::InProgress,
+            'driver_id' => User::factory()->driver()->create()->id,
+            'agreed_price' => 6000,
+            'started_at' => now(),
+        ]);
+
+        $this->app->make(CompleteRideAction::class)->handle($viaje);
+
+        $this->assertSame(6000, $viaje->refresh()->final_fare);
+        $this->assertSame(6000, $viaje->payment?->amount);
+    }
 }

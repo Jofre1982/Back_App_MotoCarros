@@ -404,8 +404,12 @@ personas concretas.
 | Evento | `broadcastAs()` | Payload | Lo dispara |
 |---|---|---|---|
 | `DriverLocationUpdated` | `location.updated` | `driver_id`, `latitude`, `longitude` | `ShareDriverLocationAction` (#20) |
-| `RideStatusChanged` | `status.changed` | `status`, `driver_id` (nullable) | `AcceptRideAction`, `StartRideAction` (#21) |
+| `RideStatusChanged` | `status.changed` | `status`, `driver_id` (nullable), `agreed_price` (nullable, #95) | `AcceptRideAction`, `StartRideAction` (#21), `CompleteRideAction` |
 
+- `ride.requested` (canal `driver.{id}`) lleva desde #95 `mode`, `destination`
+  (nullable: `null` en un viaje solo recogida), `destination_text` (nullable) y
+  `estimated_fare` (nullable: el precio de un viaje solo recogida se acuerda al
+  aceptar). Un cliente que deserialice el payload tiene que aceptar ambas formas.
 - El nombre del evento es siempre **explícito** con `broadcastAs()`: la app móvil
   escucha `status.changed`, no el FQCN de una clase de PHP, que es un detalle interno
   que se puede renombrar.

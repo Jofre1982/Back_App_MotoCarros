@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\RideMode;
 use App\Enums\RideStatus;
 use App\Policies\RidePolicy;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -32,13 +33,16 @@ use Illuminate\Support\Carbon;
  * el de la columna (ver .claude/STANDARDS.md).
  *
  * @property RideStatus $status
+ * @property RideMode $mode
  * @property int $passenger_id
  * @property int|null $driver_id
  * @property float $origin_latitude
  * @property float $origin_longitude
- * @property int $destination_site_id
+ * @property int|null $destination_site_id
+ * @property string|null $destination_text
  * @property int $passenger_count
- * @property int $estimated_fare
+ * @property int|null $estimated_fare
+ * @property int|null $agreed_price
  * @property Carbon|null $started_at
  * @property Carbon|null $completed_at
  * @property int|null $final_fare
@@ -47,6 +51,7 @@ use Illuminate\Support\Carbon;
     'passenger_id',
     'driver_id',
     'status',
+    'mode',
     'started_at',
     'completed_at',
     'final_fare',
@@ -56,16 +61,29 @@ use Illuminate\Support\Carbon;
     'passenger_count',
     'currency',
     'estimated_fare',
+    'destination_text',
+    'agreed_price',
 ])]
 #[UsePolicy(RidePolicy::class)]
 class Ride extends Model
 {
     use HasFactory;
 
+    /**
+     * Mismo default que la columna: sin esto, un viaje recién creado sin
+     * `mode` lo tendría `null` en memoria hasta volver a leerlo de la base.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'mode' => 'catalog',
+    ];
+
     protected function casts(): array
     {
         return [
             'status' => RideStatus::class,
+            'mode' => RideMode::class,
             'origin_latitude' => 'float',
             'origin_longitude' => 'float',
             'passenger_count' => 'integer',
@@ -73,6 +91,7 @@ class Ride extends Model
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'final_fare' => 'integer',
+            'agreed_price' => 'integer',
         ];
     }
 
@@ -119,5 +138,21 @@ class Ride extends Model
     public function payment(): HasOne
     {
         return $this->hasOne(Payment::class);
+    }
+
+    public function isPickupOnly(): bool
+    {
+        return $this->mode === RideMode::PickupOnly;
+    }
+
+    /**
+     * Lo que corresponde cobrar por el viaje: el precio fijo del sitio en un
+     * viaje de catálogo (historia #87), o el que acordó el conductor en uno
+     * solo recogida (historia #95). `null` si todavía no hay precio (un viaje
+     * solo recogida que nadie aceptó).
+     */
+    public function fareToCharge(): ?int
+    {
+        return $this->isPickupOnly() ? $this->agreed_price : $this->estimated_fare;
     }
 }

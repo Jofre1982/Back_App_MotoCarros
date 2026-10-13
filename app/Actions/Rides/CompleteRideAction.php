@@ -37,14 +37,18 @@ final readonly class CompleteRideAction
     {
         $completedAt = now();
 
+        // El precio fijo del sitio, o el acordado en un viaje solo recogida
+        // (historia #95): ver `Ride::fareToCharge()`.
+        $amount = (int) $ride->fareToCharge();
+
         $fare = new FareBreakdown(
             currency: $ride->currency,
-            base: $ride->estimated_fare,
+            base: $amount,
             distance: 0,
             time: 0,
             waiting: 0,
-            subtotal: $ride->estimated_fare,
-            total: $ride->estimated_fare,
+            subtotal: $amount,
+            total: $amount,
             minimumApplied: false,
         );
 
@@ -64,7 +68,7 @@ final readonly class CompleteRideAction
 
         // Cierra el ciclo de vida para el pasajero que sigue el viaje por el
         // canal privado (historia #21).
-        RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id);
+        RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id, $ride->agreed_price);
 
         return $ride;
     }

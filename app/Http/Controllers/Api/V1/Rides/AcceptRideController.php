@@ -30,7 +30,7 @@ class AcceptRideController extends Controller
         AcceptRideAction $acceptRide,
         Ride $ride,
     ): JsonResponse {
-        $ride = $acceptRide->handle($ride, $request->user());
+        $ride = $acceptRide->handle($ride, $request->user(), $request->agreedPrice());
 
         return (new RideResource($ride))->response();
     }

@@ -91,4 +91,24 @@ class AcceptRideActionTest extends TestCase
 
         Event::assertNotDispatched(RideNoLongerAvailable::class);
     }
+
+    public function test_guarda_el_precio_acordado_en_un_viaje_solo_recogida(): void
+    {
+        $viaje = Ride::factory()->pickupOnly()->create();
+        $conductor = User::factory()->driver()->create();
+
+        $aceptado = $this->app->make(AcceptRideAction::class)->handle($viaje, $conductor, 7500);
+
+        $this->assertSame(7500, $aceptado->agreed_price);
+        $this->assertSame(7500, $viaje->refresh()->agreed_price);
+    }
+
+    public function test_no_guarda_precio_acordado_en_un_viaje_de_catalogo(): void
+    {
+        $viaje = Ride::factory()->create();
+
+        $this->app->make(AcceptRideAction::class)->handle($viaje, User::factory()->driver()->create(), 7500);
+
+        $this->assertNull($viaje->refresh()->agreed_price);
+    }
 }

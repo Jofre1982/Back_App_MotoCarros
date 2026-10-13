@@ -94,7 +94,7 @@ class RideStatusChangedTest extends TestCase
         $this->assertSame('private-ride.7', $evento->broadcastOn()->name);
         $this->assertSame('status.changed', $evento->broadcastAs());
         $this->assertSame(
-            ['status' => 'in_progress', 'driver_id' => 42],
+            ['status' => 'in_progress', 'driver_id' => 42, 'agreed_price' => null],
             $evento->broadcastWith(),
         );
     }

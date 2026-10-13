@@ -44,9 +44,9 @@ final readonly class AcceptRideAction
      *                                        `requested` cuando se resuelve
      *                                        el lock.
      */
-    public function handle(Ride $ride, User $driver): Ride
+    public function handle(Ride $ride, User $driver, ?int $agreedPrice = null): Ride
     {
-        $accepted = DB::transaction(function () use ($ride, $driver): Ride {
+        $accepted = DB::transaction(function () use ($ride, $driver, $agreedPrice): Ride {
             /** @var Ride $locked */
             $locked = Ride::query()->whereKey($ride->getKey())->lockForUpdate()->firstOrFail();
 
@@ -57,6 +57,9 @@ final readonly class AcceptRideAction
             $locked->update([
                 'status' => RideStatus::Accepted,
                 'driver_id' => $driver->getKey(),
+                // Solo un viaje solo recogida guarda precio acordado
+                // (historia #95); el de catálogo ya tiene el del sitio.
+                'agreed_price' => $locked->isPickupOnly() ? $agreedPrice : null,
             ]);
 
             return $locked;
@@ -66,7 +69,7 @@ final readonly class AcceptRideAction
         // sale por la excepción sin pasar por acá, así que el pasajero recibe
         // un único "te aceptaron" por el único conductor que quedó asignado
         // (historia #21).
-        RideStatusChanged::dispatch($accepted->id, $accepted->status, $accepted->driver_id);
+        RideStatusChanged::dispatch($accepted->id, $accepted->status, $accepted->driver_id, $accepted->agreed_price);
 
         $this->notifyOtherDrivers($accepted, $driver);
 

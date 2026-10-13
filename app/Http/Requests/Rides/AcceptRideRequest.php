@@ -37,7 +37,27 @@ class AcceptRideRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [];
+        // Historia #95: un viaje solo recogida se acepta registrando el
+        // precio acordado con el pasajero, con la misma regla que al aceptar
+        // un mandado. Uno de catálogo no lo necesita (y si llega, se ignora).
+        if (! $this->ride()->isPickupOnly()) {
+            return [];
+        }
+
+        return [
+            'agreed_price' => ['required', 'integer', 'min:1'],
+        ];
+    }
+
+    public function ride(): Ride
+    {
+        /** @var Ride */
+        return $this->route('ride');
+    }
+
+    public function agreedPrice(): ?int
+    {
+        return $this->ride()->isPickupOnly() ? $this->integer('agreed_price') : null;
     }
 
     /**

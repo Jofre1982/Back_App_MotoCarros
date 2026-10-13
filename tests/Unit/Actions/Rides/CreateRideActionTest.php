@@ -9,6 +9,7 @@ use App\DTOs\Coordinates;
 use App\DTOs\PushNotification;
 use App\DTOs\RideRequest;
 use App\Enums\PricingUnit;
+use App\Enums\RideMode;
 use App\Enums\RideStatus;
 use App\Enums\VehicleType;
 use App\Events\Realtime\RideRequested;
@@ -246,5 +247,40 @@ class CreateRideActionTest extends TestCase
         ]);
 
         return $site;
+    }
+
+    public function test_crea_un_viaje_solo_recogida_sin_sitio_ni_tarifa(): void
+    {
+        $viaje = $this->action()->handle(
+            User::factory()->create(),
+            RideRequest::pickupOnly(new Coordinates(4.710989, -74.072092), '  al hospital ', 2),
+        );
+
+        $this->assertSame(RideMode::PickupOnly, $viaje->mode);
+        $this->assertSame(RideStatus::Requested, $viaje->status);
+        $this->assertSame('al hospital', $viaje->destination_text);
+        $this->assertNull($viaje->destination_site_id);
+        $this->assertNull($viaje->estimated_fare);
+        $this->assertNull($viaje->agreed_price);
+        $this->assertSame('COP', $viaje->currency);
+        $this->assertSame(2, $viaje->passenger_count);
+    }
+
+    public function test_el_viaje_solo_recogida_avisa_con_el_destino_escrito(): void
+    {
+        Event::fake([RideRequested::class]);
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->available(latitude: 4.710989, longitude: -74.072092)->create(['user_id' => $conductor->id]);
+
+        $this->action()->handle(
+            User::factory()->create(),
+            RideRequest::pickupOnly(new Coordinates(4.710989, -74.072092), 'al puerto', 1),
+        );
+
+        Event::assertDispatched(RideRequested::class, fn (RideRequested $evento): bool => $evento->mode === RideMode::PickupOnly
+            && $evento->destinationText === 'al puerto'
+            && $evento->destinationSiteId === null
+            && $evento->estimatedFare === null
+            && $evento->nearbyDriverIds === [$conductor->id]);
     }
 }
