@@ -108,9 +108,11 @@ class CreateErrandTest extends TestCase
             ->assertJsonValidationErrors('description');
     }
 
-    public function test_la_cuenta_de_conductor_no_puede_pedir_un_mandado(): void
+    public function test_la_cuenta_de_admin_no_puede_pedir_un_mandado(): void
     {
-        $conductor = User::factory()->driver()->create();
+        // Historia #99: un conductor sí puede pedir mandados como pasajero
+        // (ver DualRoleAccountTest); el administrador no.
+        $conductor = User::factory()->admin()->create();
         $sitio = Site::factory()->create();
 
         $this->withToken(JWTAuth::fromUser($conductor))

@@ -42,7 +42,7 @@ class RegisterPassengerRequest extends FormRequest
      */
     public function messages(): array
     {
-        return $this->accountMessages();
+        return [...$this->accountMessages(), ...$this->existingAccountMessages()];
     }
 
     /**

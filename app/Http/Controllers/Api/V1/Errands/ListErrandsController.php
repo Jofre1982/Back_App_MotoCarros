@@ -29,6 +29,8 @@ class ListErrandsController extends Controller
 
         $errands = Errand::query()
             ->where('status', ErrandStatus::Requested)
+            // Historia #99: el conductor no ve los mandados que pidió él.
+            ->where('passenger_id', '!=', $request->user()?->getKey())
             ->with('destinationSite')
             ->orderBy('created_at')
             ->get();

@@ -78,6 +78,7 @@ class RegisterDriverRequest extends FormRequest
     {
         return [
             ...$this->accountMessages(),
+            ...$this->existingAccountMessages(),
             'license_number.regex' => 'El campo license number debe tener entre 5 y 50 caracteres, solo letras, dígitos y guiones; se guarda siempre en mayúsculas.',
         ];
     }

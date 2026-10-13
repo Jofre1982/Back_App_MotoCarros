@@ -25,9 +25,15 @@ class RidePolicyTest extends TestCase
         $this->assertTrue(User::factory()->create()->can('create', Ride::class));
     }
 
-    public function test_el_conductor_no_puede_solicitar_un_viaje(): void
+    public function test_el_conductor_tambien_puede_solicitar_un_viaje(): void
     {
-        $this->assertFalse(User::factory()->driver()->create()->can('create', Ride::class));
+        // Historia #99: la misma cuenta puede pedir servicios como pasajero.
+        $this->assertTrue(User::factory()->driver()->create()->can('create', Ride::class));
+    }
+
+    public function test_el_admin_no_puede_solicitar_un_viaje(): void
+    {
+        $this->assertFalse(User::factory()->admin()->create()->can('create', Ride::class));
     }
 
     public function test_el_pasajero_dueno_puede_cancelar_su_viaje(): void
@@ -45,12 +51,22 @@ class RidePolicyTest extends TestCase
         $this->assertFalse(User::factory()->create()->can('cancel', $viaje));
     }
 
-    public function test_un_conductor_no_puede_cancelar_un_viaje_aunque_la_fila_apunte_a_su_cuenta(): void
+    public function test_un_conductor_cancela_el_viaje_que_pidio_como_pasajero(): void
     {
+        // Historia #99: la cuenta de conductor que pidió el viaje es su
+        // pasajero, así que puede cancelarlo como cualquier pasajero.
         $conductor = User::factory()->driver()->create();
         $viaje = Ride::factory()->for($conductor, 'passenger')->create();
 
-        $this->assertFalse($conductor->can('cancel', $viaje));
+        $this->assertTrue($conductor->can('cancel', $viaje));
+    }
+
+    public function test_un_admin_no_puede_cancelar_un_viaje_aunque_la_fila_apunte_a_su_cuenta(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viaje = Ride::factory()->for($admin, 'passenger')->create();
+
+        $this->assertFalse($admin->can('cancel', $viaje));
     }
 
     public function test_el_conductor_asignado_puede_cancelar_el_viaje_que_acepto(): void

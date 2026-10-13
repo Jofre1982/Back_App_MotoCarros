@@ -37,14 +37,21 @@ class DriverProfilePolicyTest extends TestCase
         $this->assertFalse($conductor->can('updateAvailability', $ajeno));
     }
 
-    public function test_el_pasajero_no_puede_actualizar_disponibilidad_aunque_figure_como_dueno(): void
+    public function test_un_pasajero_que_activo_el_modo_conductor_maneja_su_disponibilidad(): void
     {
-        // La base no impide que una fila apunte a una cuenta de pasajero (un
-        // rol degradado a mano, por ejemplo). Operar disponibilidad sigue
-        // siendo del rol conductor, así que la propiedad sola no alcanza.
+        // Historia #99: una cuenta registrada como pasajero que tiene perfil
+        // de conductor (lo activó con POST /me/driver-profile) es conductor.
         $pasajero = User::factory()->create();
         $perfil = DriverProfile::factory()->create(['user_id' => $pasajero->id]);
 
-        $this->assertFalse($pasajero->can('updateAvailability', $perfil));
+        $this->assertTrue($pasajero->can('updateAvailability', $perfil));
+    }
+
+    public function test_un_admin_no_maneja_la_disponibilidad_de_un_perfil(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $perfil = DriverProfile::factory()->create();
+
+        $this->assertFalse($admin->can('updateAvailability', $perfil));
     }
 }

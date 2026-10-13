@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Auth\RequestPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\RequestPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Documents\ShowDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Documents\UploadDriverDocumentController;
+use App\Http\Controllers\Api\V1\Drivers\BecomeDriverController;
 use App\Http\Controllers\Api\V1\Drivers\ShowDriverEarningsController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverAvailabilityController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverErrandAvailabilityController;
@@ -179,6 +180,12 @@ Route::prefix('v1')->group(function () {
     // no existe forma de tocar la disponibilidad de otro conductor. Que solo
     // los conductores puedan usarlo no lo decide un middleware de rol acá,
     // sino `DriverProfilePolicy` desde `UpdateDriverAvailabilityRequest`.
+    // Activar el modo conductor en la propia cuenta (historia #99). Quién
+    // puede hacerlo lo decide `DriverProfilePolicy::create()`.
+    Route::middleware('auth:api')
+        ->post('me/driver-profile', BecomeDriverController::class)
+        ->name('drivers.become');
+
     Route::middleware('auth:api')
         ->patch('me/availability', UpdateDriverAvailabilityController::class)
         ->name('drivers.availability');

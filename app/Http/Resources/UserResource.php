@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -31,6 +32,8 @@ class UserResource extends JsonResource
             'phone' => $this->resource->phone,
             'phone_verified' => $this->resource->isPhoneVerified(),
             'role' => $this->resource->role->value,
+            // Historia #99: con que roles puede actuar la cuenta.
+            'roles' => array_map(static fn (UserRole $role): string => $role->value, $this->resource->roles()),
         ];
     }
 }

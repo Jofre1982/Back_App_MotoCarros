@@ -44,7 +44,7 @@ class ShowRideHistoryController extends Controller
 
         $usuario = $request->user();
 
-        $relacion = $usuario->isDriver() ? $usuario->driverRides() : $usuario->rides();
+        $relacion = $request->asDriver() ? $usuario->driverRides() : $usuario->rides();
 
         $viajes = $relacion
             ->with('driver', 'destinationSite')
