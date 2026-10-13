@@ -115,6 +115,49 @@
   .doc-preview a { color: var(--primary); font-size: 0.9rem; }
   .empty { color: var(--muted); text-align: center; padding: 24px 0; }
   .loading { color: var(--muted); text-align: center; padding: 24px 0; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .tab[aria-selected="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .totals { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .total {
+    flex: 1 1 120px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .total strong { display: block; font-size: 1.4rem; }
+  .total span { color: var(--muted); font-size: 0.85rem; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .filters select, .filters input {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  .filters input { flex: 1 1 200px; }
+  .table-wrap { overflow-x: auto; }
+  table.users { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  table.users th, table.users td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.users th { color: var(--muted); font-weight: 600; }
+  .badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 0.78rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--muted); font-size: 0.88rem; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -122,7 +165,7 @@
 <div class="wrap">
   <div class="top-bar">
     <div>
-      <h1>MotoYa — Documentos pendientes</h1>
+      <h1>MotoYa — Panel de administrador</h1>
       <p class="subtitle">Panel interno de administración</p>
     </div>
     <button id="logout-button" class="btn-link" hidden>Cerrar sesión</button>
@@ -139,6 +182,44 @@
       </div>
     </form>
     <p id="login-error" class="error" hidden></p>
+  </div>
+
+  <div id="tabs" class="tabs" role="tablist" hidden>
+    <button type="button" class="tab" id="tab-documents" role="tab" aria-selected="true">Documentos pendientes</button>
+    <button type="button" class="tab" id="tab-users" role="tab" aria-selected="false">Usuarios registrados</button>
+  </div>
+
+  <div id="users-card" class="card" hidden>
+    <div class="totals">
+      <div class="total"><strong id="total-passenger">–</strong><span>Pasajeros</span></div>
+      <div class="total"><strong id="total-driver">–</strong><span>Conductores</span></div>
+      <div class="total"><strong id="total-admin">–</strong><span>Administradores</span></div>
+    </div>
+    <div class="filters">
+      <select id="users-role" aria-label="Filtrar por rol">
+        <option value="">Todos los roles</option>
+        <option value="passenger">Pasajeros</option>
+        <option value="driver">Conductores</option>
+        <option value="admin">Administradores</option>
+      </select>
+      <input id="users-search" type="search" placeholder="Buscar por nombre, email o teléfono" aria-label="Buscar">
+    </div>
+    <p id="users-loading" class="loading">Cargando usuarios...</p>
+    <p id="users-empty" class="empty" hidden>No hay usuarios que coincidan.</p>
+    <p id="users-error" class="error" hidden></p>
+    <div class="table-wrap">
+      <table class="users" id="users-table" hidden>
+        <thead>
+          <tr><th>Nombre</th><th>Contacto</th><th>Rol</th><th>Registro</th></tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+      </table>
+    </div>
+    <div class="pager" id="users-pager" hidden>
+      <button type="button" class="btn-link" id="users-prev">« Anterior</button>
+      <span id="users-page-info"></span>
+      <button type="button" class="btn-link" id="users-next">Siguiente »</button>
+    </div>
   </div>
 
   <div id="documents-card" class="card" hidden>
@@ -222,14 +303,170 @@
   function showLogin() {
     loginCard.hidden = false;
     documentsCard.hidden = true;
+    usersCard.hidden = true;
+    tabs.hidden = true;
     logoutButton.hidden = true;
   }
 
   function showDocuments() {
     loginCard.hidden = true;
-    documentsCard.hidden = false;
+    tabs.hidden = false;
     logoutButton.hidden = false;
-    loadPendingDocuments();
+    selectTab("documents");
+  }
+
+  // ---- Pestañas: documentos pendientes / usuarios registrados (#97) ----
+  var tabs = document.getElementById("tabs");
+  var tabDocuments = document.getElementById("tab-documents");
+  var tabUsers = document.getElementById("tab-users");
+  var usersCard = document.getElementById("users-card");
+
+  function selectTab(name) {
+    var isUsers = name === "users";
+    tabDocuments.setAttribute("aria-selected", String(!isUsers));
+    tabUsers.setAttribute("aria-selected", String(isUsers));
+    documentsCard.hidden = isUsers;
+    usersCard.hidden = !isUsers;
+    if (isUsers) {
+      loadUsers(1);
+    } else {
+      loadPendingDocuments();
+    }
+  }
+
+  tabDocuments.addEventListener("click", function () { selectTab("documents"); });
+  tabUsers.addEventListener("click", function () { selectTab("users"); });
+
+  // ---- Usuarios registrados (#97) ----
+  var usersRole = document.getElementById("users-role");
+  var usersSearch = document.getElementById("users-search");
+  var usersLoading = document.getElementById("users-loading");
+  var usersEmpty = document.getElementById("users-empty");
+  var usersError = document.getElementById("users-error");
+  var usersTable = document.getElementById("users-table");
+  var usersBody = document.getElementById("users-body");
+  var usersPager = document.getElementById("users-pager");
+  var usersPrev = document.getElementById("users-prev");
+  var usersNext = document.getElementById("users-next");
+  var usersPageInfo = document.getElementById("users-page-info");
+  var usersPage = 1;
+  var usersLastPage = 1;
+  var searchTimer = null;
+
+  var ROLE_LABELS = { passenger: "Pasajero", driver: "Conductor", admin: "Administrador" };
+  var VERIFICATION_LABELS = { pending: "documentos pendientes", verified: "verificado", rejected: "rechazado" };
+
+  usersRole.addEventListener("change", function () { loadUsers(1); });
+  usersSearch.addEventListener("input", function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () { loadUsers(1); }, 350);
+  });
+  usersPrev.addEventListener("click", function () { if (usersPage > 1) loadUsers(usersPage - 1); });
+  usersNext.addEventListener("click", function () { if (usersPage < usersLastPage) loadUsers(usersPage + 1); });
+
+  function loadUsers(page) {
+    var params = new URLSearchParams();
+    params.set("page", String(page));
+    if (usersRole.value) params.set("role", usersRole.value);
+    var search = usersSearch.value.trim();
+    if (search) params.set("search", search);
+
+    usersLoading.hidden = false;
+    usersEmpty.hidden = true;
+    usersTable.hidden = true;
+    usersPager.hidden = true;
+    hideError(usersError);
+
+    apiFetch("/admin/users?" + params.toString())
+      .then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok) {
+            if (response.status === 403) {
+              throw new Error("Esta cuenta no es de administrador.");
+            }
+            throw new Error(body.message || "No se pudo cargar la lista de usuarios.");
+          }
+          return body;
+        });
+      })
+      .then(function (body) {
+        renderUsers(body);
+      })
+      .catch(function (err) {
+        showError(usersError, err.message);
+      })
+      .finally(function () {
+        usersLoading.hidden = true;
+      });
+  }
+
+  function renderUsers(body) {
+    var meta = body.meta;
+    document.getElementById("total-passenger").textContent = meta.totals.passenger;
+    document.getElementById("total-driver").textContent = meta.totals.driver;
+    document.getElementById("total-admin").textContent = meta.totals.admin;
+
+    usersPage = meta.current_page;
+    usersLastPage = meta.last_page;
+    usersBody.innerHTML = "";
+
+    if (body.data.length === 0) {
+      usersEmpty.hidden = false;
+      return;
+    }
+
+    body.data.forEach(function (user) {
+      usersBody.appendChild(buildUserRow(user));
+    });
+    usersTable.hidden = false;
+
+    usersPager.hidden = meta.last_page <= 1;
+    usersPrev.disabled = meta.current_page <= 1;
+    usersNext.disabled = meta.current_page >= meta.last_page;
+    usersPageInfo.textContent = "Página " + meta.current_page + " de " + meta.last_page + " · " + meta.total + " usuarios";
+  }
+
+  // Todo se arma con textContent (nunca innerHTML con datos del usuario):
+  // el nombre lo escribe cada persona al registrarse.
+  function buildUserRow(user) {
+    var row = document.createElement("tr");
+
+    var nameCell = document.createElement("td");
+    nameCell.textContent = user.name;
+    row.appendChild(nameCell);
+
+    var contactCell = document.createElement("td");
+    var email = document.createElement("div");
+    email.textContent = user.email;
+    var phone = document.createElement("div");
+    phone.textContent = user.phone + (user.phone_verified ? " ✓" : " (sin verificar)");
+    phone.style.color = "var(--muted)";
+    contactCell.appendChild(email);
+    contactCell.appendChild(phone);
+    row.appendChild(contactCell);
+
+    var roleCell = document.createElement("td");
+    var badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = ROLE_LABELS[user.role] || user.role;
+    roleCell.appendChild(badge);
+    if (user.driver_verification_status) {
+      var status = document.createElement("div");
+      status.style.color = "var(--muted)";
+      status.style.fontSize = "0.8rem";
+      status.textContent = VERIFICATION_LABELS[user.driver_verification_status] || user.driver_verification_status;
+      roleCell.appendChild(status);
+    }
+    row.appendChild(roleCell);
+
+    var dateCell = document.createElement("td");
+    dateCell.textContent = new Date(user.registered_at).toLocaleString("es-CO", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    row.appendChild(dateCell);
+
+    return row;
   }
 
   loginForm.addEventListener("submit", function (event) {
