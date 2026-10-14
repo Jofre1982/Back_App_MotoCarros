@@ -87,4 +87,21 @@ trait NormalizesAccountInput
             'phone.regex' => 'El campo phone debe tener entre 7 y 15 dígitos, con un + opcional al inicio; se guarda siempre con el +.',
         ];
     }
+
+    /**
+     * Mensajes del registro cuando el correo o el teléfono ya tienen cuenta
+     * (historia #99): una misma cuenta puede ser pasajero y conductor, así
+     * que se le indica entrar con la que ya tiene en vez de crear otra. No
+     * van en `accountMessages()` porque esa también la usa la edición del
+     * perfil, donde "inicia sesión" no tendría sentido.
+     *
+     * @return array<string, string>
+     */
+    protected function existingAccountMessages(): array
+    {
+        return [
+            'email.unique' => 'Ya hay una cuenta con este correo. Inicia sesión con ella; si quieres ser conductor, activa el modo conductor desde tu perfil.',
+            'phone.unique' => 'Ya hay una cuenta con este teléfono. Inicia sesión con ella; si quieres ser conductor, activa el modo conductor desde tu perfil.',
+        ];
+    }
 }

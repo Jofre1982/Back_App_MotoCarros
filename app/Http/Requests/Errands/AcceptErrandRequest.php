@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Errands;
 
 use App\Models\Errand;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -40,5 +41,26 @@ class AcceptErrandRequest extends FormRequest
     public function agreedPrice(): int
     {
         return $this->integer('agreed_price');
+    }
+
+    /**
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [$this->rejectOwnErrand(...)];
+    }
+
+    /**
+     * Historia #99: una cuenta puede ser pasajero y conductor, pero no puede
+     * tomar el mandado que ella misma pidió.
+     */
+    private function rejectOwnErrand(Validator $validator): void
+    {
+        $errand = $this->route('errand');
+
+        if ($errand instanceof Errand && $errand->passenger_id === $this->user()?->getKey()) {
+            $validator->errors()->add('errand', 'No puedes aceptar un mandado que pediste tú.');
+        }
     }
 }

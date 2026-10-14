@@ -128,6 +128,22 @@ class CreateRideRequest extends FormRequest
                 'ride',
                 'Ya tienes un viaje en curso; termínalo o cancélalo antes de solicitar otro.',
             );
+
+            return;
+        }
+
+        // Historia #99: quien está llevando a alguien como conductor no puede
+        // pedir un viaje como pasajero hasta terminarlo.
+        $hasActiveRideAsDriver = Ride::query()
+            ->where('driver_id', $passenger->getKey())
+            ->whereIn('status', RideStatus::active())
+            ->exists();
+
+        if ($hasActiveRideAsDriver) {
+            $validator->errors()->add(
+                'ride',
+                'Tienes un viaje en curso como conductor; termínalo antes de pedir uno como pasajero.',
+            );
         }
     }
 

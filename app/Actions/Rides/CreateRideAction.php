@@ -105,7 +105,12 @@ final readonly class CreateRideAction
 
     private function notifyNearbyDrivers(Ride $ride, Coordinates $origin): void
     {
-        $driverIds = $this->nearbyDrivers->near($origin);
+        // Historia #99: quien pidió el viaje puede ser también conductor
+        // disponible cerca de su propio origen; el aviso no le llega a él.
+        $driverIds = array_values(array_diff(
+            $this->nearbyDrivers->near($origin),
+            [$ride->passenger_id],
+        ));
 
         if ($driverIds === []) {
             return;

@@ -44,6 +44,8 @@ class ShowProfileTest extends TestCase
                     'phone' => '+573001234567',
                     'phone_verified' => false,
                     'role' => 'passenger',
+                    // Historia #99: con que roles puede actuar la cuenta.
+                    'roles' => ['passenger'],
                 ],
             ]);
     }
@@ -92,6 +94,7 @@ class ShowProfileTest extends TestCase
                     'phone' => '+573009876543',
                     'phone_verified' => false,
                     'role' => 'driver',
+                    'roles' => ['passenger', 'driver'],
                     'driver_profile' => [
                         'license_number' => 'LIC-445566',
                         // Historia #17: `false`/`null` por defecto, mismo

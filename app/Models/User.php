@@ -89,14 +89,41 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(Ride::class, 'driver_id');
     }
 
+    /**
+     * Si la cuenta puede actuar como conductor (historia #99): se registró
+     * como conductor, o es un pasajero que activó el modo conductor y por
+     * eso ya tiene `driver_profile`.
+     */
     public function isDriver(): bool
     {
-        return $this->role === UserRole::Driver;
+        return $this->role === UserRole::Driver || $this->driverProfile !== null;
     }
 
+    /**
+     * Si la cuenta puede pedir servicios como pasajero (historia #99): toda
+     * cuenta que no es de administrador, incluidas las de conductor.
+     */
     public function isPassenger(): bool
     {
-        return $this->role === UserRole::Passenger;
+        return ! $this->isAdmin();
+    }
+
+    /**
+     * Los roles con los que la cuenta puede actuar, en el orden en que la
+     * app los ofrece (historia #99). `role` sigue siendo el rol con el que
+     * se registró; esta lista es la que decide qué modos ofrecer.
+     *
+     * @return list<UserRole>
+     */
+    public function roles(): array
+    {
+        if ($this->isAdmin()) {
+            return [UserRole::Admin];
+        }
+
+        return $this->isDriver()
+            ? [UserRole::Passenger, UserRole::Driver]
+            : [UserRole::Passenger];
     }
 
     public function isAdmin(): bool

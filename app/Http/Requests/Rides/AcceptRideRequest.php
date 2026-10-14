@@ -66,7 +66,9 @@ class AcceptRideRequest extends FormRequest
     public function after(): array
     {
         return [
+            $this->rejectOwnRide(...),
             $this->rejectDriverWithActiveRide(...),
+            $this->rejectDriverWithActivePassengerRide(...),
         ];
     }
 
@@ -104,6 +106,42 @@ class AcceptRideRequest extends FormRequest
             $validator->errors()->add(
                 'ride',
                 'Ya tienes un viaje activo; termínalo o cancélalo antes de aceptar otro.',
+            );
+        }
+    }
+
+    /**
+     * Historia #99: una cuenta puede ser pasajero y conductor, pero no puede
+     * aceptar el viaje que ella misma pidió.
+     */
+    private function rejectOwnRide(Validator $validator): void
+    {
+        if ($this->ride()->passenger_id === $this->user()?->getKey()) {
+            $validator->errors()->add('ride', 'No puedes aceptar un viaje que pediste tú.');
+        }
+    }
+
+    /**
+     * Historia #99: quien tiene un viaje activo como pasajero no puede, a la
+     * vez, llevar a otro como conductor.
+     */
+    private function rejectDriverWithActivePassengerRide(Validator $validator): void
+    {
+        $user = $this->user();
+
+        if (! $user instanceof User) {
+            return;
+        }
+
+        $hasActiveRideAsPassenger = Ride::query()
+            ->where('passenger_id', $user->getKey())
+            ->whereIn('status', RideStatus::active())
+            ->exists();
+
+        if ($hasActiveRideAsPassenger) {
+            $validator->errors()->add(
+                'ride',
+                'Tienes un viaje en curso como pasajero; termínalo o cancélalo antes de aceptar uno como conductor.',
             );
         }
     }

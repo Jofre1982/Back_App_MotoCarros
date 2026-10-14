@@ -42,7 +42,9 @@ class UserRoleSchemaTest extends TestCase
         $user->driverProfile()->create(['license_number' => 'LIC-001']);
 
         $this->assertTrue($user->isDriver());
-        $this->assertFalse($user->isPassenger());
+        // Historia #99: la cuenta de conductor también es pasajero.
+        $this->assertTrue($user->isPassenger());
+        $this->assertSame([UserRole::Passenger, UserRole::Driver], $user->roles());
         $this->assertNotNull($user->driverProfile);
         $this->assertSame('LIC-001', $user->driverProfile->license_number);
     }

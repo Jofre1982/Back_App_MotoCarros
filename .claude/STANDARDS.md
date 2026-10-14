@@ -641,6 +641,26 @@ tabla `driver_profiles` para datos específicos del conductor.
 - Si en el futuro un mismo `User` necesita ambos roles, se añade el caso `Both` al enum
   o se migra a una tabla pivot `user_roles` — la capa de modelos actual no lo bloquea.
 
+**Actualización (#99): una misma cuenta puede ser pasajero y conductor.** Lo pidió el
+dueño del producto. Sin tabla pivote ni caso `Both`: los roles pasan a ser
+**capacidades** derivadas de los datos que ya existen.
+
+- `isPassenger()`: toda cuenta que no es `admin` (también la registrada como conductor).
+- `isDriver()`: `role === driver` **o** tiene `driver_profile`. Un pasajero se vuelve
+  conductor con `POST /me/driver-profile` (`BecomeDriverAction`), que le crea el perfil
+  con la verificación en `pending`; `users.role` no cambia.
+- `User::roles()` es la lista que viaja en `User.roles` (login, registro, `GET /me`).
+  `role` se mantiene como "rol con el que se registró la cuenta", para no romper
+  clientes, y es el default de `GET /me/rides` cuando no viene `as`.
+- El **modo** en que la persona usa la app (pasajero o conductor) lo decide el cliente;
+  el servidor no guarda un "modo activo". Donde el comportamiento depende del modo, el
+  cliente lo dice explícitamente (`GET /me/rides?as=passenger|driver`).
+- Salvaguardas: nadie acepta su propio viaje ni su propio mandado; no se pide un viaje
+  con uno activo como conductor ni se acepta uno con uno activo como pasajero; el aviso
+  `ride.requested` excluye a quien pidió el viaje; la lista de mandados de un conductor
+  excluye los que pidió él.
+- No volver al modelo de rol único sin que el dueño del producto lo pida.
+
 **Justificación**: una sola tabla de autenticación simplifica el JWT (el `sub` siempre
 es el id de `User`), y `driver_profiles` mantiene la extensibilidad sin pre-optimizar
 una estructura multi-rol que todavía no existe en el producto.

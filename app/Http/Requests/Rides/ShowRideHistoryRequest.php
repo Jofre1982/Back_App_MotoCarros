@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Rides;
 
+use App\Enums\UserRole;
 use App\Models\Ride;
+use App\Models\User;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -32,8 +35,41 @@ class ShowRideHistoryRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'as' => ['sometimes', 'string', 'in:passenger,driver'],
             'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', 'integer', 'min:1'],
         ];
+    }
+
+    /**
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [$this->rejectDriverHistoryForNonDriver(...)];
+    }
+
+    private function rejectDriverHistoryForNonDriver(Validator $validator): void
+    {
+        $user = $this->user();
+
+        if ($this->input('as') === 'driver' && $user instanceof User && ! $user->isDriver()) {
+            $validator->errors()->add('as', 'Tu cuenta no tiene el modo conductor activo.');
+        }
+    }
+
+    /**
+     * Qué historial ver (historia #99). Sin `as`, el del rol con el que se
+     * registró la cuenta, como antes de la historia.
+     */
+    public function asDriver(): bool
+    {
+        $as = $this->input('as');
+
+        if (is_string($as)) {
+            return $as === 'driver';
+        }
+
+        return $this->user()?->role === UserRole::Driver;
     }
 }

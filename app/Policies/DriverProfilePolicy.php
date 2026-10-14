@@ -33,4 +33,15 @@ class DriverProfilePolicy
     {
         return $user->isDriver() && $profile->user_id === $user->getKey();
     }
+
+    /**
+     * Activar el modo conductor en la propia cuenta (historia #99): cualquier
+     * cuenta que no sea de administrador. Que ya tenga perfil de conductor
+     * no es un 403 sino un 422 (ver `BecomeDriverRequest`): el permiso lo
+     * tiene, solo que ya lo hizo.
+     */
+    public function create(User $user): bool
+    {
+        return ! $user->isAdmin();
+    }
 }

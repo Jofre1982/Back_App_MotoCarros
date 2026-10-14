@@ -68,6 +68,7 @@ paths:
                     phone: "+573001234567"
                     phone_verified: false
                     role: passenger
+                    roles: [passenger]
                   token:
                     access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
                     token_type: bearer
@@ -347,6 +348,7 @@ paths:
                     phone: "+573001234567"
                     phone_verified: true
                     role: passenger
+                    roles: [passenger]
                   token:
                     access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
                     token_type: bearer
@@ -437,6 +439,7 @@ paths:
                     phone: "+573009876543"
                     phone_verified: false
                     role: driver
+                    roles: [passenger, driver]
                   token:
                     access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJkcml2ZXIifQ.HCJUJDXBM6BAvUcTGF6ZiHR2Wr3ubuRxKh7uBB4Umt4
                     token_type: bearer
@@ -514,6 +517,7 @@ paths:
                     phone: "+573001234567"
                     phone_verified: false
                     role: passenger
+                    roles: [passenger]
                   token:
                     access_token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsInJvbGUiOiJwYXNzZW5nZXIifQ.4pcPyMD09olPSyXnrXCjTwXyr4BsezdI1AVTmud2fU4
                     token_type: bearer
@@ -656,6 +660,7 @@ paths:
                   phone: "+573001234567"
                   phone_verified: false
                   role: passenger
+                  roles: [passenger]
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -722,6 +727,7 @@ paths:
                   phone: "+573007654321"
                   phone_verified: false
                   role: passenger
+                  roles: [passenger]
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -744,6 +750,97 @@ paths:
                 errors:
                   email:
                     - The email has already been taken.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /me/driver-profile:
+    post:
+      tags:
+        - Drivers
+      operationId: becomeDriver
+      summary: Activar el modo conductor en la propia cuenta
+      description: >-
+        Crea el perfil de conductor de una cuenta que hoy solo es pasajero
+        (historia #99), con el mismo `license_number` que pide
+        `POST /auth/register/driver`. La cuenta queda con
+        `roles: [passenger, driver]` y la verificación del conductor en
+        `pending`: el siguiente paso es registrar el vehículo
+        (`POST /me/vehicle`) y subir los documentos (`POST /me/documents`),
+        igual que un conductor recién registrado.
+
+        Si la cuenta ya es conductor responde 422; un `admin` recibe 403.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BecomeDriverRequest"
+            example:
+              license_number: ABC-12345
+      responses:
+        "201":
+          description: Se activó el modo conductor. Devuelve el perfil completo de la cuenta.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Profile"
+              example:
+                data:
+                  id: 1
+                  name: Ana García
+                  email: ana@example.com
+                  phone: "+573001234567"
+                  phone_verified: true
+                  role: passenger
+                  roles: [passenger, driver]
+                  driver_profile:
+                    license_number: ABC-12345
+                    is_available: false
+                    is_available_for_errands: false
+                    latitude: null
+                    longitude: null
+                    location_updated_at: null
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta es de administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: >-
+            La licencia falta, no tiene el formato válido o ya está
+            registrada, o la cuenta ya es conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Tu cuenta ya tiene el modo conductor activo.
+                errors:
+                  driver_profile:
+                    - Tu cuenta ya tiene el modo conductor activo.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -918,6 +1015,7 @@ paths:
                   phone: "+573001234567"
                   phone_verified: true
                   role: passenger
+                  roles: [passenger]
         "401":
           description: Falta el access token, es ilegible o ya venció.
           content:
@@ -2156,6 +2254,7 @@ paths:
                     phone: "+573001234567"
                     phone_verified: true
                     role: driver
+                    roles: [passenger, driver]
                     driver_verification_status: verified
                     registered_at: "2026-10-13T14:03:21+00:00"
                 meta:
@@ -2756,6 +2855,21 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: as
+          in: query
+          required: false
+          description: >-
+            Qué historial ver en una cuenta con ambos roles (historia #99):
+            `passenger`, los viajes que pidió; `driver`, los que hizo como
+            conductor. Sin `as`, se usa el rol con el que se registró la
+            cuenta (`role`), igual que antes. Pedir `driver` sin ser
+            conductor responde 422.
+          schema:
+            type: string
+            enum:
+              - passenger
+              - driver
+          example: passenger
         - name: page
           in: query
           required: false
@@ -4619,6 +4733,7 @@ components:
         - phone
         - phone_verified
         - role
+        - roles
       properties:
         id:
           type: integer
@@ -4654,6 +4769,23 @@ components:
             - driver
             - admin
           example: passenger
+        roles:
+          type: array
+          description: >-
+            Con qué roles puede actuar la cuenta (historia #99). Toda cuenta
+            que no es `admin` puede pedir servicios como `passenger`; además es
+            `driver` si tiene perfil de conductor — porque se registró como
+            conductor o porque lo activó con `POST /me/driver-profile`. El
+            cliente usa esta lista para ofrecer elegir el modo al entrar;
+            `role` se mantiene como el rol con el que se registró la cuenta.
+          items:
+            type: string
+            enum:
+              - passenger
+              - driver
+              - admin
+          example:
+            - passenger
     AuthenticatedUser:
       type: object
       description: >-
@@ -4771,6 +4903,21 @@ components:
           type: boolean
           description: Si el conductor puede tomar mandados en este momento.
           example: true
+    BecomeDriverRequest:
+      type: object
+      description: >-
+        Cuerpo de `POST /me/driver-profile` (historia #99). Mismas reglas
+        que `license_number` en el registro de conductor.
+      required:
+        - license_number
+      properties:
+        license_number:
+          type: string
+          maxLength: 50
+          description: >-
+            Entre 5 y 50 caracteres: letras, dígitos y guiones. Se guarda en
+            mayúsculas y no puede estar registrada en otra cuenta.
+          example: ABC-12345
     Profile:
       description: >-
         Cuenta autenticada vista por su dueño. Es el schema `User` más lo que
@@ -4785,8 +4932,8 @@ components:
               allOf:
                 - $ref: "#/components/schemas/DriverProfile"
               description: >-
-                Presente solo en cuentas con rol `driver` que ya tienen su
-                perfil creado. En una cuenta de pasajero la clave se omite
+                Presente solo en cuentas que pueden actuar como `driver`
+                (`roles` lo incluye), con su perfil creado. En una cuenta de pasajero la clave se omite
                 entera, en vez de venir como `null`: no es un dato que falte,
                 es un dato que no aplica.
     UpdateProfileRequest:
@@ -5531,6 +5678,7 @@ components:
         - phone
         - phone_verified
         - role
+        - roles
         - driver_verification_status
         - registered_at
       properties:
@@ -5557,6 +5705,18 @@ components:
             - driver
             - admin
           example: driver
+        roles:
+          type: array
+          description: Igual que `User.roles` (historia #99).
+          items:
+            type: string
+            enum:
+              - passenger
+              - driver
+              - admin
+          example:
+            - passenger
+            - driver
         driver_verification_status:
           type: string
           nullable: true

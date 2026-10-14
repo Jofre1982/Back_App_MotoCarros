@@ -105,7 +105,10 @@ class RegisterDriverActionTest extends TestCase
         $resultado = $this->action()->handle($this->registracion());
 
         $this->assertTrue($resultado->user->isDriver());
-        $this->assertFalse($resultado->user->isPassenger());
+        // Historia #99: un conductor también puede pedir servicios como
+        // pasajero con la misma cuenta.
+        $this->assertTrue($resultado->user->isPassenger());
+        $this->assertSame(UserRole::Driver, $resultado->user->role);
     }
 
     private function action(): RegisterDriverAction

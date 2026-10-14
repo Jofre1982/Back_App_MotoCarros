@@ -293,12 +293,12 @@ class RequestRideTest extends TestCase
         ];
     }
 
-    public function test_la_cuenta_de_conductor_no_puede_solicitar_un_viaje(): void
+    public function test_la_cuenta_de_admin_no_puede_solicitar_un_viaje(): void
     {
         // 403 y no 422: no es una entrada que se pueda corregir mandando otros
-        // datos, es una operación que el rol no tiene. Un conductor consigue
-        // viajes aceptando los que ya existen (historia #18).
-        $this->withToken(JWTAuth::fromUser(User::factory()->driver()->create()))
+        // datos, es una operación que el rol no tiene. Desde la historia #99
+        // un conductor sí puede pedir viajes como pasajero; el admin no.
+        $this->withToken(JWTAuth::fromUser(User::factory()->admin()->create()))
             ->postJson(self::URI, $this->datosValidos())
             ->assertForbidden()
             ->assertJsonStructure(['message']);
@@ -306,11 +306,11 @@ class RequestRideTest extends TestCase
         $this->assertDatabaseCount('rides', 0);
     }
 
-    public function test_al_conductor_le_responde_403_aunque_los_datos_sean_invalidos(): void
+    public function test_al_admin_le_responde_403_aunque_los_datos_sean_invalidos(): void
     {
         // La autorización corre antes que la validación: si no, el 422 le
         // diría a una cuenta sin permiso qué forma tiene que tener la entrada.
-        $this->withToken(JWTAuth::fromUser(User::factory()->driver()->create()))
+        $this->withToken(JWTAuth::fromUser(User::factory()->admin()->create()))
             ->postJson(self::URI, [])
             ->assertForbidden();
     }
