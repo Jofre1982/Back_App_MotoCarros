@@ -158,6 +158,20 @@
     border: 1px solid var(--border);
   }
   .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--muted); font-size: 0.88rem; }
+  .site-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+  .site-form .field { flex: 1 1 140px; }
+  .site-form .field.wide { flex: 2 1 220px; }
+  .site-form label { margin-top: 0; }
+  .site-form input, .site-form select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  .hint { color: var(--muted); font-size: 0.85rem; margin: 0 0 12px; }
+  .ok { color: #2b8a3e; font-size: 0.9rem; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -187,6 +201,7 @@
   <div id="tabs" class="tabs" role="tablist" hidden>
     <button type="button" class="tab" id="tab-documents" role="tab" aria-selected="true">Documentos pendientes</button>
     <button type="button" class="tab" id="tab-users" role="tab" aria-selected="false">Usuarios registrados</button>
+    <button type="button" class="tab" id="tab-sites" role="tab" aria-selected="false">Destinos y precios</button>
   </div>
 
   <div id="users-card" class="card" hidden>
@@ -219,6 +234,47 @@
       <button type="button" class="btn-link" id="users-prev">« Anterior</button>
       <span id="users-page-info"></span>
       <button type="button" class="btn-link" id="users-next">Siguiente »</button>
+    </div>
+  </div>
+
+  <div id="sites-card" class="card" hidden>
+    <p class="hint">Estos son los destinos que el pasajero puede elegir en "Pedir motocarro". Solo aparecen en la app los que tienen precio de motocarro.</p>
+    <form id="site-form" class="site-form">
+      <div class="field wide">
+        <label for="site-name">Destino</label>
+        <input id="site-name" type="text" maxlength="100" placeholder="Ej. Aeropuerto, Hospital, Puerto" required>
+      </div>
+      <div class="field">
+        <label for="site-day-price">Precio de día (COP)</label>
+        <input id="site-day-price" type="number" min="0" step="500" inputmode="numeric" required>
+      </div>
+      <div class="field">
+        <label for="site-night-price">Precio de noche (opcional)</label>
+        <input id="site-night-price" type="number" min="0" step="500" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label for="site-unit">Se cobra</label>
+        <select id="site-unit">
+          <option value="per_trip">Por viaje</option>
+          <option value="per_person">Por persona</option>
+        </select>
+      </div>
+      <div class="field">
+        <button type="submit" id="site-save" class="btn-primary">Guardar</button>
+      </div>
+    </form>
+    <p id="site-form-error" class="error" hidden></p>
+    <p id="site-form-ok" class="ok" hidden></p>
+    <p id="sites-loading" class="loading">Cargando destinos...</p>
+    <p id="sites-empty" class="empty" hidden>Todavía no hay destinos. Agrega el primero arriba.</p>
+    <p id="sites-error" class="error" hidden></p>
+    <div class="table-wrap">
+      <table class="users" id="sites-table" hidden>
+        <thead>
+          <tr><th>Destino</th><th>Motocarro</th><th></th></tr>
+        </thead>
+        <tbody id="sites-body"></tbody>
+      </table>
     </div>
   </div>
 
@@ -304,6 +360,7 @@
     loginCard.hidden = false;
     documentsCard.hidden = true;
     usersCard.hidden = true;
+    sitesCard.hidden = true;
     tabs.hidden = true;
     logoutButton.hidden = true;
   }
@@ -319,16 +376,21 @@
   var tabs = document.getElementById("tabs");
   var tabDocuments = document.getElementById("tab-documents");
   var tabUsers = document.getElementById("tab-users");
+  var tabSites = document.getElementById("tab-sites");
   var usersCard = document.getElementById("users-card");
+  var sitesCard = document.getElementById("sites-card");
 
   function selectTab(name) {
-    var isUsers = name === "users";
-    tabDocuments.setAttribute("aria-selected", String(!isUsers));
-    tabUsers.setAttribute("aria-selected", String(isUsers));
-    documentsCard.hidden = isUsers;
-    usersCard.hidden = !isUsers;
-    if (isUsers) {
+    tabDocuments.setAttribute("aria-selected", String(name === "documents"));
+    tabUsers.setAttribute("aria-selected", String(name === "users"));
+    tabSites.setAttribute("aria-selected", String(name === "sites"));
+    documentsCard.hidden = name !== "documents";
+    usersCard.hidden = name !== "users";
+    sitesCard.hidden = name !== "sites";
+    if (name === "users") {
       loadUsers(1);
+    } else if (name === "sites") {
+      loadSites();
     } else {
       loadPendingDocuments();
     }
@@ -336,6 +398,179 @@
 
   tabDocuments.addEventListener("click", function () { selectTab("documents"); });
   tabUsers.addEventListener("click", function () { selectTab("users"); });
+  tabSites.addEventListener("click", function () { selectTab("sites"); });
+
+  // ---- Destinos y precios: catálogo de sitios (historia #85) ----
+  // Usa los endpoints que ya existían (GET/POST /admin/sites,
+  // PUT /admin/sites/{id}/fare, DELETE /admin/sites/{id}); antes no había
+  // forma de cargarlos sin Postman, y la app mostraba la lista de destinos
+  // vacía.
+  var siteForm = document.getElementById("site-form");
+  var siteName = document.getElementById("site-name");
+  var siteDayPrice = document.getElementById("site-day-price");
+  var siteNightPrice = document.getElementById("site-night-price");
+  var siteUnit = document.getElementById("site-unit");
+  var siteSave = document.getElementById("site-save");
+  var siteFormError = document.getElementById("site-form-error");
+  var siteFormOk = document.getElementById("site-form-ok");
+  var sitesLoading = document.getElementById("sites-loading");
+  var sitesEmpty = document.getElementById("sites-empty");
+  var sitesError = document.getElementById("sites-error");
+  var sitesTable = document.getElementById("sites-table");
+  var sitesBody = document.getElementById("sites-body");
+  var currentSites = [];
+  var UNIT_LABELS = { per_trip: "por viaje", per_person: "por persona" };
+
+  function formatCop(value) {
+    return "$" + Number(value).toLocaleString("es-CO");
+  }
+
+  // Convierte una respuesta en JSON o en un Error con el primer mensaje de
+  // validación (422) para mostrarlo tal cual al admin.
+  function jsonOrThrow(response, fallback) {
+    if (response.status === 204) return Promise.resolve(null);
+    return response.json().then(function (body) {
+      if (!response.ok) {
+        if (response.status === 403) throw new Error("Esta cuenta no es de administrador.");
+        var first = body.errors && Object.keys(body.errors).length
+          ? body.errors[Object.keys(body.errors)[0]][0]
+          : null;
+        throw new Error(first || body.message || fallback);
+      }
+      return body;
+    });
+  }
+
+  function loadSites() {
+    sitesLoading.hidden = false;
+    sitesEmpty.hidden = true;
+    sitesTable.hidden = true;
+    hideError(sitesError);
+
+    apiFetch("/admin/sites")
+      .then(function (response) { return jsonOrThrow(response, "No se pudieron cargar los destinos."); })
+      .then(function (body) { renderSites(body.data); })
+      .catch(function (err) { showError(sitesError, err.message); })
+      .finally(function () { sitesLoading.hidden = true; });
+  }
+
+  function motocarroFare(site) {
+    return (site.fares || []).filter(function (fare) { return fare.vehicle_type === "motocarro"; })[0] || null;
+  }
+
+  function renderSites(sites) {
+    currentSites = sites;
+    sitesBody.innerHTML = "";
+    if (sites.length === 0) {
+      sitesEmpty.hidden = false;
+      return;
+    }
+    sites.forEach(function (site) { sitesBody.appendChild(buildSiteRow(site)); });
+    sitesTable.hidden = false;
+  }
+
+  function buildSiteRow(site) {
+    var row = document.createElement("tr");
+
+    var nameCell = document.createElement("td");
+    nameCell.textContent = site.name;
+    row.appendChild(nameCell);
+
+    var fareCell = document.createElement("td");
+    var fare = motocarroFare(site);
+    if (fare) {
+      var text = formatCop(fare.day_price) + " de día";
+      if (fare.night_price !== null && fare.night_price !== undefined) {
+        text += " · " + formatCop(fare.night_price) + " de noche";
+      }
+      fareCell.textContent = text + " (" + (UNIT_LABELS[fare.pricing_unit] || fare.pricing_unit) + ")";
+    } else {
+      fareCell.textContent = "Sin precio — no aparece en la app";
+      fareCell.style.color = "var(--danger)";
+    }
+    row.appendChild(fareCell);
+
+    var actionsCell = document.createElement("td");
+    actionsCell.style.whiteSpace = "nowrap";
+    actionsCell.style.textAlign = "right";
+    var editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "btn-link";
+    editButton.textContent = "Editar precio";
+    editButton.addEventListener("click", function () {
+      siteName.value = site.name;
+      siteDayPrice.value = fare ? fare.day_price : "";
+      siteNightPrice.value = fare && fare.night_price !== null ? fare.night_price : "";
+      siteUnit.value = fare ? fare.pricing_unit : "per_trip";
+      siteDayPrice.focus();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    var deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "btn-link";
+    deleteButton.style.color = "var(--danger)";
+    deleteButton.style.marginLeft = "14px";
+    deleteButton.textContent = "Borrar";
+    deleteButton.addEventListener("click", function () {
+      if (!window.confirm("¿Borrar el destino \"" + site.name + "\"? Los pasajeros ya no podrán elegirlo.")) return;
+      deleteButton.disabled = true;
+      apiFetch("/admin/sites/" + site.id, { method: "DELETE" })
+        .then(function (response) { return jsonOrThrow(response, "No se pudo borrar el destino."); })
+        .then(function () { loadSites(); })
+        .catch(function (err) {
+          showError(sitesError, err.message);
+          deleteButton.disabled = false;
+        });
+    });
+    actionsCell.appendChild(editButton);
+    actionsCell.appendChild(deleteButton);
+    row.appendChild(actionsCell);
+
+    return row;
+  }
+
+  // Guardar = crear el sitio si no existe (mismo nombre, sin distinguir
+  // mayúsculas) y luego fijarle el precio de motocarro.
+  siteForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    hideError(siteFormError);
+    siteFormOk.hidden = true;
+
+    var name = siteName.value.trim();
+    var existing = currentSites.filter(function (site) {
+      return site.name.toLowerCase() === name.toLowerCase();
+    })[0];
+    var fareBody = {
+      vehicle_type: "motocarro",
+      pricing_unit: siteUnit.value,
+      day_price: parseInt(siteDayPrice.value, 10),
+      night_price: siteNightPrice.value === "" ? null : parseInt(siteNightPrice.value, 10),
+    };
+
+    siteSave.disabled = true;
+    var siteIdPromise = existing
+      ? Promise.resolve(existing.id)
+      : apiFetch("/admin/sites", { method: "POST", body: JSON.stringify({ name: name }) })
+          .then(function (response) { return jsonOrThrow(response, "No se pudo crear el destino."); })
+          .then(function (body) { return body.data.id; });
+
+    siteIdPromise
+      .then(function (siteId) {
+        return apiFetch("/admin/sites/" + siteId + "/fare", { method: "PUT", body: JSON.stringify(fareBody) });
+      })
+      .then(function (response) { return jsonOrThrow(response, "No se pudo guardar el precio."); })
+      .then(function () {
+        siteFormOk.textContent = "Guardado: " + (existing ? existing.name : name) + ". Ya aparece en la app.";
+        siteFormOk.hidden = false;
+        siteForm.reset();
+        loadSites();
+      })
+      .catch(function (err) {
+        showError(siteFormError, err.message);
+        loadSites();
+      })
+      .finally(function () { siteSave.disabled = false; });
+  });
 
   // ---- Usuarios registrados (#97) ----
   var usersRole = document.getElementById("users-role");

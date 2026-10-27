@@ -2616,6 +2616,20 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: No query results for model [App\\Models\\Site] 1
+        "422":
+          description: >-
+            El sitio ya es destino de algún viaje o mandado: borrarlo dejaría
+            ese historial sin destino, así que se rechaza. Se le puede
+            cambiar el precio en vez de borrarlo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este destino ya tiene viajes o mandados y no se puede borrar. Puedes cambiarle el precio.
+                errors:
+                  site:
+                    - Este destino ya tiene viajes o mandados y no se puede borrar. Puedes cambiarle el precio.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
