@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Errand;
+use App\Models\Ride;
 use App\Models\Site;
 use App\Models\SiteFare;
 use App\Models\User;
@@ -29,6 +31,32 @@ class DeleteSiteTest extends TestCase
 
         $this->assertDatabaseMissing('sites', ['id' => $sitio->id]);
         $this->assertDatabaseMissing('site_fares', ['id' => $precio->id]);
+    }
+
+    public function test_no_borra_un_sitio_con_viajes(): void
+    {
+        $sitio = Site::factory()->create();
+        Ride::factory()->create(['destination_site_id' => $sitio->id]);
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->admin()->create()))
+            ->deleteJson("/api/v1/admin/sites/{$sitio->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['site']);
+
+        $this->assertDatabaseHas('sites', ['id' => $sitio->id]);
+    }
+
+    public function test_no_borra_un_sitio_con_mandados(): void
+    {
+        $sitio = Site::factory()->create();
+        Errand::factory()->create(['destination_site_id' => $sitio->id]);
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->admin()->create()))
+            ->deleteJson("/api/v1/admin/sites/{$sitio->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['site']);
+
+        $this->assertDatabaseHas('sites', ['id' => $sitio->id]);
     }
 
     public function test_responde_404_si_el_sitio_no_existe(): void
