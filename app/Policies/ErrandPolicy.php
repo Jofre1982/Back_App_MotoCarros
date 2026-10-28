@@ -77,4 +77,13 @@ class ErrandPolicy
     {
         return ! $user->isAdmin();
     }
+
+    /**
+     * Aceptar o rechazar el precio que propuso el conductor es del pasajero
+     * dueño, y de nadie más.
+     */
+    public function respondToPrice(User $user, Errand $errand): bool
+    {
+        return $errand->passenger_id === $user->getKey();
+    }
 }

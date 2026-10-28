@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\V1\Errands\CompleteErrandController;
 use App\Http\Controllers\Api\V1\Errands\CreateErrandController;
 use App\Http\Controllers\Api\V1\Errands\ListErrandsController;
 use App\Http\Controllers\Api\V1\Errands\ListMyErrandsController;
+use App\Http\Controllers\Api\V1\Errands\RespondToErrandPriceController;
 use App\Http\Controllers\Api\V1\Errands\ShowErrandPhotoController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
@@ -43,6 +44,7 @@ use App\Http\Controllers\Api\V1\Rides\CompleteRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
 use App\Http\Controllers\Api\V1\Rides\ListAvailableRidesController;
+use App\Http\Controllers\Api\V1\Rides\RespondToRidePriceController;
 use App\Http\Controllers\Api\V1\Rides\ShareRideLocationController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideHistoryController;
@@ -388,6 +390,12 @@ Route::prefix('v1')->group(function () {
     // el viaje no esté en `accepted` es 422 y lo resuelve `StartRideRequest`;
     // no hace falta lock porque el único que puede competir por esta fila es
     // el mismo conductor (ver `StartRideAction`).
+    // El pasajero acepta o rechaza el precio que propuso el conductor en un
+    // viaje solo recogida; sin aceptarlo el conductor no puede iniciarlo.
+    Route::middleware('auth:api')
+        ->post('rides/{ride}/price-response', RespondToRidePriceController::class)
+        ->name('rides.price-response');
+
     Route::middleware('auth:api')
         ->post('rides/{ride}/start', StartRideController::class)
         ->name('rides.start');
@@ -448,6 +456,11 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('errands/{errand}/accept', AcceptErrandController::class)
         ->name('errands.accept');
+
+    // El pasajero acepta o rechaza el precio que propuso el conductor.
+    Route::middleware('auth:api')
+        ->post('errands/{errand}/price-response', RespondToErrandPriceController::class)
+        ->name('errands.price-response');
 
     Route::middleware('auth:api')
         ->post('errands/{errand}/complete', CompleteErrandController::class)

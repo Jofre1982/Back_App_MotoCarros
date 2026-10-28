@@ -46,6 +46,7 @@ class StartRideRequest extends FormRequest
     {
         return [
             $this->rejectRideNotAccepted(...),
+            $this->rejectUnconfirmedPrice(...),
         ];
     }
 
@@ -69,6 +70,19 @@ class StartRideRequest extends FormRequest
                 'ride',
                 'Solo se puede iniciar un viaje que esté aceptado.',
             );
+        }
+    }
+
+    /**
+     * En un viaje solo recogida el pasajero tiene que aceptar el precio
+     * antes de que el conductor lo inicie (`POST /rides/{id}/price-response`).
+     */
+    private function rejectUnconfirmedPrice(Validator $validator): void
+    {
+        $ride = $this->ride();
+
+        if ($ride->status === RideStatus::Accepted && ! $ride->isPriceConfirmed()) {
+            $validator->errors()->add('ride', 'El pasajero todavía no aceptó el precio.');
         }
     }
 

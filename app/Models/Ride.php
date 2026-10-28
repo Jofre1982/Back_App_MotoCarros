@@ -43,6 +43,7 @@ use Illuminate\Support\Carbon;
  * @property int $passenger_count
  * @property int|null $estimated_fare
  * @property int|null $agreed_price
+ * @property Carbon|null $price_confirmed_at
  * @property Carbon|null $started_at
  * @property Carbon|null $completed_at
  * @property int|null $final_fare
@@ -63,6 +64,7 @@ use Illuminate\Support\Carbon;
     'estimated_fare',
     'destination_text',
     'agreed_price',
+    'price_confirmed_at',
 ])]
 #[UsePolicy(RidePolicy::class)]
 class Ride extends Model
@@ -92,6 +94,7 @@ class Ride extends Model
             'completed_at' => 'datetime',
             'final_fare' => 'integer',
             'agreed_price' => 'integer',
+            'price_confirmed_at' => 'datetime',
         ];
     }
 
@@ -154,5 +157,14 @@ class Ride extends Model
     public function fareToCharge(): ?int
     {
         return $this->isPickupOnly() ? $this->agreed_price : $this->estimated_fare;
+    }
+
+    /**
+     * Si el pasajero ya aceptó el precio. Un viaje de catálogo tiene precio
+     * fijo: siempre confirmado.
+     */
+    public function isPriceConfirmed(): bool
+    {
+        return ! $this->isPickupOnly() || $this->price_confirmed_at !== null;
     }
 }

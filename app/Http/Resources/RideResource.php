@@ -54,6 +54,7 @@ class RideResource extends JsonResource
             // El precio que registró el conductor al aceptar un viaje solo
             // recogida; `null` antes de eso y siempre en uno de catálogo.
             'agreed_price' => $this->resource->agreed_price,
+            'price_confirmed' => $this->resource->isPriceConfirmed(),
             // Presente siempre, aunque valga `null`, por el mismo motivo que
             // `started_at`: el contrato lo declara obligatorio y nullable para
             // que el cliente no distinga "todavía no hay conductor" de "esta

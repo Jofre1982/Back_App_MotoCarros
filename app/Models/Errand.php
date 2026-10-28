@@ -32,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $destination_site_id
  * @property string|null $destination_text
  * @property int|null $agreed_price
+ * @property Carbon|null $price_confirmed_at
  * @property Carbon|null $completed_at
  */
 #[Fillable([
@@ -46,6 +47,7 @@ use Illuminate\Support\Carbon;
     'destination_site_id',
     'destination_text',
     'agreed_price',
+    'price_confirmed_at',
     'completed_at',
 ])]
 #[UsePolicy(ErrandPolicy::class)]
@@ -61,6 +63,7 @@ class Errand extends Model
             'origin_latitude' => 'float',
             'origin_longitude' => 'float',
             'agreed_price' => 'integer',
+            'price_confirmed_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }
@@ -93,5 +96,10 @@ class Errand extends Model
     public function destinationSite(): BelongsTo
     {
         return $this->belongsTo(Site::class, 'destination_site_id');
+    }
+
+    public function isPriceConfirmed(): bool
+    {
+        return $this->price_confirmed_at !== null;
     }
 }
