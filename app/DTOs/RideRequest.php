@@ -40,14 +40,14 @@ final readonly class RideRequest
     /**
      * Viaje solo recogida (historia #95).
      */
-    public static function pickupOnly(Coordinates $origin, string $destinationText, int $passengerCount): self
+    public static function pickupOnly(Coordinates $origin, ?string $destinationText, int $passengerCount): self
     {
         return new self(
             origin: $origin,
             destinationSiteId: null,
             passengerCount: $passengerCount,
             mode: RideMode::PickupOnly,
-            destinationText: trim($destinationText),
+            destinationText: $destinationText === null ? null : trim($destinationText),
         );
     }
 }

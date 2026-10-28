@@ -3185,8 +3185,8 @@ paths:
 
         **Viaje solo recogida (historia #95).** Con `mode: pickup_only` el
         pasajero marca solo el punto de recogida y escribe a dónde va en
-        `destination_text` (texto libre, obligatorio, máximo 255 caracteres;
-        vacío o solo espacios responde 422). No lleva `destination_site_id`
+        `destination_text` (texto libre **opcional**, máximo 255 caracteres;
+        vacío o solo espacios queda en `null`). No lleva `destination_site_id`
         ni tarifa: el viaje nace con `destination: null`,
         `estimated_fare: null` y `agreed_price: null`, y el precio lo
         registra el conductor al aceptarlo (`POST /rides/{id}/accept` con
@@ -5687,9 +5687,10 @@ components:
           example: 1
         destination_text:
           type: string
+          nullable: true
           maxLength: 255
           description: >-
-            Obligatorio con `mode: pickup_only`: a dónde va el pasajero, con
+            Opcional con `mode: pickup_only`: a dónde va el pasajero, con
             sus palabras (p. ej. "al hospital"). Se guarda sin espacios al
             inicio ni al final.
           example: Casa de mi mamá, barrio La Esperanza

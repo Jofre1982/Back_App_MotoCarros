@@ -55,13 +55,14 @@ class CreateRideRequest extends FormRequest
             'origin.longitude' => ['required', 'numeric', 'between:-180,180'],
         ];
 
-        // Viaje solo recogida (historia #95): el destino es texto libre y no
-        // hay sitio. El `TrimStrings` global ya convierte "   " en `null`, así
-        // que `required` rechaza también el texto hecho solo de espacios.
+        // Viaje solo recogida (historia #95): el destino es texto libre,
+        // opcional (pedido del dueño: pedir un motocarro tiene que ser lo más
+        // simple posible), y no hay sitio. `TrimStrings` ya convierte "   "
+        // en `null`.
         if ($this->mode() === RideMode::PickupOnly) {
             return [
                 ...$rules,
-                'destination_text' => ['required', 'string', 'max:255'],
+                'destination_text' => ['nullable', 'string', 'max:255'],
                 'passenger_count' => ['required', 'integer', 'between:1,3'],
             ];
         }
@@ -165,7 +166,11 @@ class CreateRideRequest extends FormRequest
         );
 
         if ($this->mode() === RideMode::PickupOnly) {
-            return RideRequest::pickupOnly($origin, $this->string('destination_text')->toString(), $this->passengerCount());
+            return RideRequest::pickupOnly(
+                $origin,
+                $this->filled('destination_text') ? $this->string('destination_text')->toString() : null,
+                $this->passengerCount(),
+            );
         }
 
         return new RideRequest(
