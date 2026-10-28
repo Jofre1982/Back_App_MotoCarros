@@ -4205,8 +4205,13 @@ paths:
       summary: Pedir un mandado
       description: >-
         Crea la solicitud de mandado del pasajero autenticado (historia #92):
-        un conductor recoge algo en un punto libre y lo entrega en un sitio
-        del catálogo.
+        un conductor recoge algo en un punto libre y lo lleva a donde diga
+        el pasajero.
+
+        `vehicle_type` decide qué conductores lo ven: `motocarro` (mandado,
+        por defecto) o `motocarga` (transporte de carga). El destino es
+        opcional: `destination_text` (texto libre) o, por compatibilidad,
+        `destination_site_id` del catálogo.
 
         Sin tarifa fija: el precio se negocia con el conductor por fuera del
         sistema y queda en `null` hasta que uno lo acepta con
@@ -4230,7 +4235,6 @@ paths:
               required:
                 - description
                 - origin
-                - destination_site_id
               properties:
                 description:
                   type: string
@@ -4240,21 +4244,32 @@ paths:
                   $ref: "#/components/schemas/Coordinates"
                 destination_site_id:
                   type: integer
-                  description: El sitio de entrega, del catálogo que devuelve `GET /sites`.
+                  nullable: true
+                  description: Opcional. El sitio de entrega, del catálogo que devuelve `GET /sites`.
                   example: 1
+                destination_text:
+                  type: string
+                  nullable: true
+                  maxLength: 255
+                  description: Opcional. A dónde llevarlo, en texto libre.
+                  example: Barrio Las Palmas, casa azul
+                vehicle_type:
+                  type: string
+                  enum: [motocarro, motocarga]
+                  default: motocarro
+                  description: Qué vehículo se necesita. Por defecto `motocarro`.
             example:
               description: Recoger un paquete en la farmacia del centro y llevarlo a mi casa.
               origin:
                 latitude: 4.710989
                 longitude: -74.072092
-              destination_site_id: 1
+              vehicle_type: motocarga
           multipart/form-data:
             schema:
               type: object
               required:
                 - description
                 - origin
-                - destination_site_id
               properties:
                 description:
                   type: string
@@ -4264,7 +4279,16 @@ paths:
                   $ref: "#/components/schemas/Coordinates"
                 destination_site_id:
                   type: integer
+                  nullable: true
                   example: 1
+                destination_text:
+                  type: string
+                  nullable: true
+                  maxLength: 255
+                vehicle_type:
+                  type: string
+                  enum: [motocarro, motocarga]
+                  default: motocarro
                 photo:
                   type: string
                   format: binary
@@ -4291,9 +4315,9 @@ paths:
                   origin:
                     latitude: 4.710989
                     longitude: -74.072092
-                  destination:
-                    site_id: 1
-                    name: Casco urbano
+                  vehicle_type: motocarro
+                  destination: null
+                  destination_text: null
                   driver: null
                   agreed_price: null
                   requested_at: "2026-09-13T14:03:21+00:00"
@@ -4349,6 +4373,10 @@ paths:
         disponible **para mandados** — pool separado del de viajes de
         pasajero (`PATCH /me/availability/errands`): un conductor disponible
         solo para viajes recibe una lista vacía, no un error.
+
+        Solo aparecen los mandados del tipo de vehículo del conductor
+        (`motocarro` o `motocarga`, según su vehículo registrado; sin
+        vehículo cuenta como `motocarro`).
       security:
         - bearerAuth: []
       responses:
@@ -4378,9 +4406,9 @@ paths:
                     origin:
                       latitude: 4.710989
                       longitude: -74.072092
-                    destination:
-                      site_id: 1
-                      name: Casco urbano
+                    vehicle_type: motocarro
+                    destination: null
+                    destination_text: Barrio Las Palmas
                     driver: null
                     agreed_price: null
                     requested_at: "2026-09-13T14:03:21+00:00"
@@ -4426,7 +4454,9 @@ paths:
         Solo un conductor puede aceptar mandados: un pasajero recibe **403**.
         No hace falta estar marcado disponible para mandados para aceptar
         uno puntual: esa disponibilidad solo decide qué se ve en
-        `GET /errands`.
+        `GET /errands`. Sí hace falta el vehículo correcto: un mandado de
+        `motocarga` solo lo acepta un conductor con motocarga, y uno de
+        `motocarro` uno sin motocarga (**422** con `errors.errand`).
       security:
         - bearerAuth: []
       parameters:
@@ -4475,9 +4505,9 @@ paths:
                   origin:
                     latitude: 4.710989
                     longitude: -74.072092
-                  destination:
-                    site_id: 1
-                    name: Casco urbano
+                  vehicle_type: motocarro
+                  destination: null
+                  destination_text: null
                   driver:
                     id: 42
                     name: Carlos Pérez
@@ -4519,7 +4549,9 @@ paths:
               example:
                 message: Este mandado ya no está disponible.
         "422":
-          description: Falta `agreed_price`, o no es un entero positivo.
+          description: >-
+            Falta `agreed_price` o no es un entero positivo; o el mandado es
+            de otro tipo de vehículo que el del conductor (`errors.errand`).
           content:
             application/json:
               schema:
@@ -4585,9 +4617,9 @@ paths:
                   origin:
                     latitude: 4.710989
                     longitude: -74.072092
-                  destination:
-                    site_id: 1
-                    name: Casco urbano
+                  vehicle_type: motocarro
+                  destination: null
+                  destination_text: null
                   driver:
                     id: 42
                     name: Carlos Pérez
@@ -6112,7 +6144,9 @@ components:
         - has_photo
         - photo_url
         - origin
+        - vehicle_type
         - destination
+        - destination_text
         - driver
         - agreed_price
         - requested_at
@@ -6154,11 +6188,23 @@ components:
           example: null
         origin:
           $ref: "#/components/schemas/Coordinates"
+        vehicle_type:
+          type: string
+          enum: [motocarro, motocarga]
+          description: Qué vehículo se necesita; decide qué conductores lo ven.
+          example: motocarro
+        destination_text:
+          type: string
+          nullable: true
+          description: A dónde llevarlo, en texto libre, o `null` si el pasajero no lo dijo.
+          example: null
         destination:
           type: object
+          nullable: true
           description: >-
-            El sitio de entrega (historia #85). A diferencia del origen, no es
-            un punto libre: sale del mismo catálogo que usa `Ride.destination`.
+            El sitio de entrega del catálogo (historia #85), o `null` si el
+            mandado no usa el catálogo (lo normal desde que el destino es
+            opcional).
           required:
             - site_id
             - name

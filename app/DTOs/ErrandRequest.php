@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\DTOs;
 
+use App\Enums\VehicleType;
 use Illuminate\Http\UploadedFile;
 
 /**
@@ -19,7 +20,9 @@ final readonly class ErrandRequest
     public function __construct(
         public string $description,
         public Coordinates $origin,
-        public int $destinationSiteId,
+        public ?int $destinationSiteId,
         public ?UploadedFile $photo = null,
+        public VehicleType $vehicleType = VehicleType::Motocarro,
+        public ?string $destinationText = null,
     ) {}
 }

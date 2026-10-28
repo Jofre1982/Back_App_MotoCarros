@@ -26,8 +26,17 @@ class VehicleFactory extends Factory
             // más laxo a propósito, ver openapi.yaml— pero para los datos de
             // prueba conviene que se parezcan a los reales.
             'plate' => fake()->unique()->bothify('???##?', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
-            'type' => fake()->randomElement(VehicleType::cases()),
+            // Motocarro por defecto (no al azar): desde que los viajes y
+            // mandados se reparten por tipo de vehículo, un tipo al azar
+            // volvería intermitentes los tests de aceptar. `motocarga()`
+            // para el otro caso.
+            'type' => VehicleType::Motocarro,
             'year' => fake()->numberBetween(2010, (int) date('Y')),
         ];
+    }
+
+    public function motocarga(): static
+    {
+        return $this->state(fn (): array => ['type' => VehicleType::Motocarga]);
     }
 }

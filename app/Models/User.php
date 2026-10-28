@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\UserRole;
+use App\Enums\VehicleType;
 use App\Policies\UserPolicy;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -62,6 +63,16 @@ class User extends Authenticatable implements JWTSubject
     public function vehicle(): HasOne
     {
         return $this->hasOne(Vehicle::class);
+    }
+
+    /**
+     * El vehículo con el que trabaja la cuenta, para repartir viajes y
+     * mandados: sin vehículo registrado cuenta como `motocarro`, el caso
+     * normal (la motocarga es la excepción que hay que declarar).
+     */
+    public function vehicleType(): VehicleType
+    {
+        return $this->vehicle->type ?? VehicleType::Motocarro;
     }
 
     /**

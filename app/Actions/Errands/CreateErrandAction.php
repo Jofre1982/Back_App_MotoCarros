@@ -34,7 +34,9 @@ final readonly class CreateErrandAction
             'photo_path' => $photoPath,
             'origin_latitude' => $request->origin->latitude,
             'origin_longitude' => $request->origin->longitude,
+            'vehicle_type' => $request->vehicleType,
             'destination_site_id' => $request->destinationSiteId,
+            'destination_text' => $request->destinationText,
         ]);
     }
 }

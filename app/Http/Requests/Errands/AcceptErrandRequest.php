@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Errands;
 
+use App\Enums\VehicleType;
 use App\Models\Errand;
+use App\Models\User;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -48,7 +50,7 @@ class AcceptErrandRequest extends FormRequest
      */
     public function after(): array
     {
-        return [$this->rejectOwnErrand(...)];
+        return [$this->rejectOwnErrand(...), $this->rejectOtherVehicleType(...)];
     }
 
     /**
@@ -61,6 +63,22 @@ class AcceptErrandRequest extends FormRequest
 
         if ($errand instanceof Errand && $errand->passenger_id === $this->user()?->getKey()) {
             $validator->errors()->add('errand', 'No puedes aceptar un mandado que pediste tú.');
+        }
+    }
+
+    /**
+     * Un mandado de motocarga solo lo toma quien tiene motocarga, y uno de
+     * motocarro quien no la tiene: es lo que el pasajero pidió.
+     */
+    private function rejectOtherVehicleType(Validator $validator): void
+    {
+        $errand = $this->route('errand');
+        $user = $this->user();
+
+        if ($errand instanceof Errand && $user instanceof User && $errand->vehicle_type !== $user->vehicleType()) {
+            $validator->errors()->add('errand', $errand->vehicle_type === VehicleType::Motocarga
+                ? 'Este pedido es para motocarga y tu vehículo es un motocarro.'
+                : 'Este mandado es para motocarro y tu vehículo es una motocarga.');
         }
     }
 }

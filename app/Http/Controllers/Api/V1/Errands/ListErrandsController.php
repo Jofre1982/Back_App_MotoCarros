@@ -31,6 +31,8 @@ class ListErrandsController extends Controller
             ->where('status', ErrandStatus::Requested)
             // Historia #99: el conductor no ve los mandados que pidió él.
             ->where('passenger_id', '!=', $request->user()?->getKey())
+            // Cada conductor ve solo los de su vehículo (motocarro/motocarga).
+            ->where('vehicle_type', $request->driverVehicleType())
             ->with('destinationSite')
             ->orderBy('created_at')
             ->get();

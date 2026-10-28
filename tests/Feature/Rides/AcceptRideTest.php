@@ -8,6 +8,7 @@ use App\Enums\RideStatus;
 use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\RecordsBroadcasts;
@@ -42,6 +43,20 @@ class AcceptRideTest extends TestCase
             'status' => RideStatus::Accepted->value,
             'driver_id' => $conductor->id,
         ]);
+    }
+
+    public function test_un_conductor_de_motocarga_no_acepta_viajes_de_pasajero(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        Vehicle::factory()->motocarga()->create(['user_id' => $conductor->id]);
+        $viaje = Ride::factory()->create(['status' => RideStatus::Requested]);
+
+        $this->withToken(JWTAuth::fromUser($conductor))
+            ->postJson($this->uri($viaje))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['ride']);
+
+        $this->assertNull($viaje->refresh()->driver_id);
     }
 
     public function test_rechaza_un_viaje_ya_aceptado_por_otro_conductor(): void
