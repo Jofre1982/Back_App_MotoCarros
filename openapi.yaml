@@ -3293,6 +3293,57 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/available:
+    get:
+      tags:
+        - Rides
+      operationId: listAvailableRides
+      summary: Ver los viajes que esperan conductor
+      description: >-
+        Lista los viajes en `requested` (sin conductor) para que un
+        conductor los vea y acepte, del más antiguo al más nuevo.
+
+        Complementa el aviso en tiempo real `ride.requested`, que solo le
+        llega a quien estaba conectado y cerca en el instante en que se pidió
+        el viaje: con este endpoint un conductor que entra después igual ve
+        los que siguen esperando. Sin filtro por distancia (el servicio es de
+        un solo municipio).
+
+        No incluye los viajes que pidió la misma cuenta. Un conductor con
+        motocarga recibe la lista vacía: los viajes de pasajero son de
+        motocarro. Una cuenta que no es conductor recibe **403**.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Viajes esperando conductor. Lista vacía si no hay ninguno.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Ride"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta no es conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
   /rides/estimate:
     post:
       tags:
