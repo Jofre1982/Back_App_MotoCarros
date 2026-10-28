@@ -38,6 +38,7 @@ class CompleteErrandRequest extends FormRequest
     {
         return [
             $this->rejectErrandNotAccepted(...),
+            $this->rejectUnconfirmedPrice(...),
         ];
     }
 
@@ -54,6 +55,19 @@ class CompleteErrandRequest extends FormRequest
                 'errand',
                 'Solo se puede completar un mandado que esté aceptado.',
             );
+        }
+    }
+
+    /**
+     * El pasajero tiene que aceptar el precio antes de que el conductor
+     * complete el mandado (`POST /errands/{id}/price-response`).
+     */
+    private function rejectUnconfirmedPrice(Validator $validator): void
+    {
+        $errand = $this->errand();
+
+        if ($errand->status === ErrandStatus::Accepted && ! $errand->isPriceConfirmed()) {
+            $validator->errors()->add('errand', 'El pasajero todavía no aceptó el precio.');
         }
     }
 

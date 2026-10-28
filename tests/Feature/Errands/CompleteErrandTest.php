@@ -33,6 +33,7 @@ class CompleteErrandTest extends TestCase
             'status' => ErrandStatus::Accepted,
             'driver_id' => $conductor->id,
             'agreed_price' => 15000,
+            'price_confirmed_at' => now(),
         ]);
 
         $respuesta = $this->withToken(JWTAuth::fromUser($conductor))

@@ -51,6 +51,7 @@ class ErrandResource extends JsonResource
                 ? null
                 : new RideDriverResource($this->resource->driver),
             'agreed_price' => $this->resource->agreed_price,
+            'price_confirmed' => $this->resource->isPriceConfirmed(),
             'requested_at' => $this->resource->created_at?->toIso8601String(),
             'completed_at' => $this->resource->completed_at?->toIso8601String(),
         ];

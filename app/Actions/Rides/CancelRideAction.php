@@ -70,6 +70,8 @@ final readonly class CancelRideAction
         $ride->update([
             'status' => RideStatus::Requested,
             'driver_id' => null,
+            'agreed_price' => null,
+            'price_confirmed_at' => null,
         ]);
 
         $driver->driverProfile?->increment('cancellation_count');

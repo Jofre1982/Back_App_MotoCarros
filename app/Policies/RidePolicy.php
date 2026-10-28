@@ -192,4 +192,13 @@ class RidePolicy
     {
         return $user->isDriver();
     }
+
+    /**
+     * Aceptar o rechazar el precio que propuso el conductor es del pasajero
+     * dueño, y de nadie más.
+     */
+    public function respondToPrice(User $user, Ride $ride): bool
+    {
+        return $ride->passenger_id === $user->getKey();
+    }
 }

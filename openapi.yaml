@@ -3820,6 +3820,95 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /rides/{id}/price-response:
+    post:
+      tags:
+        - Rides
+      operationId: respondToRidePrice
+      summary: El pasajero acepta o rechaza el precio del conductor
+      description: >-
+        Cuando un conductor acepta el viaje propone un precio
+        (`agreed_price`). El pasajero dueño responde:
+
+        - `accept`: el precio queda confirmado (`price_confirmed: true`) y
+          el conductor ya puede iniciarlo.
+
+        - `reject`: el viaje vuelve a `requested` sin conductor ni precio,
+          para que otro conductor lo tome.
+
+        Solo el pasajero dueño (**403** para cualquier otra cuenta). **422**
+        (`errors.ride`) si el viaje no está esperando respuesta de precio:
+        sin conductor, ya confirmado, en otro estado, o de catálogo (precio fijo).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - decision
+              properties:
+                decision:
+                  type: string
+                  enum: [accept, reject]
+            example:
+              decision: accept
+      responses:
+        "200":
+          description: El viaje actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ride"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta no es el pasajero dueño del viaje.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un viaje con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Not found.
+        "422":
+          description: "`decision` inválida, o el viaje no está esperando respuesta de precio."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este viaje no está esperando que respondas un precio.
+                errors:
+                  ride:
+                    - Este viaje no está esperando que respondas un precio.
   /rides/{id}/start:
     post:
       tags:
@@ -4684,6 +4773,95 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /errands/{id}/price-response:
+    post:
+      tags:
+        - Errands
+      operationId: respondToErrandPrice
+      summary: El pasajero acepta o rechaza el precio del conductor
+      description: >-
+        Cuando un conductor acepta el mandado propone un precio
+        (`agreed_price`). El pasajero dueño responde:
+
+        - `accept`: el precio queda confirmado (`price_confirmed: true`) y
+          el conductor ya puede completarlo.
+
+        - `reject`: el mandado vuelve a `requested` sin conductor ni precio,
+          para que otro conductor lo tome.
+
+        Solo el pasajero dueño (**403** para cualquier otra cuenta). **422**
+        (`errors.errand`) si el mandado no está esperando respuesta de precio:
+        sin conductor, ya confirmado, en otro estado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - decision
+              properties:
+                decision:
+                  type: string
+                  enum: [accept, reject]
+            example:
+              decision: accept
+      responses:
+        "200":
+          description: El mandado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Errand"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta no es el pasajero dueño del mandado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un mandado con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Not found.
+        "422":
+          description: "`decision` inválida, o el mandado no está esperando respuesta de precio."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este mandado no está esperando que respondas un precio.
+                errors:
+                  errand:
+                    - Este mandado no está esperando que respondas un precio.
   /errands/{id}/complete:
     post:
       tags:
@@ -5991,6 +6169,15 @@ components:
             siempre `null` en un viaje de catálogo. Al completarse, es el
             `final_fare` del viaje.
           example: null
+        price_confirmed:
+          type: boolean
+          description: >-
+            Si el pasajero ya aceptó el precio. En un viaje `pickup_only` el
+            conductor propone `agreed_price` al aceptar y el pasajero lo
+            acepta o rechaza (`POST /rides/{id}/price-response`); hasta que lo
+            acepte el viaje no se puede iniciar. Un viaje de catálogo tiene
+            precio fijo y siempre vale `true`.
+          example: true
         estimated_fare:
           type: integer
           nullable: true
@@ -6349,6 +6536,13 @@ components:
             que un conductor acepta el mandado; no hay tarifa fija (historia
             #92).
           example: null
+        price_confirmed:
+          type: boolean
+          description: >-
+            Si el pasajero ya aceptó el `agreed_price` que propuso el
+            conductor (`POST /errands/{id}/price-response`). Hasta entonces
+            el mandado no se puede completar.
+          example: false
         requested_at:
           type: string
           format: date-time
