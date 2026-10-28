@@ -7,8 +7,8 @@ namespace Tests\Unit\Actions\Auth;
 use App\Actions\Auth\RequestPasswordResetAction;
 use App\Models\PasswordResetCode;
 use App\Models\User;
-use App\Services\Sms\SmsGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Fakes\FakeAccountCodeSender;
 use Tests\TestCase;
 
 class RequestPasswordResetActionTest extends TestCase
@@ -19,41 +19,27 @@ class RequestPasswordResetActionTest extends TestCase
     {
         $usuario = User::factory()->create(['phone' => '+573001234567']);
 
-        $gateway = new class implements SmsGateway
-        {
-            public ?string $phone = null;
+        $gateway = new FakeAccountCodeSender;
 
-            public ?string $message = null;
-
-            public function send(string $phone, string $message): void
-            {
-                $this->phone = $phone;
-                $this->message = $message;
-            }
-        };
-
-        (new RequestPasswordResetAction($gateway))->handle('+573001234567');
+        (new RequestPasswordResetAction($gateway))->handle($usuario);
 
         $codigo = PasswordResetCode::query()->where('user_id', $usuario->id)->firstOrFail();
         $this->assertSame(0, $codigo->attempts);
         $this->assertTrue($codigo->expires_at->isFuture());
-        $this->assertSame('+573001234567', $gateway->phone);
-        $this->assertNotNull($gateway->message);
+        $this->assertSame($usuario->email, $gateway->lastEmail());
+        $this->assertCount(1, $gateway->sent);
     }
 
     public function test_pedir_un_codigo_nuevo_reemplaza_el_hash_anterior(): void
     {
         $usuario = User::factory()->create(['phone' => '+573001234567']);
-        $gateway = new class implements SmsGateway
-        {
-            public function send(string $phone, string $message): void {}
-        };
+        $gateway = new FakeAccountCodeSender;
         $action = new RequestPasswordResetAction($gateway);
 
-        $action->handle('+573001234567');
+        $action->handle($usuario);
         $primerHash = PasswordResetCode::query()->where('user_id', $usuario->id)->firstOrFail()->code_hash;
 
-        $action->handle('+573001234567');
+        $action->handle($usuario);
         $segundoHash = PasswordResetCode::query()->where('user_id', $usuario->id)->firstOrFail()->code_hash;
 
         $this->assertSame(1, PasswordResetCode::query()->count());
@@ -67,19 +53,11 @@ class RequestPasswordResetActionTest extends TestCase
      */
     public function test_un_celular_sin_cuenta_no_escribe_nada_ni_envia_nada(): void
     {
-        $gateway = new class implements SmsGateway
-        {
-            public int $envios = 0;
+        $gateway = new FakeAccountCodeSender;
 
-            public function send(string $phone, string $message): void
-            {
-                $this->envios++;
-            }
-        };
-
-        (new RequestPasswordResetAction($gateway))->handle('+573009999999');
+        (new RequestPasswordResetAction($gateway))->handle(null);
 
         $this->assertSame(0, PasswordResetCode::query()->count());
-        $this->assertSame(0, $gateway->envios);
+        $this->assertSame([], $gateway->sent);
     }
 }

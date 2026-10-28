@@ -222,8 +222,10 @@ paths:
       operationId: requestPasswordReset
       summary: Pedir un código para recuperar mi contraseña
       description: >-
-        Genera un código de recuperación de contraseña y lo envía por SMS al
-        celular dado, si tiene cuenta. Pedir uno nuevo reemplaza el anterior:
+        Genera un código de recuperación de contraseña y lo envía **al correo
+        de la cuenta**, si existe. La cuenta se busca por `email` (lo normal
+        desde que no hay proveedor de SMS) o, por compatibilidad, por
+        `phone`; hay que mandar uno de los dos. Pedir uno nuevo reemplaza el anterior:
         nunca hay dos códigos vigentes a la vez para la misma cuenta, mismo
         criterio que `POST /me/phone/verification`.
 
@@ -243,21 +245,24 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - phone
+              description: Uno de los dos, `email` o `phone`.
               properties:
+                email:
+                  type: string
+                  format: email
+                  example: ana@example.com
                 phone:
                   type: string
                   example: "+573001234567"
             example:
-              phone: "+573001234567"
+              email: ana@example.com
       responses:
         "204":
           description: >-
-            Solicitud procesada. No indica si el celular tiene cuenta: si la
-            tiene, el código ya se envió por SMS.
+            Solicitud procesada. No indica si hay una cuenta con ese correo o
+            celular: si la hay, el código ya se envió a su correo.
         "422":
-          description: El celular no tiene forma de celular.
+          description: No llegó ni `email` ni `phone`, o no tienen forma de correo o celular.
           content:
             application/json:
               schema:
@@ -309,11 +314,15 @@ paths:
           application/json:
             schema:
               type: object
+              description: "`email` o `phone` (el mismo que se usó para pedir el código), más `code` y `password`."
               required:
-                - phone
                 - code
                 - password
               properties:
+                email:
+                  type: string
+                  format: email
+                  example: ana@example.com
                 phone:
                   type: string
                   example: "+573001234567"
@@ -324,7 +333,7 @@ paths:
                   type: string
                   example: nuevaClave2026
             example:
-              phone: "+573001234567"
+              email: ana@example.com
               code: "482913"
               password: nuevaClave2026
       responses:
@@ -930,13 +939,11 @@ paths:
       operationId: requestPhoneVerification
       summary: Pedir un código de verificación de mi celular
       description: >-
-        Genera un código de verificación y lo envía por SMS al celular de la
-        cuenta autenticada (historia #69). Pedir uno nuevo reemplaza el
+        Genera un código de verificación y lo envía **al correo** de la
+        cuenta autenticada (historia #69; por correo y no por SMS mientras
+        no haya un proveedor de SMS contratado). Pedir uno nuevo reemplaza el
         anterior: nunca hay dos códigos vigentes a la vez para la misma
         cuenta.
-
-        No hay proveedor de SMS configurado todavía: mientras tanto, el
-        código solo queda registrado en el log del servidor.
 
         Límite de tasa más estricto que el general de la API (3 cada 10
         minutos, por cuenta): cada acierto le va a costar un SMS real apenas

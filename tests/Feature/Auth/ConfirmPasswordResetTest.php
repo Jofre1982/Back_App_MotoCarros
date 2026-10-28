@@ -20,6 +20,43 @@ class ConfirmPasswordResetTest extends TestCase
 
     private const URI = '/api/v1/auth/password/reset';
 
+    public function test_cambia_la_contrasena_identificando_la_cuenta_por_correo(): void
+    {
+        $usuario = User::factory()->create(['email' => 'ana@example.com']);
+        PasswordResetCode::factory()->create([
+            'user_id' => $usuario->id,
+            'code_hash' => Hash::make('123456'),
+        ]);
+
+        $this->postJson(self::URI, [
+            'email' => 'Ana@Example.com',
+            'code' => '123456',
+            'password' => 'nuevaClave2026',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.user.id', $usuario->id);
+
+        $this->assertTrue(Hash::check('nuevaClave2026', $usuario->fresh()->password));
+    }
+
+    public function test_un_codigo_de_otra_cuenta_no_sirve_con_este_correo(): void
+    {
+        $ana = User::factory()->create(['email' => 'ana@example.com']);
+        User::factory()->create(['email' => 'luis@example.com']);
+        PasswordResetCode::factory()->create([
+            'user_id' => $ana->id,
+            'code_hash' => Hash::make('123456'),
+        ]);
+
+        $this->postJson(self::URI, [
+            'email' => 'luis@example.com',
+            'code' => '123456',
+            'password' => 'nuevaClave2026',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('code');
+    }
+
     public function test_cambia_la_contrasena_con_el_codigo_correcto_y_deja_la_cuenta_autenticada(): void
     {
         $usuario = User::factory()->create(['phone' => '+573001234567']);

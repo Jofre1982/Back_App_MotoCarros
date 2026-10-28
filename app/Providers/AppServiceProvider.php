@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\DTOs\FareSchedule;
+use App\Services\Codes\AccountCodeSender;
+use App\Services\Codes\MailAccountCodeSender;
 use App\Services\Maps\GoogleRoutesEstimator;
 use App\Services\Maps\RouteEstimator;
 use App\Services\Payments\NullPaymentGateway;
@@ -37,6 +39,7 @@ class AppServiceProvider extends ServiceProvider
         $this->registerNearbyDriverFinder();
         $this->registerPushNotificationGateway();
         $this->registerSmsGateway();
+        $this->app->singleton(AccountCodeSender::class, MailAccountCodeSender::class);
     }
 
     /**

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auth;
 
 use App\Http\Requests\Concerns\NormalizesAccountInput;
+use App\Http\Requests\Concerns\ResolvesAccountByEmailOrPhone;
 use App\Models\PasswordResetCode;
-use App\Models\User;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Config;
@@ -21,9 +21,7 @@ use Illuminate\Validation\Rules\Password;
  */
 class ConfirmPasswordResetRequest extends FormRequest
 {
-    use NormalizesAccountInput;
-
-    private ?User $account = null;
+    use NormalizesAccountInput, ResolvesAccountByEmailOrPhone;
 
     /**
      * Lleva `phone` a su forma canónica, mismo motivo que
@@ -45,7 +43,7 @@ class ConfirmPasswordResetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'phone' => ['required', 'string', 'max:20', 'regex:/^\+[0-9]{7,15}$/'],
+            ...$this->accountLookupRules(),
             'code' => ['required', 'string'],
             'password' => ['required', 'string', Password::defaults()],
         ];
@@ -111,29 +109,6 @@ class ConfirmPasswordResetRequest extends FormRequest
     private function pendingReset(): ?PasswordResetCode
     {
         return $this->account()?->passwordResetCode;
-    }
-
-    /**
-     * La cuenta dueña del celular de la entrada, o `null` si no existe.
-     *
-     * Memoizada porque la usan la validación y el controller, y las dos
-     * tienen que ver la misma fila. No se llama `user()` a propósito: ese
-     * nombre en un `FormRequest` es el de la cuenta *autenticada* del guard
-     * (ver `Illuminate\Http\Request::user()`), y este endpoint es anónimo —
-     * llamarlo igual invitaría a confundir "quién hizo la request" con
-     * "de qué cuenta es el celular que mandó".
-     */
-    public function account(): ?User
-    {
-        if ($this->account instanceof User) {
-            return $this->account;
-        }
-
-        if (! $this->filled('phone')) {
-            return null;
-        }
-
-        return $this->account = User::firstWhere('phone', $this->string('phone')->toString());
     }
 
     public function newPassword(): string
