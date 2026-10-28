@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\V1\Rides\CancelRideController;
 use App\Http\Controllers\Api\V1\Rides\CompleteRideController;
 use App\Http\Controllers\Api\V1\Rides\CreateRideController;
 use App\Http\Controllers\Api\V1\Rides\EstimateRideController;
+use App\Http\Controllers\Api\V1\Rides\ListAvailableRidesController;
 use App\Http\Controllers\Api\V1\Rides\ShareRideLocationController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideController;
 use App\Http\Controllers\Api\V1\Rides\ShowRideHistoryController;
@@ -347,6 +348,14 @@ Route::prefix('v1')->group(function () {
     // mientras la app está viva, este endpoint lo responde cuando arranca o
     // se reconecta. Por eso lo autoriza la misma regla que el canal —el
     // pasajero dueño y el conductor asignado—, resuelta en `RidePolicy::view()`.
+    // Viajes esperando conductor, para quien se conecta después de que se
+    // pidieron (el aviso `ride.requested` solo le llega a quien estaba en
+    // línea). Va antes de `rides/{ride}` para que "available" no se lea como
+    // un id.
+    Route::middleware('auth:api')
+        ->get('rides/available', ListAvailableRidesController::class)
+        ->name('rides.available');
+
     Route::middleware('auth:api')
         ->get('rides/{ride}', ShowRideController::class)
         ->name('rides.show');
