@@ -23,7 +23,7 @@ class RequestPasswordResetController extends Controller
 {
     public function __invoke(RequestPasswordResetRequest $request, RequestPasswordResetAction $requestReset): Response
     {
-        $requestReset->handle($request->phone());
+        $requestReset->handle($request->account());
 
         return response()->noContent();
     }

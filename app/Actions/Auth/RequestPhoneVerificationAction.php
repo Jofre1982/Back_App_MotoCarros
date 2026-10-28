@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Auth;
 
 use App\Models\User;
-use App\Services\Sms\SmsGateway;
+use App\Services\Codes\AccountCodeSender;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Hash;
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Hash;
  */
 final readonly class RequestPhoneVerificationAction
 {
-    public function __construct(private SmsGateway $sms) {}
+    public function __construct(private AccountCodeSender $sender) {}
 
     public function handle(User $user): void
     {
@@ -40,10 +40,7 @@ final readonly class RequestPhoneVerificationAction
 
         $minutos = Config::integer('phone_verification.expires_in_minutes');
 
-        $this->sms->send(
-            $user->phone,
-            "Tu código de verificación MotoYa es {$code}. Vence en {$minutos} minutos.",
-        );
+        $this->sender->send($user, $code, 'verificar tu cuenta', $minutos);
     }
 
     private function generateCode(): string

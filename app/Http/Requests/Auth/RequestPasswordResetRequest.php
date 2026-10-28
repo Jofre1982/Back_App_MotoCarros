@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auth;
 
 use App\Http\Requests\Concerns\NormalizesAccountInput;
+use App\Http\Requests\Concerns\ResolvesAccountByEmailOrPhone;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -17,7 +18,7 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class RequestPasswordResetRequest extends FormRequest
 {
-    use NormalizesAccountInput;
+    use NormalizesAccountInput, ResolvesAccountByEmailOrPhone;
 
     /**
      * Lleva `phone` a su forma canónica ANTES de validar, mismo motivo que en
@@ -36,9 +37,7 @@ class RequestPasswordResetRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'phone' => ['required', 'string', 'max:20', 'regex:/^\+[0-9]{7,15}$/'],
-        ];
+        return $this->accountLookupRules();
     }
 
     /**
@@ -49,10 +48,5 @@ class RequestPasswordResetRequest extends FormRequest
         return [
             'phone.regex' => 'El campo phone debe tener entre 7 y 15 dígitos, con un + opcional al inicio; se guarda siempre con el +.',
         ];
-    }
-
-    public function phone(): string
-    {
-        return $this->string('phone')->toString();
     }
 }

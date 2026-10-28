@@ -7,8 +7,8 @@ namespace Tests\Unit\Actions\Auth;
 use App\Actions\Auth\RequestPhoneVerificationAction;
 use App\Models\PhoneVerificationCode;
 use App\Models\User;
-use App\Services\Sms\SmsGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Fakes\FakeAccountCodeSender;
 use Tests\TestCase;
 
 class RequestPhoneVerificationActionTest extends TestCase
@@ -19,35 +19,21 @@ class RequestPhoneVerificationActionTest extends TestCase
     {
         $usuario = User::factory()->create(['phone' => '+573001234567']);
 
-        $gateway = new class implements SmsGateway
-        {
-            public ?string $phone = null;
-
-            public ?string $message = null;
-
-            public function send(string $phone, string $message): void
-            {
-                $this->phone = $phone;
-                $this->message = $message;
-            }
-        };
+        $gateway = new FakeAccountCodeSender;
 
         (new RequestPhoneVerificationAction($gateway))->handle($usuario);
 
         $codigo = PhoneVerificationCode::query()->where('user_id', $usuario->id)->firstOrFail();
         $this->assertSame(0, $codigo->attempts);
         $this->assertTrue($codigo->expires_at->isFuture());
-        $this->assertSame('+573001234567', $gateway->phone);
-        $this->assertNotNull($gateway->message);
+        $this->assertSame($usuario->email, $gateway->lastEmail());
+        $this->assertCount(1, $gateway->sent);
     }
 
     public function test_pedir_un_codigo_nuevo_reemplaza_el_hash_anterior(): void
     {
         $usuario = User::factory()->create();
-        $gateway = new class implements SmsGateway
-        {
-            public function send(string $phone, string $message): void {}
-        };
+        $gateway = new FakeAccountCodeSender;
         $action = new RequestPhoneVerificationAction($gateway);
 
         $action->handle($usuario);

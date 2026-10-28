@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Auth;
 
 use App\Models\User;
-use App\Services\Sms\SmsGateway;
+use App\Services\Codes\AccountCodeSender;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Hash;
@@ -29,12 +29,14 @@ use Illuminate\Support\Facades\Hash;
  */
 final readonly class RequestPasswordResetAction
 {
-    public function __construct(private SmsGateway $sms) {}
+    public function __construct(private AccountCodeSender $sender) {}
 
-    public function handle(string $phone): void
+    /**
+     * `$user` llega ya resuelto por `RequestPasswordResetRequest` (por correo
+     * o por celular), o `null` si no hay cuenta con ese dato.
+     */
+    public function handle(?User $user): void
     {
-        $user = User::firstWhere('phone', $phone);
-
         if ($user === null) {
             // Se gasta un hash contra nada, mismo motivo que `LoginAction`
             // con un email sin cuenta: sin esto, un celular sin cuenta
@@ -59,10 +61,7 @@ final readonly class RequestPasswordResetAction
 
         $minutos = Config::integer('password_reset.expires_in_minutes');
 
-        $this->sms->send(
-            $user->phone,
-            "Tu código para recuperar tu contraseña en MotoYa es {$code}. Vence en {$minutos} minutos.",
-        );
+        $this->sender->send($user, $code, 'recuperar tu contraseña', $minutos);
     }
 
     private function generateCode(): string
