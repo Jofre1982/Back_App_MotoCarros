@@ -4495,6 +4495,63 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /me/errands:
+    get:
+      tags:
+        - Errands
+      operationId: listMyErrands
+      summary: Mis mandados y motocargas
+      description: >-
+        Los mandados (y motocargas) de la cuenta autenticada, del más nuevo
+        al más viejo, máximo 20. Con `as=passenger` (por defecto) los que
+        pidió; con `as=driver` los que le asignaron como conductor.
+
+        Es lo que le permite al pasajero ver si ya aceptaron su pedido, con
+        qué conductor y a qué precio, y al conductor recuperar el mandado que
+        tiene en curso si cerró la app.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: as
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [passenger, driver]
+            default: passenger
+      responses:
+        "200":
+          description: Los mandados de la cuenta. Lista vacía si no tiene.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Errand"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "422":
+          description: "`as=driver` desde una cuenta sin modo conductor, o un `as` desconocido."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Tu cuenta no tiene el modo conductor activo.
+                errors:
+                  as:
+                    - Tu cuenta no tiene el modo conductor activo.
   /errands/{id}/accept:
     post:
       tags:
