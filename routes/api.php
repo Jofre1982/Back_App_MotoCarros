@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\V1\Errands\AcceptErrandController;
 use App\Http\Controllers\Api\V1\Errands\CompleteErrandController;
 use App\Http\Controllers\Api\V1\Errands\CreateErrandController;
 use App\Http\Controllers\Api\V1\Errands\ListErrandsController;
+use App\Http\Controllers\Api\V1\Errands\ListMyErrandsController;
 use App\Http\Controllers\Api\V1\Errands\ShowErrandPhotoController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
@@ -437,6 +438,12 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->get('errands', ListErrandsController::class)
         ->name('errands.index');
+
+    // Los mandados propios: el pasajero ve si ya se los aceptaron (y a qué
+    // precio); el conductor, con `as=driver`, recupera el que tiene en curso.
+    Route::middleware('auth:api')
+        ->get('me/errands', ListMyErrandsController::class)
+        ->name('errands.mine');
 
     Route::middleware('auth:api')
         ->post('errands/{errand}/accept', AcceptErrandController::class)

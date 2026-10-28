@@ -68,4 +68,13 @@ class ErrandPolicy
             && $errand->driver_id !== null
             && $errand->driver_id === $user->getKey();
     }
+
+    /**
+     * Ver los mandados propios (`GET /me/errands`): cualquier cuenta, pero
+     * solo los suyos — la consulta se arma desde el token, nunca por un id.
+     */
+    public function viewOwn(User $user): bool
+    {
+        return ! $user->isAdmin();
+    }
 }
