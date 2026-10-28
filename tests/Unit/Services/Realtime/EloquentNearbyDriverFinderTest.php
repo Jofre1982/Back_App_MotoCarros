@@ -6,6 +6,7 @@ namespace Tests\Unit\Services\Realtime;
 
 use App\DTOs\Coordinates;
 use App\Models\DriverProfile;
+use App\Models\Vehicle;
 use App\Services\Realtime\EloquentNearbyDriverFinder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -67,6 +68,19 @@ class EloquentNearbyDriverFinderTest extends TestCase
         $ids = $this->finder(3000)->near(new Coordinates(...self::ORIGEN));
 
         $this->assertEqualsCanonicalizing([$primero->user_id, $segundo->user_id], $ids);
+    }
+
+    public function test_ignora_a_los_conductores_de_motocarga(): void
+    {
+        $motocarro = DriverProfile::factory()->available()->create();
+        Vehicle::factory()->create(['user_id' => $motocarro->user_id]);
+        $motocarga = DriverProfile::factory()->available()->create();
+        Vehicle::factory()->motocarga()->create(['user_id' => $motocarga->user_id]);
+        $sinVehiculo = DriverProfile::factory()->available()->create();
+
+        $ids = $this->finder(3000)->near(new Coordinates(...self::ORIGEN));
+
+        $this->assertEqualsCanonicalizing([$motocarro->user_id, $sinVehiculo->user_id], $ids);
     }
 
     private function finder(int $radiusMeters): EloquentNearbyDriverFinder

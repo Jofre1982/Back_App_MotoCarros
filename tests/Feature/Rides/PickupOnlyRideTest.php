@@ -84,7 +84,7 @@ class PickupOnlyRideTest extends TestCase
      * @param  array<string, mixed>  $cambios
      */
     #[DataProvider('destinosInvalidos')]
-    public function test_rechaza_un_viaje_solo_recogida_sin_destino_escrito(array $cambios): void
+    public function test_rechaza_un_destino_escrito_invalido(array $cambios): void
     {
         $datos = array_merge($this->datosValidos(), $cambios);
         $datos = array_filter($datos, static fn ($valor) => $valor !== '__omitir__');
@@ -103,11 +103,35 @@ class PickupOnlyRideTest extends TestCase
     public static function destinosInvalidos(): array
     {
         return [
+            'demasiado largo' => [['destination_text' => str_repeat('a', 256)]],
+            'no es texto' => [['destination_text' => ['hospital']]],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $cambios
+     */
+    #[DataProvider('sinDestinoEscrito')]
+    public function test_el_destino_escrito_es_opcional(array $cambios): void
+    {
+        $datos = array_merge($this->datosValidos(), $cambios);
+        $datos = array_filter($datos, static fn ($valor) => $valor !== '__omitir__');
+
+        $this->withToken(JWTAuth::fromUser(User::factory()->create()))
+            ->postJson('/api/v1/rides', $datos)
+            ->assertCreated()
+            ->assertJsonPath('data.destination_text', null);
+    }
+
+    /**
+     * @return array<string, array{0: array<string, mixed>}>
+     */
+    public static function sinDestinoEscrito(): array
+    {
+        return [
             'sin el campo' => [['destination_text' => '__omitir__']],
             'vacío' => [['destination_text' => '']],
             'solo espacios' => [['destination_text' => '    ']],
-            'demasiado largo' => [['destination_text' => str_repeat('a', 256)]],
-            'no es texto' => [['destination_text' => ['hospital']]],
         ];
     }
 

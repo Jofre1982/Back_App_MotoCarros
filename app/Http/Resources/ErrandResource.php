@@ -37,10 +37,12 @@ class ErrandResource extends JsonResource
                 'latitude' => $this->resource->origin_latitude,
                 'longitude' => $this->resource->origin_longitude,
             ],
-            'destination' => [
+            'vehicle_type' => $this->resource->vehicle_type->value,
+            'destination' => $this->resource->destinationSite === null ? null : [
                 'site_id' => $this->resource->destinationSite->id,
                 'name' => $this->resource->destinationSite->name,
             ],
+            'destination_text' => $this->resource->destination_text,
             // Presente siempre, aunque valga `null`, mismo criterio que
             // `driver`/`final_fare` en `RideResource`: el contrato lo declara
             // nullable para que el cliente no distinga "todavía sin

@@ -6,9 +6,11 @@ namespace App\Http\Requests\Errands;
 
 use App\DTOs\Coordinates;
 use App\DTOs\ErrandRequest;
+use App\Enums\VehicleType;
 use App\Models\Errand;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\Rules\Enum;
 
 /**
  * Entrada de POST /api/v1/errands — ver openapi.yaml.
@@ -43,7 +45,9 @@ class CreateErrandRequest extends FormRequest
             'origin' => ['required', 'array'],
             'origin.latitude' => ['required', 'numeric', 'between:-90,90'],
             'origin.longitude' => ['required', 'numeric', 'between:-180,180'],
-            'destination_site_id' => ['required', 'integer', 'exists:sites,id'],
+            'destination_site_id' => ['nullable', 'integer', 'exists:sites,id'],
+            'destination_text' => ['nullable', 'string', 'max:255'],
+            'vehicle_type' => ['nullable', new Enum(VehicleType::class)],
             'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:5120'],
         ];
     }
@@ -59,8 +63,12 @@ class CreateErrandRequest extends FormRequest
                 latitude: $this->float('origin.latitude'),
                 longitude: $this->float('origin.longitude'),
             ),
-            destinationSiteId: $this->integer('destination_site_id'),
+            destinationSiteId: $this->filled('destination_site_id') ? $this->integer('destination_site_id') : null,
             photo: $photo,
+            vehicleType: $this->filled('vehicle_type')
+                ? VehicleType::from($this->string('vehicle_type')->toString())
+                : VehicleType::Motocarro,
+            destinationText: $this->filled('destination_text') ? $this->string('destination_text')->trim()->toString() : null,
         );
     }
 }

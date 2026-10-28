@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\ErrandStatus;
+use App\Enums\VehicleType;
 use App\Policies\ErrandPolicy;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
@@ -27,7 +28,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $photo_path
  * @property float $origin_latitude
  * @property float $origin_longitude
- * @property int $destination_site_id
+ * @property VehicleType $vehicle_type
+ * @property int|null $destination_site_id
+ * @property string|null $destination_text
  * @property int|null $agreed_price
  * @property Carbon|null $completed_at
  */
@@ -39,7 +42,9 @@ use Illuminate\Support\Carbon;
     'photo_path',
     'origin_latitude',
     'origin_longitude',
+    'vehicle_type',
     'destination_site_id',
+    'destination_text',
     'agreed_price',
     'completed_at',
 ])]
@@ -52,6 +57,7 @@ class Errand extends Model
     {
         return [
             'status' => ErrandStatus::class,
+            'vehicle_type' => VehicleType::class,
             'origin_latitude' => 'float',
             'origin_longitude' => 'float',
             'agreed_price' => 'integer',

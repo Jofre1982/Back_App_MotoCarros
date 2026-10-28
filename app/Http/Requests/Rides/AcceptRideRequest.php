@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Rides;
 
 use App\Enums\RideStatus;
+use App\Enums\VehicleType;
 use App\Models\Ride;
 use App\Models\User;
 use Illuminate\Contracts\Validation\Validator;
@@ -67,6 +68,7 @@ class AcceptRideRequest extends FormRequest
     {
         return [
             $this->rejectOwnRide(...),
+            $this->rejectMotocargaDriver(...),
             $this->rejectDriverWithActiveRide(...),
             $this->rejectDriverWithActivePassengerRide(...),
         ];
@@ -118,6 +120,20 @@ class AcceptRideRequest extends FormRequest
     {
         if ($this->ride()->passenger_id === $this->user()?->getKey()) {
             $validator->errors()->add('ride', 'No puedes aceptar un viaje que pediste tú.');
+        }
+    }
+
+    /**
+     * Los viajes de pasajero son de motocarro; un conductor con motocarga
+     * atiende las solicitudes de carga (`POST /errands` con
+     * `vehicle_type: motocarga`).
+     */
+    private function rejectMotocargaDriver(Validator $validator): void
+    {
+        $user = $this->user();
+
+        if ($user instanceof User && $user->vehicleType() === VehicleType::Motocarga) {
+            $validator->errors()->add('ride', 'Tu vehículo es una motocarga: los viajes de pasajeros son para motocarros.');
         }
     }
 

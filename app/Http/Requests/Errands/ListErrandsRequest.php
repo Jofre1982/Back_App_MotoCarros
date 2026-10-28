@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Errands;
 
+use App\Enums\VehicleType;
 use App\Models\DriverProfile;
 use App\Models\Errand;
 use App\Models\User;
@@ -39,5 +40,12 @@ class ListErrandsRequest extends FormRequest
         $profile = $user instanceof User ? $user->driverProfile : null;
 
         return $profile instanceof DriverProfile && $profile->is_available_for_errands;
+    }
+
+    public function driverVehicleType(): VehicleType
+    {
+        $user = $this->user();
+
+        return $user instanceof User ? $user->vehicleType() : VehicleType::Motocarro;
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Realtime;
 
 use App\DTOs\Coordinates;
+use App\Enums\VehicleType;
 use App\Models\DriverProfile;
 
 /**
@@ -33,6 +34,9 @@ final readonly class EloquentNearbyDriverFinder implements NearbyDriverFinder
             ->where('is_available', true)
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
+            // Los viajes de pasajero son de motocarro: un conductor que
+            // registró una motocarga no recibe el aviso.
+            ->whereDoesntHave('user.vehicle', fn ($vehicle) => $vehicle->where('type', VehicleType::Motocarga))
             ->get(['user_id', 'latitude', 'longitude'])
             ->filter(fn (DriverProfile $driver): bool => $this->distanceMeters(
                 $point,
