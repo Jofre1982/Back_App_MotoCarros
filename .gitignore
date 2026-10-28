@@ -28,3 +28,8 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Log de errores que el PHP del hosting (cPanel) escribe en la carpeta del
+# repo. Sin ignorarlo, cPanel bloquea "Desplegar commit HEAD" porque ve un
+# archivo sin commit.
+error_log
