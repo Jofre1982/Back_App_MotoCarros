@@ -4862,6 +4862,79 @@ paths:
                 errors:
                   errand:
                     - Este mandado no está esperando que respondas un precio.
+  /errands/{id}/cancel:
+    post:
+      tags:
+        - Errands
+      operationId: cancelErrand
+      summary: Cancelar un mandado o soltarlo
+      description: >-
+        - El **pasajero dueño** cancela su mandado mientras no esté
+          completado (nadie lo aceptó, o ya no lo necesita): queda en
+          `cancelled`.
+
+        - El **conductor asignado** lo suelta: vuelve a `requested` sin
+          conductor ni precio, para que otro lo tome (mismo criterio que
+          cuando el conductor cancela un viaje).
+
+        Cualquier otra cuenta recibe **403**. **422** (`errors.errand`) si
+        el mandado ya está completado o cancelado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El mandado actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Errand"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta no es el pasajero dueño ni el conductor asignado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un mandado con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Not found.
+        "422":
+          description: El mandado ya está completado o cancelado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este mandado ya terminó; no se puede cancelar.
+                errors:
+                  errand:
+                    - Este mandado ya terminó; no se puede cancelar.
   /errands/{id}/complete:
     post:
       tags:
@@ -6178,6 +6251,25 @@ components:
             acepte el viaje no se puede iniciar. Un viaje de catálogo tiene
             precio fijo y siempre vale `true`.
           example: true
+        counterpart:
+          type: object
+          nullable: true
+          description: >-
+            La otra persona del servicio, para que se puedan comunicar: al
+            pasajero le llega el conductor y al conductor el pasajero. Solo
+            viene cuando el precio ya está confirmado y el servicio sigue
+            activo; en cualquier otro caso es `null`. El teléfono va con
+            indicativo (`+57...`), listo para un enlace de WhatsApp.
+          required:
+            - name
+            - phone
+          properties:
+            name:
+              type: string
+              example: Luis Pérez
+            phone:
+              type: string
+              example: "+573001234567"
         estimated_fare:
           type: integer
           nullable: true
@@ -6471,6 +6563,7 @@ components:
             - requested
             - accepted
             - completed
+            - cancelled
           example: requested
         description:
           type: string
@@ -6543,6 +6636,25 @@ components:
             conductor (`POST /errands/{id}/price-response`). Hasta entonces
             el mandado no se puede completar.
           example: false
+        counterpart:
+          type: object
+          nullable: true
+          description: >-
+            La otra persona del servicio, para que se puedan comunicar: al
+            pasajero le llega el conductor y al conductor el pasajero. Solo
+            viene cuando el precio ya está confirmado y el servicio sigue
+            activo; en cualquier otro caso es `null`. El teléfono va con
+            indicativo (`+57...`), listo para un enlace de WhatsApp.
+          required:
+            - name
+            - phone
+          properties:
+            name:
+              type: string
+              example: Luis Pérez
+            phone:
+              type: string
+              example: "+573001234567"
         requested_at:
           type: string
           format: date-time

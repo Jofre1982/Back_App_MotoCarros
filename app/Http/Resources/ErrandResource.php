@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Enums\ErrandStatus;
 use App\Models\Errand;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -52,6 +53,12 @@ class ErrandResource extends JsonResource
                 : new RideDriverResource($this->resource->driver),
             'agreed_price' => $this->resource->agreed_price,
             'price_confirmed' => $this->resource->isPriceConfirmed(),
+            'counterpart' => CounterpartResource::for(
+                $request->user(),
+                $this->resource->passenger,
+                $this->resource->driver,
+                $this->resource->isPriceConfirmed() && $this->resource->status === ErrandStatus::Accepted,
+            ),
             'requested_at' => $this->resource->created_at?->toIso8601String(),
             'completed_at' => $this->resource->completed_at?->toIso8601String(),
         ];
