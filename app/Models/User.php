@@ -21,8 +21,11 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
 /**
  * @property UserRole $role
  * @property Carbon|null $phone_verified_at
+ * @property string|null $avatar_path
+ * @property string|null $avatar_status
+ * @property string|null $avatar_rejection_reason
  */
-#[Fillable(['name', 'email', 'phone', 'password', 'role'])]
+#[Fillable(['name', 'email', 'phone', 'password', 'role', 'avatar_path', 'avatar_status', 'avatar_rejection_reason'])]
 #[UsePolicy(UserPolicy::class)]
 class User extends Authenticatable implements JWTSubject
 {

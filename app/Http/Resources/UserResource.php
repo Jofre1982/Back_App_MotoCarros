@@ -31,6 +31,9 @@ class UserResource extends JsonResource
             'email' => $this->resource->email,
             'phone' => $this->resource->phone,
             'phone_verified' => $this->resource->isPhoneVerified(),
+            'avatar_url' => AvatarUrl::own($this->resource),
+            'avatar_status' => $this->resource->avatar_status,
+            'avatar_rejection_reason' => $this->resource->avatar_rejection_reason,
             'role' => $this->resource->role->value,
             // Historia #99: con que roles puede actuar la cuenta.
             'roles' => array_map(static fn (UserRole $role): string => $role->value, $this->resource->roles()),

@@ -200,6 +200,7 @@
 
   <div id="tabs" class="tabs" role="tablist" hidden>
     <button type="button" class="tab" id="tab-documents" role="tab" aria-selected="true">Documentos pendientes</button>
+    <button type="button" class="tab" id="tab-avatars" role="tab" aria-selected="false">Fotos de perfil</button>
     <button type="button" class="tab" id="tab-users" role="tab" aria-selected="false">Usuarios registrados</button>
     <button type="button" class="tab" id="tab-sites" role="tab" aria-selected="false">Destinos y precios</button>
   </div>
@@ -235,6 +236,14 @@
       <span id="users-page-info"></span>
       <button type="button" class="btn-link" id="users-next">Siguiente »</button>
     </div>
+  </div>
+
+  <div id="avatars-card" class="card" hidden>
+    <p class="hint">Fotos de perfil de conductores. Los pasajeros solo las ven cuando las apruebas. Revisa que se vea bien la cara de la persona.</p>
+    <p id="avatars-loading" class="loading">Cargando fotos...</p>
+    <p id="avatars-empty" class="empty" hidden>No hay fotos pendientes por ahora.</p>
+    <p id="avatars-error" class="error" hidden></p>
+    <ul id="avatars-list" class="doc-list"></ul>
   </div>
 
   <div id="sites-card" class="card" hidden>
@@ -361,6 +370,7 @@
     documentsCard.hidden = true;
     usersCard.hidden = true;
     sitesCard.hidden = true;
+    avatarsCard.hidden = true;
     tabs.hidden = true;
     logoutButton.hidden = true;
   }
@@ -377,10 +387,14 @@
   var tabDocuments = document.getElementById("tab-documents");
   var tabUsers = document.getElementById("tab-users");
   var tabSites = document.getElementById("tab-sites");
+  var tabAvatars = document.getElementById("tab-avatars");
+  var avatarsCard = document.getElementById("avatars-card");
   var usersCard = document.getElementById("users-card");
   var sitesCard = document.getElementById("sites-card");
 
   function selectTab(name) {
+    tabAvatars.setAttribute("aria-selected", String(name === "avatars"));
+    avatarsCard.hidden = name !== "avatars";
     tabDocuments.setAttribute("aria-selected", String(name === "documents"));
     tabUsers.setAttribute("aria-selected", String(name === "users"));
     tabSites.setAttribute("aria-selected", String(name === "sites"));
@@ -389,6 +403,8 @@
     sitesCard.hidden = name !== "sites";
     if (name === "users") {
       loadUsers(1);
+    } else if (name === "avatars") {
+      loadPendingAvatars();
     } else if (name === "sites") {
       loadSites();
     } else {
@@ -399,6 +415,109 @@
   tabDocuments.addEventListener("click", function () { selectTab("documents"); });
   tabUsers.addEventListener("click", function () { selectTab("users"); });
   tabSites.addEventListener("click", function () { selectTab("sites"); });
+  tabAvatars.addEventListener("click", function () { selectTab("avatars"); });
+
+  // ---- Fotos de perfil de conductores por aprobar ----
+  var avatarsLoading = document.getElementById("avatars-loading");
+  var avatarsEmpty = document.getElementById("avatars-empty");
+  var avatarsError = document.getElementById("avatars-error");
+  var avatarsList = document.getElementById("avatars-list");
+
+  function loadPendingAvatars() {
+    avatarsLoading.hidden = false;
+    avatarsEmpty.hidden = true;
+    hideError(avatarsError);
+    avatarsList.innerHTML = "";
+
+    apiFetch("/admin/avatars")
+      .then(function (response) { return jsonOrThrow(response, "No se pudieron cargar las fotos."); })
+      .then(function (body) {
+        if (body.data.length === 0) {
+          avatarsEmpty.hidden = false;
+          return;
+        }
+        body.data.forEach(function (user) { avatarsList.appendChild(buildAvatarRow(user)); });
+      })
+      .catch(function (err) { showError(avatarsError, err.message); })
+      .finally(function () { avatarsLoading.hidden = true; });
+  }
+
+  function buildAvatarRow(user) {
+    var row = document.createElement("li");
+    row.className = "doc-row";
+
+    var who = document.createElement("div");
+    who.className = "driver";
+    who.textContent = user.name;
+    row.appendChild(who);
+    var meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = user.phone + " · " + user.email;
+    row.appendChild(meta);
+
+    var preview = document.createElement("div");
+    preview.className = "doc-preview";
+    row.appendChild(preview);
+    apiFetch("/users/" + user.id + "/avatar")
+      .then(function (response) {
+        if (!response.ok) throw new Error();
+        return response.blob();
+      })
+      .then(function (blob) {
+        var img = document.createElement("img");
+        img.src = URL.createObjectURL(blob);
+        img.alt = "Foto de perfil de " + user.name;
+        preview.appendChild(img);
+      })
+      .catch(function () {
+        preview.textContent = "No se pudo cargar la foto.";
+      });
+
+    var rowError = document.createElement("p");
+    rowError.className = "error";
+    rowError.hidden = true;
+
+    var actions = document.createElement("div");
+    actions.className = "actions";
+    var approve = document.createElement("button");
+    approve.type = "button";
+    approve.className = "btn-primary";
+    approve.textContent = "Aprobar";
+    var reject = document.createElement("button");
+    reject.type = "button";
+    reject.className = "btn-danger";
+    reject.textContent = "Rechazar";
+    actions.appendChild(approve);
+    actions.appendChild(reject);
+    row.appendChild(actions);
+    row.appendChild(rowError);
+
+    function review(action, body) {
+      approve.disabled = true;
+      reject.disabled = true;
+      hideError(rowError);
+      apiFetch("/admin/users/" + user.id + "/avatar/" + action, {
+        method: "POST",
+        body: JSON.stringify(body || {}),
+      })
+        .then(function (response) { return jsonOrThrow(response, "No se pudo guardar la revisión."); })
+        .then(function () { row.remove(); if (!avatarsList.children.length) avatarsEmpty.hidden = false; })
+        .catch(function (err) {
+          showError(rowError, err.message);
+          approve.disabled = false;
+          reject.disabled = false;
+        });
+    }
+
+    approve.addEventListener("click", function () { review("approve"); });
+    reject.addEventListener("click", function () {
+      var reason = window.prompt("¿Por qué rechazas la foto? (le llega al conductor)", "No se ve bien la cara.");
+      if (reason === null || reason.trim() === "") return;
+      review("reject", { reason: reason.trim() });
+    });
+
+    return row;
+  }
 
   // ---- Destinos y precios: catálogo de sitios (historia #85) ----
   // Usa los endpoints que ya existían (GET/POST /admin/sites,

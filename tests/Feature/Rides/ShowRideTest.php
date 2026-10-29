@@ -133,7 +133,8 @@ class ShowRideTest extends TestCase
             ->assertOk()
             ->json('data.driver');
 
-        $this->assertSame(['id', 'name'], array_keys($conductorPublicado));
+        // Foto (aprobada) y vehículo para reconocerlo; nada de contacto.
+        $this->assertSame(['id', 'name', 'avatar_url', 'vehicle'], array_keys($conductorPublicado));
     }
 
     public function test_rechaza_a_quien_no_participa_del_viaje(): void
