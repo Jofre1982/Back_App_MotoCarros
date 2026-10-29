@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\Drivers\ShowDriverEarningsController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverAvailabilityController;
 use App\Http\Controllers\Api\V1\Drivers\UpdateDriverErrandAvailabilityController;
 use App\Http\Controllers\Api\V1\Errands\AcceptErrandController;
+use App\Http\Controllers\Api\V1\Errands\CancelErrandController;
 use App\Http\Controllers\Api\V1\Errands\CompleteErrandController;
 use App\Http\Controllers\Api\V1\Errands\CreateErrandController;
 use App\Http\Controllers\Api\V1\Errands\ListErrandsController;
@@ -456,6 +457,11 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->post('errands/{errand}/accept', AcceptErrandController::class)
         ->name('errands.accept');
+
+    // El pasajero cancela su mandado; el conductor asignado lo suelta.
+    Route::middleware('auth:api')
+        ->post('errands/{errand}/cancel', CancelErrandController::class)
+        ->name('errands.cancel');
 
     // El pasajero acepta o rechaza el precio que propuso el conductor.
     Route::middleware('auth:api')

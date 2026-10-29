@@ -17,4 +17,5 @@ enum ErrandStatus: string
     case Requested = 'requested';
     case Accepted = 'accepted';
     case Completed = 'completed';
+    case Cancelled = 'cancelled';
 }

@@ -86,4 +86,13 @@ class ErrandPolicy
     {
         return $errand->passenger_id === $user->getKey();
     }
+
+    /**
+     * Cancelar (pasajero dueño) o soltar (conductor asignado) un mandado.
+     */
+    public function cancel(User $user, Errand $errand): bool
+    {
+        return $errand->passenger_id === $user->getKey()
+            || ($errand->driver_id !== null && $errand->driver_id === $user->getKey());
+    }
 }

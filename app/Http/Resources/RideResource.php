@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Enums\RideStatus;
 use App\Models\Ride;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -55,6 +56,13 @@ class RideResource extends JsonResource
             // recogida; `null` antes de eso y siempre en uno de catálogo.
             'agreed_price' => $this->resource->agreed_price,
             'price_confirmed' => $this->resource->isPriceConfirmed(),
+            'counterpart' => CounterpartResource::for(
+                $request->user(),
+                $this->resource->passenger,
+                $this->resource->driver,
+                $this->resource->isPriceConfirmed()
+                    && in_array($this->resource->status, [RideStatus::Accepted, RideStatus::InProgress], true),
+            ),
             // Presente siempre, aunque valga `null`, por el mismo motivo que
             // `started_at`: el contrato lo declara obligatorio y nullable para
             // que el cliente no distinga "todavía no hay conductor" de "esta

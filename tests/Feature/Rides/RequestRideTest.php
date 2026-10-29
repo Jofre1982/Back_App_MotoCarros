@@ -68,6 +68,8 @@ class RequestRideTest extends TestCase
                 'agreed_price' => null,
                 // Viaje de catálogo: precio fijo, no espera respuesta.
                 'price_confirmed' => true,
+                // Sin conductor todavía: nadie con quién comunicarse.
+                'counterpart' => null,
                 // Todavía no lo aceptó nadie, y el campo viaja igual por el
                 // mismo motivo que `started_at`: el schema `Ride` lo declara
                 // obligatorio y nullable (historia #21).
