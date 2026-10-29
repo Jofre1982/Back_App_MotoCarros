@@ -12,7 +12,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ListMyErrandsController extends Controller
 {
-    private const int LIMIT = 20;
+    private const int LIMIT = 50;
 
     public function __invoke(ListMyErrandsRequest $request): AnonymousResourceCollection
     {

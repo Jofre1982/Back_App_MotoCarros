@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Drivers;
 
+use App\Enums\ErrandStatus;
 use App\Enums\RideStatus;
+use App\Enums\VehicleType;
+use App\Models\Errand;
 use App\Models\Ride;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,6 +60,51 @@ class ShowDriverEarningsTest extends TestCase
             ->assertJsonPath('data.currency', 'COP')
             ->assertJsonPath('data.total_earned', 17500)
             ->assertJsonPath('data.completed_rides', 2);
+    }
+
+    public function test_suma_los_mandados_y_motocargas_completados_del_rango(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        Ride::factory()->create([
+            'driver_id' => $conductor->id,
+            'status' => RideStatus::Completed,
+            'final_fare' => 8000,
+            'completed_at' => Carbon::parse('2026-07-10 10:00'),
+        ]);
+        Errand::factory()->create([
+            'driver_id' => $conductor->id,
+            'status' => ErrandStatus::Completed,
+            'agreed_price' => 5000,
+            'completed_at' => Carbon::parse('2026-07-11 10:00'),
+        ]);
+        Errand::factory()->create([
+            'driver_id' => $conductor->id,
+            'vehicle_type' => VehicleType::Motocarga,
+            'status' => ErrandStatus::Completed,
+            'agreed_price' => 20000,
+            'completed_at' => Carbon::parse('2026-07-12 10:00'),
+        ]);
+        // Fuera del rango y sin completar: no cuentan.
+        Errand::factory()->create([
+            'driver_id' => $conductor->id,
+            'status' => ErrandStatus::Completed,
+            'agreed_price' => 99000,
+            'completed_at' => Carbon::parse('2026-08-02 10:00'),
+        ]);
+        Errand::factory()->create([
+            'driver_id' => $conductor->id,
+            'status' => ErrandStatus::Accepted,
+            'agreed_price' => 99000,
+        ]);
+
+        $this->withToken(JWTAuth::fromUser($conductor))
+            ->getJson(self::URI.'?from=2026-07-01&to=2026-07-31')
+            ->assertOk()
+            ->assertJsonPath('data.total_earned', 33000)
+            ->assertJsonPath('data.rides_earned', 8000)
+            ->assertJsonPath('data.completed_rides', 1)
+            ->assertJsonPath('data.errands_earned', 25000)
+            ->assertJsonPath('data.completed_errands', 2);
     }
 
     public function test_un_conductor_sin_viajes_completados_en_el_rango_recibe_cero(): void

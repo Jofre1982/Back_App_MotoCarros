@@ -32,6 +32,28 @@ trait NormalizesAccountInput
      *
      * @return array<string, string>
      */
+    /**
+     * Celular canónico: sin espacios ni guiones, con `+`, y con el +57 de
+     * Colombia cuando se escribió sin indicativo (10 dígitos que empiezan en
+     * 3, como `3108838480`). Sin eso quedaba `+3108838480`, que WhatsApp lee
+     * como un número de Holanda (+31). Lo que no tiene forma de celular se
+     * deja tal cual para que muera en el `regex`.
+     */
+    public static function canonicalPhone(string $phone): string
+    {
+        $compact = preg_replace('/[\s\-().]/', '', $phone) ?? $phone;
+
+        if (preg_match('/^\+?(3[0-9]{9})$/', $compact, $match) === 1) {
+            return '+57'.$match[1];
+        }
+
+        if (preg_match('/^[0-9]/', $compact) === 1) {
+            return '+'.$compact;
+        }
+
+        return $compact === '' ? $phone : $compact;
+    }
+
     protected function canonicalAccountInput(): array
     {
         $canonicos = [];
@@ -50,8 +72,8 @@ trait NormalizesAccountInput
         // teclearlo y pegarlo desde la agenda. Solo se antepone el `+` a lo que
         // ya empieza por dígito, para que una entrada malformada (`++57…`) siga
         // muriendo en el `regex` en vez de quedar "arreglada" por acá.
-        if (is_string($phone) && preg_match('/^[0-9]/', $phone) === 1) {
-            $canonicos['phone'] = '+'.$phone;
+        if (is_string($phone)) {
+            $canonicos['phone'] = self::canonicalPhone($phone);
         }
 
         return $canonicos;

@@ -27,6 +27,9 @@ class DriverEarningsSummaryResource extends JsonResource
             'currency' => $this->resource->currency,
             'total_earned' => $this->resource->totalEarned,
             'completed_rides' => $this->resource->completedRides,
+            'rides_earned' => $this->resource->ridesEarned,
+            'errands_earned' => $this->resource->errandsEarned,
+            'completed_errands' => $this->resource->completedErrands,
         ];
     }
 }

@@ -34,6 +34,17 @@ class ListAvailableRidesRequest extends FormRequest
      * Los viajes de pasajero son de motocarro: un conductor con motocarga no
      * tiene nada que ver acá (y aceptarlos le responde 422).
      */
+    /**
+     * "Recibir viajes" apagado: la lista viene vacía, así el conductor usa
+     * la app sin que le lleguen solicitudes.
+     */
+    public function isAvailableForRides(): bool
+    {
+        $user = $this->user();
+
+        return $user instanceof User && $user->driverProfile?->is_available === true;
+    }
+
     public function drivesMotocarga(): bool
     {
         $user = $this->user();
