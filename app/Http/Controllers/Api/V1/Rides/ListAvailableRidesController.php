@@ -15,7 +15,7 @@ class ListAvailableRidesController extends Controller
 {
     public function __invoke(ListAvailableRidesRequest $request): AnonymousResourceCollection
     {
-        if ($request->drivesMotocarga()) {
+        if ($request->drivesMotocarga() || ! $request->isAvailableForRides()) {
             return RideResource::collection([]);
         }
 

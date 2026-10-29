@@ -67,15 +67,19 @@ class UpdateDriverAvailabilityTest extends TestCase
         ]);
     }
 
-    public function test_exige_ubicacion_al_marcarse_disponible(): void
+    /**
+     * Desde el interruptor "Recibir viajes" la ubicación es opcional, pero si
+     * viene una coordenada tiene que venir la otra.
+     */
+    public function test_exige_las_dos_coordenadas_juntas(): void
     {
         $conductor = User::factory()->driver()->create();
         DriverProfile::factory()->create(['user_id' => $conductor->id]);
 
         $this->withToken(JWTAuth::fromUser($conductor))
-            ->patchJson(self::URI, ['is_available' => true])
+            ->patchJson(self::URI, ['is_available' => true, 'latitude' => 3.8653])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['latitude', 'longitude']);
+            ->assertJsonValidationErrors(['longitude']);
 
         $this->assertDatabaseHas('driver_profiles', ['user_id' => $conductor->id, 'is_available' => false]);
     }

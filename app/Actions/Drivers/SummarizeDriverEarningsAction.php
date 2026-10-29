@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Actions\Drivers;
 
 use App\DTOs\DriverEarningsSummary;
+use App\Enums\ErrandStatus;
 use App\Enums\RideStatus;
+use App\Models\Errand;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 
@@ -26,7 +28,7 @@ final readonly class SummarizeDriverEarningsAction
     {
         $rango = [$from->copy()->startOfDay(), $to->copy()->endOfDay()];
 
-        $totalEarned = (int) $driver->driverRides()
+        $ridesEarned = (int) $driver->driverRides()
             ->where('status', RideStatus::Completed)
             ->whereBetween('completed_at', $rango)
             ->sum('final_fare');
@@ -36,12 +38,24 @@ final readonly class SummarizeDriverEarningsAction
             ->whereBetween('completed_at', $rango)
             ->count();
 
+        // Mandados y motocargas: lo que cobra el conductor es el precio que
+        // aceptó el pasajero.
+        $errands = Errand::query()
+            ->where('driver_id', $driver->getKey())
+            ->where('status', ErrandStatus::Completed)
+            ->whereBetween('completed_at', $rango);
+        $errandsEarned = (int) (clone $errands)->sum('agreed_price');
+        $completedErrands = (clone $errands)->count();
+
         return new DriverEarningsSummary(
             from: $from,
             to: $to,
             currency: config('fares.currency'),
-            totalEarned: $totalEarned,
+            totalEarned: $ridesEarned + $errandsEarned,
             completedRides: $completedRides,
+            ridesEarned: $ridesEarned,
+            errandsEarned: $errandsEarned,
+            completedErrands: $completedErrands,
         );
     }
 }

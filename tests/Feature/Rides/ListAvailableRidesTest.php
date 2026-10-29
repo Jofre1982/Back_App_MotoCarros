@@ -80,7 +80,8 @@ class ListAvailableRidesTest extends TestCase
     private function conductor(): User
     {
         $conductor = User::factory()->driver()->create();
-        DriverProfile::factory()->create(['user_id' => $conductor->id]);
+        // Con "Recibir viajes" prendido: si no, la lista viene vacía.
+        DriverProfile::factory()->create(['user_id' => $conductor->id, 'is_available' => true]);
 
         return $conductor;
     }

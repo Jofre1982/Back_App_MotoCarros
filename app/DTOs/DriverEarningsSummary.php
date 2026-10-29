@@ -22,5 +22,8 @@ final readonly class DriverEarningsSummary
         public string $currency,
         public int $totalEarned,
         public int $completedRides,
+        public int $ridesEarned = 0,
+        public int $errandsEarned = 0,
+        public int $completedErrands = 0,
     ) {}
 }

@@ -94,14 +94,17 @@ class UpdateDriverAvailabilityRequest extends FormRequest
     {
         return [
             'is_available' => ['required', 'boolean'],
-            'latitude' => ['required_if:is_available,true', 'numeric', 'between:-90,90'],
-            'longitude' => ['required_if:is_available,true', 'numeric', 'between:-180,180'],
+            // Opcional: sin ubicación el conductor igual ve los viajes que
+            // esperan (`GET /rides/available`); solo no entra en el aviso en
+            // tiempo real por radio.
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
         ];
     }
 
     public function toUpdate(): DriverAvailabilityUpdate
     {
-        $tieneUbicacion = $this->has('latitude') && $this->has('longitude');
+        $tieneUbicacion = $this->filled('latitude') && $this->filled('longitude');
 
         return new DriverAvailabilityUpdate(
             isAvailable: $this->boolean('is_available'),

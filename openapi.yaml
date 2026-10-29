@@ -2913,10 +2913,11 @@ paths:
         perfil por el token, nunca por un id propio, así que estructuralmente
         no existe forma de tocar la disponibilidad de otro conductor.
 
-        `latitude`/`longitude` son obligatorias cuando `is_available` es
-        `true`: sin una ubicación conocida, el conductor no entraría en
-        ninguna búsqueda por radio y marcarse disponible no tendría efecto.
-        Son opcionales al marcarse no disponible.
+        `latitude`/`longitude` son opcionales (si vienen, van juntas): sin
+        ubicación el conductor igual ve los viajes que esperan en
+        `GET /rides/available`, solo no entra en el aviso en tiempo real por
+        radio. Un conductor **no disponible** ve esa lista vacía: así puede
+        usar la app sin recibir solicitudes.
 
         Mientras está disponible, un conductor recibe por el canal privado
         `driver.{id}` un evento `ride.requested` por cada viaje nuevo dentro
@@ -4845,7 +4846,7 @@ paths:
       summary: Mis mandados y motocargas
       description: >-
         Los mandados (y motocargas) de la cuenta autenticada, del más nuevo
-        al más viejo, máximo 20. Con `as=passenger` (por defecto) los que
+        al más viejo, máximo 50. Con `as=passenger` (por defecto) los que
         pidió; con `as=driver` los que le asignaron como conductor.
 
         Es lo que le permite al pasajero ver si ya aceptaron su pedido, con
@@ -5567,9 +5568,9 @@ components:
           minimum: -90
           maximum: 90
           description: >-
-            Obligatoria cuando `is_available` es `true`: sin ubicación, el
-            conductor no entraría en ninguna búsqueda por radio. Opcional al
-            marcarse no disponible.
+            Opcional (junto con `longitude`). Sin ubicación el conductor no
+            entra en el aviso en tiempo real por radio, pero igual ve los
+            viajes que esperan en `GET /rides/available`.
           example: 4.710989
         longitude:
           type: number
@@ -6233,6 +6234,9 @@ components:
         - currency
         - total_earned
         - completed_rides
+        - rides_earned
+        - errands_earned
+        - completed_errands
       properties:
         from:
           type: string
@@ -6251,14 +6255,28 @@ components:
         total_earned:
           type: integer
           description: >-
-            Suma de `final_fare` de los viajes completados del conductor en
-            el rango, entero en la unidad mínima de `currency` (ver la nota
-            sobre dinero en config/fares.php).
-          example: 182400
+            Todo lo que ganó el conductor en el rango: `rides_earned` +
+            `errands_earned` (viajes, mandados y motocargas completados),
+            entero en la unidad mínima de `currency`.
+          example: 212400
         completed_rides:
           type: integer
-          description: Número de viajes completados que componen `total_earned`.
+          description: Número de viajes de pasajero completados en el rango.
           example: 21
+        rides_earned:
+          type: integer
+          description: Suma de `final_fare` de los viajes completados en el rango.
+          example: 182400
+        errands_earned:
+          type: integer
+          description: >-
+            Suma de `agreed_price` de los mandados y motocargas completados en
+            el rango.
+          example: 30000
+        completed_errands:
+          type: integer
+          description: Número de mandados y motocargas completados en el rango.
+          example: 4
     RideRequest:
       type: object
       description: >-
