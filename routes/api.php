@@ -7,9 +7,11 @@ use App\Http\Controllers\Api\V1\Admin\DeleteCargoJobTypeController;
 use App\Http\Controllers\Api\V1\Admin\DeleteSiteController;
 use App\Http\Controllers\Api\V1\Admin\ListCargoJobTypesController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
+use App\Http\Controllers\Api\V1\Admin\ListPendingAvatarsController;
 use App\Http\Controllers\Api\V1\Admin\ListSitesController;
 use App\Http\Controllers\Api\V1\Admin\ListUsersController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\ReviewAvatarController;
 use App\Http\Controllers\Api\V1\Admin\SetSiteFareController;
 use App\Http\Controllers\Api\V1\Admin\ShowDriverDocumentFileController;
 use App\Http\Controllers\Api\V1\Admin\UpdateCargoJobTypeController;
@@ -36,8 +38,10 @@ use App\Http\Controllers\Api\V1\Errands\ListErrandsController;
 use App\Http\Controllers\Api\V1\Errands\ListMyErrandsController;
 use App\Http\Controllers\Api\V1\Errands\RespondToErrandPriceController;
 use App\Http\Controllers\Api\V1\Errands\ShowErrandPhotoController;
+use App\Http\Controllers\Api\V1\Profile\ShowAvatarController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
+use App\Http\Controllers\Api\V1\Profile\UploadAvatarController;
 use App\Http\Controllers\Api\V1\Realtime\RegisterDeviceTokenController;
 use App\Http\Controllers\Api\V1\Rides\AcceptRideController;
 use App\Http\Controllers\Api\V1\Rides\CancelRideController;
@@ -129,6 +133,16 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->patch('me', UpdateProfileController::class)
         ->name('profile.update');
+
+    // Foto de perfil (pasajero o conductor): la sube cada cuenta y la ven
+    // ella misma, el admin y quien comparte un servicio con ella.
+    Route::middleware('auth:api')
+        ->post('me/avatar', UploadAvatarController::class)
+        ->name('me.avatar.store');
+
+    Route::middleware('auth:api')
+        ->get('users/{user}/avatar', ShowAvatarController::class)
+        ->name('users.avatar');
 
     // Token de notificaciones push del dispositivo (historia #67). No es una
     // operación de un rol en particular —pasajero o conductor pueden tener un
@@ -232,6 +246,20 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:api')
             ->get('users', ListUsersController::class)
             ->name('users.index');
+
+        // Fotos de perfil de conductores por revisar (los pasajeros solo ven
+        // una foto aprobada). Autorización en UserPolicy::reviewAvatar().
+        Route::middleware('auth:api')
+            ->get('avatars', ListPendingAvatarsController::class)
+            ->name('avatars.pending');
+
+        Route::middleware('auth:api')
+            ->post('users/{user}/avatar/approve', ReviewAvatarController::class)
+            ->name('avatars.approve');
+
+        Route::middleware('auth:api')
+            ->post('users/{user}/avatar/reject', ReviewAvatarController::class)
+            ->name('avatars.reject');
 
         Route::middleware('auth:api')
             ->get('documents', ListDriverDocumentsController::class)

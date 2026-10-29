@@ -44,12 +44,12 @@ class CounterpartContactTest extends TestCase
 
         $this->withToken(JWTAuth::fromUser($pasajero))
             ->getJson("/api/v1/rides/{$viaje->id}")
-            ->assertJsonPath('data.counterpart', ['name' => 'Luis', 'phone' => '+573002222222']);
+            ->assertJsonPath('data.counterpart', ['name' => 'Luis', 'phone' => '+573002222222', 'avatar_url' => null]);
 
         $this->cambiarDeCuenta();
         $this->withToken(JWTAuth::fromUser($conductor))
             ->getJson("/api/v1/rides/{$viaje->id}")
-            ->assertJsonPath('data.counterpart', ['name' => 'Ana', 'phone' => '+573001111111']);
+            ->assertJsonPath('data.counterpart', ['name' => 'Ana', 'phone' => '+573001111111', 'avatar_url' => null]);
     }
 
     public function test_sin_precio_confirmado_no_se_comparte_el_celular(): void
@@ -81,7 +81,7 @@ class CounterpartContactTest extends TestCase
 
         $this->withToken(JWTAuth::fromUser($pasajero))
             ->getJson('/api/v1/me/errands')
-            ->assertJsonPath('data.0.counterpart', ['name' => 'Luis', 'phone' => '+573002222222']);
+            ->assertJsonPath('data.0.counterpart', ['name' => 'Luis', 'phone' => '+573002222222', 'avatar_url' => null]);
     }
 
     public function test_un_mandado_terminado_ya_no_comparte_el_celular(): void

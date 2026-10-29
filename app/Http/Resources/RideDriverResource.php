@@ -33,6 +33,12 @@ class RideDriverResource extends JsonResource
         return [
             'id' => $this->resource->id,
             'name' => $this->resource->name,
+            'avatar_url' => AvatarUrl::forOthers($this->resource),
+            // Placa y tipo para que el pasajero reconozca el vehículo.
+            'vehicle' => $this->resource->vehicle === null ? null : [
+                'plate' => $this->resource->vehicle->plate,
+                'type' => $this->resource->vehicle->type->value,
+            ],
         ];
     }
 }

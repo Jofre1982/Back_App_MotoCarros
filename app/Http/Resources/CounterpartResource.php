@@ -14,7 +14,7 @@ use App\Models\User;
 final class CounterpartResource
 {
     /**
-     * @return array{name: string, phone: string}|null
+     * @return array{name: string, phone: string, avatar_url: string|null}|null
      */
     public static function for(?User $viewer, ?User $passenger, ?User $driver, bool $sharesContact): ?array
     {
@@ -28,6 +28,10 @@ final class CounterpartResource
             default => null,
         };
 
-        return $other === null ? null : ['name' => $other->name, 'phone' => $other->phone];
+        return $other === null ? null : [
+            'name' => $other->name,
+            'phone' => $other->phone,
+            'avatar_url' => AvatarUrl::forOthers($other),
+        ];
     }
 }

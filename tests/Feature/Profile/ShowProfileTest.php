@@ -43,6 +43,9 @@ class ShowProfileTest extends TestCase
                     'email' => 'ana@example.com',
                     'phone' => '+573001234567',
                     'phone_verified' => false,
+                    'avatar_url' => null,
+                    'avatar_status' => null,
+                    'avatar_rejection_reason' => null,
                     'role' => 'passenger',
                     // Historia #99: con que roles puede actuar la cuenta.
                     'roles' => ['passenger'],
@@ -93,6 +96,9 @@ class ShowProfileTest extends TestCase
                     'email' => 'carlos@example.com',
                     'phone' => '+573009876543',
                     'phone_verified' => false,
+                    'avatar_url' => null,
+                    'avatar_status' => null,
+                    'avatar_rejection_reason' => null,
                     'role' => 'driver',
                     'roles' => ['passenger', 'driver'],
                     'driver_profile' => [

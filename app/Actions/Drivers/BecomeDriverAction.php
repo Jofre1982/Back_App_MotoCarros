@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Drivers;
 
+use App\Http\Resources\AvatarUrl;
 use App\Models\DriverProfile;
 use App\Models\User;
 
@@ -26,6 +27,11 @@ final readonly class BecomeDriverAction
         ]);
 
         $user->setRelation('driverProfile', $profile);
+
+        // Su foto ahora la van a ver pasajeros: pasa a revisión del admin.
+        if ($user->avatar_path !== null) {
+            $user->update(['avatar_status' => AvatarUrl::PENDING, 'avatar_rejection_reason' => null]);
+        }
 
         return $profile;
     }

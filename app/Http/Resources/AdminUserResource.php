@@ -31,6 +31,8 @@ class AdminUserResource extends JsonResource
             // Historia #99: con que roles puede actuar la cuenta.
             'roles' => array_map(static fn (UserRole $role): string => $role->value, $this->resource->roles()),
             'driver_verification_status' => $this->resource->driverProfile?->verification_status->value,
+            'avatar_url' => AvatarUrl::own($this->resource),
+            'avatar_status' => $this->resource->avatar_status,
             'registered_at' => $this->resource->created_at?->toIso8601String(),
         ];
     }

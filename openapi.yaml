@@ -621,6 +621,259 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/avatars:
+    get:
+      tags:
+        - Admin
+      operationId: listPendingAvatars
+      summary: Fotos de perfil de conductores por revisar
+      description: Las cuentas con foto `pending`, de la más antigua a la más nueva. Solo `admin`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Fotos pendientes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminUser"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+  /admin/users/{id}/avatar/approve:
+    post:
+      tags:
+        - Admin
+      operationId: approveAvatar
+      summary: Aprobar la foto de perfil
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: La cuenta con la foto aprobada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdminUser"
+        "403":
+          description: La cuenta no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: La cuenta no tiene una foto pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Esta cuenta no tiene una foto pendiente de revisión.
+                errors:
+                  avatar:
+                    - Esta cuenta no tiene una foto pendiente de revisión.
+  /admin/users/{id}/avatar/reject:
+    post:
+      tags:
+        - Admin
+      operationId: rejectAvatar
+      summary: Rechazar la foto de perfil
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  maxLength: 255
+                  example: No se ve la cara.
+      responses:
+        "200":
+          description: La cuenta con la foto rechazada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdminUser"
+        "403":
+          description: La cuenta no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: Falta el motivo, o la cuenta no tiene una foto pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The reason field is required.
+                errors:
+                  reason:
+                    - The reason field is required.
+  /me/avatar:
+    post:
+      tags:
+        - Profile
+      operationId: uploadAvatar
+      summary: Subir mi foto de perfil
+      description: >-
+        Sube o reemplaza la foto de perfil de la cuenta autenticada (pasajero
+        o conductor). Es la que ve la otra persona del servicio para
+        reconocerla. `multipart/form-data` con `photo` (jpg/png, hasta 5 MB).
+
+        Si la cuenta es conductor, la foto queda `pending` hasta que un admin
+        la apruebe (`POST /admin/users/{id}/avatar/approve`); mientras tanto
+        los pasajeros no la ven. La de un pasajero queda `approved`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - photo
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: La cuenta, con su `avatar_url` nuevo.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/User"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "422":
+          description: Falta la foto, no es jpg/png o pesa más de 5 MB.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The photo field is required.
+                errors:
+                  photo:
+                    - The photo field is required.
+  /users/{id}/avatar:
+    get:
+      tags:
+        - Profile
+      operationId: showAvatar
+      summary: Ver la foto de perfil de una cuenta
+      description: >-
+        Devuelve la foto de perfil. La puede ver la propia cuenta, un admin,
+        o alguien que comparte un viaje o mandado con esa cuenta (pasajero y
+        conductor asignado) siempre que la foto esté `approved`. **403** para cualquier otra; **404** si no hay
+        foto.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El archivo de la foto (imagen).
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: No comparte ningún servicio con esa cuenta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: La cuenta no existe o no tiene foto.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Not found.
   /me:
     get:
       tags:
@@ -5167,6 +5420,29 @@ components:
             #69). No exige nada todavía: hoy ninguna acción de la cuenta
             depende de este valor.
           example: false
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          description: >-
+            URL de la foto de perfil (`GET /users/{id}/avatar`, con token), o
+            `null` si no subió una.
+          example: null
+        avatar_status:
+          type: string
+          nullable: true
+          enum: [pending, approved, rejected, null]
+          description: >-
+            Estado de la foto de perfil. La de un conductor la revisa un
+            admin (`pending` hasta entonces) y los pasajeros solo la ven
+            `approved`; la de un pasajero queda `approved` al subirla. `null`
+            sin foto.
+          example: null
+        avatar_rejection_reason:
+          type: string
+          nullable: true
+          description: Por qué el admin rechazó la foto, si la rechazó.
+          example: null
         role:
           type: string
           description: >-
@@ -6095,6 +6371,16 @@ components:
         - driver_verification_status
         - registered_at
       properties:
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          example: null
+        avatar_status:
+          type: string
+          nullable: true
+          enum: [pending, approved, rejected, null]
+          example: null
         id:
           type: integer
           example: 42
@@ -6270,6 +6556,11 @@ components:
             phone:
               type: string
               example: "+573001234567"
+            avatar_url:
+              type: string
+              format: uri
+              nullable: true
+              example: null
         estimated_fare:
           type: integer
           nullable: true
@@ -6370,6 +6661,31 @@ components:
           type: string
           description: Nombre con el que el conductor se registró.
           example: Carlos Pérez
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          description: >-
+            URL de la foto de perfil (`GET /users/{id}/avatar`, con token), o
+            `null` si no subió una.
+          example: null
+        vehicle:
+          type: object
+          nullable: true
+          description: >-
+            El vehículo del conductor, para que el pasajero lo reconozca en la
+            calle, o `null` si todavía no lo registró.
+          required:
+            - plate
+            - type
+          properties:
+            plate:
+              type: string
+              example: ABC12D
+            type:
+              type: string
+              enum: [motocarro, motocarga]
+              example: motocarro
     Payment:
       type: object
       description: >-
@@ -6655,6 +6971,11 @@ components:
             phone:
               type: string
               example: "+573001234567"
+            avatar_url:
+              type: string
+              format: uri
+              nullable: true
+              example: null
         requested_at:
           type: string
           format: date-time
