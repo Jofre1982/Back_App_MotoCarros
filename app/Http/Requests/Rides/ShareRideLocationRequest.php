@@ -58,10 +58,12 @@ class ShareRideLocationRequest extends FormRequest
      */
     private function rejectRideNotInProgress(Validator $validator): void
     {
-        if ($this->ride()->status !== RideStatus::InProgress) {
+        // Desde que acepta (camino a recoger) hasta que termina: así el
+        // pasajero ve cuánto le falta al conductor para llegar.
+        if (! in_array($this->ride()->status, [RideStatus::Accepted, RideStatus::InProgress], true)) {
             $validator->errors()->add(
                 'ride',
-                'Solo se puede compartir ubicación en un viaje en curso.',
+                'Solo se puede compartir ubicación en un viaje aceptado o en curso.',
             );
         }
     }

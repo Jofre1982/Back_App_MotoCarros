@@ -4413,12 +4413,13 @@ paths:
 
         Solo el conductor **asignado a ese viaje** puede publicar su
         ubicación: cualquier otra cuenta —otro conductor, o el pasajero—
-        recibe **403**. Que el viaje no esté en `in_progress` es en cambio
-        **422**, porque el permiso lo tiene y lo que no corresponde es la
+        recibe **403**. Que el viaje no esté `accepted` (camino a recoger) ni
+        `in_progress` es en cambio **422**, porque el permiso lo tiene y lo que no corresponde es la
         transmisión en ese punto del ciclo de vida.
 
-        No persiste un historial de coordenadas: solo transmite la posición
-        en vivo a quien esté suscrito al canal en ese momento. Responde
+        No persiste un historial de coordenadas: guarda solo la última
+        posición en el perfil del conductor (la publica el viaje en
+        `driver_location`) y la transmite en vivo por el canal. Responde
         **204** y no un API Resource porque no hay ningún recurso que
         devolver (ver .claude/STANDARDS.md, "Envelope de las respuestas").
       security:
@@ -4474,16 +4475,16 @@ paths:
         "422":
           description: >-
             La latitud/longitud está fuera de rango, o el viaje no está
-            `in_progress`.
+            `accepted` ni `in_progress`.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
               example:
-                message: Solo se puede compartir ubicación en un viaje en curso.
+                message: Solo se puede compartir ubicación en un viaje aceptado o en curso.
                 errors:
                   ride:
-                    - Solo se puede compartir ubicación en un viaje en curso.
+                    - Solo se puede compartir ubicación en un viaje aceptado o en curso.
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -6469,6 +6470,7 @@ components:
         - estimated_fare
         - agreed_price
         - driver
+        - driver_location
         - requested_at
         - started_at
         - completed_at
@@ -6602,10 +6604,34 @@ components:
             distinguir "todavía no hay conductor" de "esta respuesta no lo
             trae".
 
-            Mientras vale `null` tampoco hay ubicación que seguir: la posición
-            del conductor no viaja nunca en esta respuesta, solo por el evento
-            `location.updated` del canal `ride.{id}`, y ese evento lo publica
-            el conductor asignado. Sin conductor no hay nadie publicándolo.
+            Mientras vale `null` tampoco hay ubicación que seguir. Con
+            conductor, su última posición viene en `driver_location` y en
+            tiempo real por el evento `location.updated` del canal
+            `ride.{id}`.
+        driver_location:
+          type: object
+          nullable: true
+          description: >-
+            Última posición que compartió el conductor (POST
+            /rides/{id}/location) mientras el viaje está `accepted` o
+            `in_progress`, para que el pasajero vea cuánto le falta. `null`
+            en otros estados o si la última es de hace más de 5 minutos.
+          required:
+            - latitude
+            - longitude
+            - updated_at
+          properties:
+            latitude:
+              type: number
+              format: double
+              example: 3.8653
+            longitude:
+              type: number
+              format: double
+              example: -67.9239
+            updated_at:
+              type: string
+              format: date-time
         requested_at:
           type: string
           format: date-time

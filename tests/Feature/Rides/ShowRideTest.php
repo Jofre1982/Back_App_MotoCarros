@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Rides;
 
 use App\Enums\RideStatus;
+use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -64,6 +65,65 @@ class ShowRideTest extends TestCase
         // para que el cliente no distinga "todavía no hay conductor" de "esta
         // respuesta no lo trae".
         $this->assertArrayHasKey('driver', $respuesta->json('data'));
+    }
+
+    /**
+     * Ubicación del conductor (para el "llega en X min" del pasajero): la
+     * última que guardó al compartirla, mientras va a recoger o en el viaje.
+     */
+    public function test_publica_la_ultima_ubicacion_del_conductor_en_un_viaje_activo(): void
+    {
+        $pasajero = User::factory()->create();
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->create([
+            'user_id' => $conductor->id,
+            'latitude' => 3.8653,
+            'longitude' => -67.9239,
+            'location_updated_at' => now(),
+        ]);
+        $viaje = Ride::factory()->for($pasajero, 'passenger')->create([
+            'status' => RideStatus::Accepted,
+            'driver_id' => $conductor->id,
+        ]);
+
+        $respuesta = $this->withToken(JWTAuth::fromUser($pasajero))
+            ->getJson($this->uri($viaje))
+            ->assertOk();
+
+        $respuesta->assertJsonPath('data.driver_location.latitude', 3.8653);
+        $respuesta->assertJsonPath('data.driver_location.longitude', -67.9239);
+        $this->assertNotNull($respuesta->json('data.driver_location.updated_at'));
+    }
+
+    public function test_no_publica_una_ubicacion_vieja_ni_la_de_un_viaje_terminado(): void
+    {
+        $pasajero = User::factory()->create();
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->create([
+            'user_id' => $conductor->id,
+            'latitude' => 3.8653,
+            'longitude' => -67.9239,
+            'location_updated_at' => now()->subHour(),
+        ]);
+        $activo = Ride::factory()->for($pasajero, 'passenger')->create([
+            'status' => RideStatus::InProgress,
+            'driver_id' => $conductor->id,
+        ]);
+        $terminado = Ride::factory()->for($pasajero, 'passenger')->create([
+            'status' => RideStatus::Completed,
+            'driver_id' => $conductor->id,
+        ]);
+        $token = JWTAuth::fromUser($pasajero);
+
+        $this->withToken($token)->getJson($this->uri($activo))
+            ->assertOk()
+            ->assertJsonPath('data.driver_location', null);
+
+        $conductor->driverProfile()->update(['location_updated_at' => now()]);
+
+        $this->withToken($token)->getJson($this->uri($terminado))
+            ->assertOk()
+            ->assertJsonPath('data.driver_location', null);
     }
 
     #[DataProvider('estadosConConductorAsignado')]

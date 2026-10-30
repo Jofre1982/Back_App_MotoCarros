@@ -6,6 +6,7 @@ namespace Tests\Feature\Rides;
 
 use App\Enums\RideStatus;
 use App\Events\Realtime\DriverLocationUpdated;
+use App\Models\DriverProfile;
 use App\Models\Ride;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -120,6 +121,39 @@ class ShareRideLocationTest extends TestCase
         $this->assertSame([], $grabador->emitidos);
     }
 
+    /**
+     * Desde que el conductor acepta (camino a recoger al pasajero) ya
+     * comparte su ubicación: es lo que le dice al pasajero cuánto falta.
+     */
+    public function test_el_conductor_comparte_su_ubicacion_camino_a_recoger(): void
+    {
+        $grabador = $this->grabarBroadcasts();
+        $conductor = User::factory()->driver()->create();
+        $viaje = Ride::factory()->create(['status' => RideStatus::Accepted, 'driver_id' => $conductor->id]);
+
+        $this->withToken(JWTAuth::fromUser($conductor))
+            ->postJson($this->uri($viaje), ['latitude' => 3.8653, 'longitude' => -67.9239])
+            ->assertNoContent();
+
+        $this->assertCount(1, $grabador->emitidos);
+    }
+
+    public function test_guarda_la_ultima_ubicacion_en_el_perfil_del_conductor(): void
+    {
+        $conductor = User::factory()->driver()->create();
+        DriverProfile::factory()->create(['user_id' => $conductor->id]);
+        $viaje = $this->viajeEnCursoDe($conductor);
+
+        $this->withToken(JWTAuth::fromUser($conductor))
+            ->postJson($this->uri($viaje), ['latitude' => 3.8653, 'longitude' => -67.9239])
+            ->assertNoContent();
+
+        $perfil = $conductor->driverProfile()->firstOrFail();
+        $this->assertSame(3.8653, $perfil->latitude);
+        $this->assertSame(-67.9239, $perfil->longitude);
+        $this->assertNotNull($perfil->location_updated_at);
+    }
+
     #[DataProvider('estadosQueNoEstanEnCurso')]
     public function test_rechaza_un_viaje_que_no_esta_en_curso(RideStatus $estado): void
     {
@@ -145,7 +179,6 @@ class ShareRideLocationTest extends TestCase
     {
         return [
             RideStatus::Requested->value => [RideStatus::Requested],
-            RideStatus::Accepted->value => [RideStatus::Accepted],
             RideStatus::Completed->value => [RideStatus::Completed],
             RideStatus::Cancelled->value => [RideStatus::Cancelled],
         ];

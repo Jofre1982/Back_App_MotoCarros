@@ -7,6 +7,7 @@ namespace App\Actions\Realtime;
 use App\DTOs\Coordinates;
 use App\Events\Realtime\DriverLocationUpdated;
 use App\Models\Ride;
+use Illuminate\Support\Facades\Date;
 
 /**
  * Publica la ubicación del conductor asignado a un viaje en curso
@@ -24,6 +25,15 @@ final readonly class ShareDriverLocationAction
 {
     public function handle(Ride $ride, Coordinates $location): void
     {
+        // La última posición queda guardada (además del evento en tiempo
+        // real) para que el pasajero la lea al consultar el viaje, aunque
+        // el WebSocket no conecte: `RideResource::driver_location`.
+        $ride->driver?->driverProfile?->update([
+            'latitude' => $location->latitude,
+            'longitude' => $location->longitude,
+            'location_updated_at' => Date::now(),
+        ]);
+
         DriverLocationUpdated::dispatch(
             $ride->id,
             (int) $ride->driver_id,

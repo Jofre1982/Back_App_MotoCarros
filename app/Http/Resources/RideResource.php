@@ -8,6 +8,7 @@ use App\Enums\RideStatus;
 use App\Models\Ride;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Date;
 
 /**
  * Serializa un viaje según el schema `Ride` de openapi.yaml.
@@ -27,6 +28,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class RideResource extends JsonResource
 {
+    /** Pasado este tiempo, la posición guardada ya no sirve para estimar. */
+    private const LOCATION_MAX_AGE_MINUTES = 5;
+
     /**
      * @return array<string, mixed>
      */
@@ -67,14 +71,15 @@ class RideResource extends JsonResource
             // `started_at`: el contrato lo declara obligatorio y nullable para
             // que el cliente no distinga "todavía no hay conductor" de "esta
             // respuesta no lo trae" (historia #21).
-            //
-            // La ubicación del conductor no está acá y no es un olvido: no se
-            // persiste, viaja solo por el evento `location.updated` del canal
-            // `ride.{id}` (historia #20). Que `driver` sea `null` es
-            // justamente lo que dice que todavía no hay nadie publicándola.
+
             'driver' => $this->resource->driver === null
                 ? null
                 : new RideDriverResource($this->resource->driver),
+            // Última posición del conductor mientras va a recoger o en el
+            // viaje (la guarda `ShareDriverLocationAction`). `null` si no
+            // hay una de los últimos minutos: una posición vieja daría un
+            // "llega en X min" falso.
+            'driver_location' => $this->driverLocation(),
             // ISO-8601 explícito en vez del formato por defecto de Eloquent:
             // el contrato publica `format: date-time` y el default trae
             // microsegundos que nadie usa acá.
@@ -102,6 +107,31 @@ class RideResource extends JsonResource
             'payment' => $this->resource->payment === null
                 ? null
                 : ['status' => $this->resource->payment->status->value],
+        ];
+    }
+
+    /**
+     * @return array{latitude: float, longitude: float, updated_at: string}|null
+     */
+    private function driverLocation(): ?array
+    {
+        if (! in_array($this->resource->status, [RideStatus::Accepted, RideStatus::InProgress], true)) {
+            return null;
+        }
+
+        $profile = $this->resource->driver?->driverProfile;
+        if ($profile === null
+            || $profile->latitude === null
+            || $profile->longitude === null
+            || $profile->location_updated_at === null
+            || $profile->location_updated_at->lt(Date::now()->subMinutes(self::LOCATION_MAX_AGE_MINUTES))) {
+            return null;
+        }
+
+        return [
+            'latitude' => $profile->latitude,
+            'longitude' => $profile->longitude,
+            'updated_at' => $profile->location_updated_at->toIso8601String(),
         ];
     }
 }
