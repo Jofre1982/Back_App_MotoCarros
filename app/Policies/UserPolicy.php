@@ -39,6 +39,20 @@ class UserPolicy
             return false;
         }
 
+        return $this->sharesAService($viewer, $owner);
+    }
+
+    /**
+     * Foto del vehículo: el propio conductor, un admin, o quien comparte un
+     * viaje o mandado con él. Que esté aprobada lo decide el controller (404).
+     */
+    public function viewVehiclePhoto(User $viewer, User $owner): bool
+    {
+        return $viewer->is($owner) || $viewer->isAdmin() || $this->sharesAService($viewer, $owner);
+    }
+
+    private function sharesAService(User $viewer, User $owner): bool
+    {
         $pair = fn ($query) => $query
             ->where(fn ($q) => $q->where('passenger_id', $viewer->getKey())->where('driver_id', $owner->getKey()))
             ->orWhere(fn ($q) => $q->where('passenger_id', $owner->getKey())->where('driver_id', $viewer->getKey()));

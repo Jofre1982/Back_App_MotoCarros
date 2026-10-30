@@ -111,7 +111,7 @@ class AvatarTest extends TestCase
         $this->withToken(JWTAuth::fromUser($pasajero))
             ->getJson("/api/v1/rides/{$viaje->id}")
             ->assertJsonPath('data.driver.avatar_url', route('users.avatar', $conductor))
-            ->assertJsonPath('data.driver.vehicle', ['plate' => 'ABC12D', 'type' => 'motocarro']);
+            ->assertJsonPath('data.driver.vehicle', ['plate' => 'ABC12D', 'type' => 'motocarro', 'photo_url' => null]);
 
         $this->withToken(JWTAuth::fromUser($pasajero))
             ->get("/api/v1/users/{$conductor->id}/avatar")

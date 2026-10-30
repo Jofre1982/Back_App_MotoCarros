@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\V1\Errands\RespondToErrandPriceController;
 use App\Http\Controllers\Api\V1\Errands\ShowErrandPhotoController;
 use App\Http\Controllers\Api\V1\Profile\ShowAvatarController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
+use App\Http\Controllers\Api\V1\Profile\ShowVehiclePhotoController;
 use App\Http\Controllers\Api\V1\Profile\UpdateProfileController;
 use App\Http\Controllers\Api\V1\Profile\UploadAvatarController;
 use App\Http\Controllers\Api\V1\Realtime\RegisterDeviceTokenController;
@@ -143,6 +144,12 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->get('users/{user}/avatar', ShowAvatarController::class)
         ->name('users.avatar');
+
+    // Foto del vehículo (documento `foto_vehiculo` aprobado): el pasajero
+    // la ve junto a la del conductor para reconocer el motocarro.
+    Route::middleware('auth:api')
+        ->get('users/{user}/vehicle-photo', ShowVehiclePhotoController::class)
+        ->name('users.vehicle-photo');
 
     // Token de notificaciones push del dispositivo (historia #67). No es una
     // operación de un rol en particular —pasajero o conductor pueden tener un
