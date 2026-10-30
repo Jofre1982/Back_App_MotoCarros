@@ -38,6 +38,8 @@ class RideDriverResource extends JsonResource
             'vehicle' => $this->resource->vehicle === null ? null : [
                 'plate' => $this->resource->vehicle->plate,
                 'type' => $this->resource->vehicle->type->value,
+                // Color y características: la foto aprobada por el admin.
+                'photo_url' => VehiclePhotoUrl::forOthers($this->resource),
             ],
         ];
     }

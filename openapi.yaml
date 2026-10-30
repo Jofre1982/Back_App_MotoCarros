@@ -874,6 +874,59 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Not found.
+  /users/{id}/vehicle-photo:
+    get:
+      tags:
+        - Profile
+      operationId: showVehiclePhoto
+      summary: Ver la foto del vehículo de un conductor
+      description: >-
+        Devuelve la foto del vehículo (documento `foto_vehiculo`) para que el
+        pasajero reconozca el motocarro por su color y características. Solo
+        si el admin la aprobó. La ven el propio conductor, un admin o quien
+        comparte un viaje o mandado con él; **403** para cualquier otra
+        cuenta; **404** si no hay foto aprobada.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: El archivo de la foto (imagen).
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: No comparte ningún servicio con ese conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: La cuenta no existe o no tiene foto del vehículo aprobada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Not found.
   /me:
     get:
       tags:
@@ -6722,6 +6775,7 @@ components:
           required:
             - plate
             - type
+            - photo_url
           properties:
             plate:
               type: string
@@ -6730,6 +6784,14 @@ components:
               type: string
               enum: [motocarro, motocarga]
               example: motocarro
+            photo_url:
+              type: string
+              format: uri
+              nullable: true
+              description: >-
+                Foto del vehículo aprobada por el admin (GET
+                /users/{id}/vehicle-photo, con token), o `null` si no hay.
+              example: https://motocarroya.com/api/v1/users/7/vehicle-photo
     Payment:
       type: object
       description: >-
