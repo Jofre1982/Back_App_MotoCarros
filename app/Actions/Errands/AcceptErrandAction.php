@@ -8,6 +8,8 @@ use App\Enums\ErrandStatus;
 use App\Exceptions\Errands\ErrandNoLongerAvailableException;
 use App\Models\Errand;
 use App\Models\User;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,6 +23,8 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class AcceptErrandAction
 {
+    public function __construct(private PushNotifier $push) {}
+
     /**
      * @throws ErrandNoLongerAvailableException si el mandado ya no está en
      *                                          `requested` cuando se resuelve
@@ -28,7 +32,7 @@ final readonly class AcceptErrandAction
      */
     public function handle(Errand $errand, User $driver, int $agreedPrice): Errand
     {
-        return DB::transaction(function () use ($errand, $driver, $agreedPrice): Errand {
+        $accepted = DB::transaction(function () use ($errand, $driver, $agreedPrice): Errand {
             /** @var Errand $locked */
             $locked = Errand::query()->whereKey($errand->getKey())->lockForUpdate()->firstOrFail();
 
@@ -44,5 +48,12 @@ final readonly class AcceptErrandAction
 
             return $locked;
         });
+
+        $this->push->toUser(
+            $accepted->passenger_id,
+            ServiceMessages::priceOffered($driver->name, $accepted->agreed_price, ServiceMessages::errandName($accepted->vehicle_type)),
+        );
+
+        return $accepted;
     }
 }

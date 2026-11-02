@@ -8,6 +8,8 @@ use App\DTOs\RideCancellation;
 use App\Enums\RideStatus;
 use App\Models\Ride;
 use App\Models\User;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 
 /**
  * Mismo endpoint, dos operaciones distintas según quién cancela — ver
@@ -24,6 +26,8 @@ use App\Models\User;
  */
 final readonly class CancelRideAction
 {
+    public function __construct(private PushNotifier $push) {}
+
     public function handle(Ride $ride, User $actor): RideCancellation
     {
         if ($ride->driver_id === $actor->getKey()) {
@@ -50,6 +54,7 @@ final readonly class CancelRideAction
         $feeApplies = $ride->status === RideStatus::Accepted;
 
         $ride->update(['status' => RideStatus::Cancelled]);
+        $this->push->toUser($ride->driver_id, ServiceMessages::cancelledByPassenger('el viaje'));
 
         return new RideCancellation($ride, $feeApplies);
     }

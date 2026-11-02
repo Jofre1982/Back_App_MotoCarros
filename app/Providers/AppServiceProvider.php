@@ -9,6 +9,7 @@ use App\Services\Maps\GoogleRoutesEstimator;
 use App\Services\Maps\RouteEstimator;
 use App\Services\Payments\NullPaymentGateway;
 use App\Services\Payments\PaymentGateway;
+use App\Services\Push\FcmPushNotificationGateway;
 use App\Services\Realtime\EloquentNearbyDriverFinder;
 use App\Services\Realtime\EloquentRideParticipants;
 use App\Services\Realtime\NearbyDriverFinder;
@@ -20,10 +21,12 @@ use App\Services\Sms\SmsGateway;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use InvalidArgumentException;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -56,16 +59,38 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Proveedor de notificaciones push que avisa a los conductores cercanos
-     * de un viaje nuevo (historia #67). Todavía no hay cuenta de Firebase/APNs
-     * configurada —ver "Fuera de alcance" en el issue—, así que apunta a
-     * `NullPushNotificationGateway`, que solo deja un registro en el log.
-     * Cambiar a un proveedor real es reemplazar este binding, mismo criterio
-     * que `registerPaymentGateway()`.
+     * Proveedor de notificaciones push (ver config/push.php). Con
+     * `PUSH_PROVIDER=fcm` usa Firebase con la cuenta de servicio de
+     * `FIREBASE_CREDENTIALS`; si ese archivo falta o no se puede leer, no
+     * tumba la app: avisa en el log y sigue con `NullPushNotificationGateway`.
      */
     private function registerPushNotificationGateway(): void
     {
-        $this->app->singleton(PushNotificationGateway::class, NullPushNotificationGateway::class);
+        $this->app->singleton(PushNotificationGateway::class, function (): PushNotificationGateway {
+            if (Config::string('push.provider') !== 'fcm') {
+                return new NullPushNotificationGateway;
+            }
+
+            $path = config('push.fcm.credentials');
+            $json = is_string($path) && is_readable($path) ? file_get_contents($path) : false;
+            $credentials = is_string($json) ? json_decode($json, true) : null;
+
+            try {
+                if (! is_array($credentials)) {
+                    throw new RuntimeException('No se pudo leer FIREBASE_CREDENTIALS.');
+                }
+
+                return FcmPushNotificationGateway::fromCredentials(
+                    $credentials,
+                    Config::string('push.fcm.send_endpoint'),
+                    Config::integer('push.fcm.timeout'),
+                );
+            } catch (RuntimeException $e) {
+                Log::warning('Notificaciones push desactivadas: '.$e->getMessage());
+
+                return new NullPushNotificationGateway;
+            }
+        });
     }
 
     /**

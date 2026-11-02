@@ -7,6 +7,8 @@ namespace App\Actions\Rides;
 use App\Enums\RideStatus;
 use App\Events\Realtime\RideStatusChanged;
 use App\Models\Ride;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 
 /**
  * Marca como iniciado un viaje que el conductor asignado ya había aceptado
@@ -31,6 +33,8 @@ use App\Models\Ride;
  */
 final readonly class StartRideAction
 {
+    public function __construct(private PushNotifier $push) {}
+
     public function handle(Ride $ride): Ride
     {
         $ride->update([
@@ -43,6 +47,7 @@ final readonly class StartRideAction
         // acá empieza además a llegarle la ubicación del conductor
         // (historias #20 y #21).
         RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id, $ride->agreed_price);
+        $this->push->toUser($ride->passenger_id, ServiceMessages::rideStarted());
 
         return $ride;
     }

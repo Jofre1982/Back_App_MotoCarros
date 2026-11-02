@@ -8,6 +8,8 @@ use App\DTOs\ErrandRequest;
 use App\Enums\ErrandStatus;
 use App\Models\Errand;
 use App\Models\User;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 
 /**
  * Crea la solicitud de mandado de un pasajero (historia #92).
@@ -23,11 +25,13 @@ use App\Models\User;
  */
 final readonly class CreateErrandAction
 {
+    public function __construct(private PushNotifier $push) {}
+
     public function handle(User $passenger, ErrandRequest $request): Errand
     {
         $photoPath = $request->photo?->store('errand-photos', 'local');
 
-        return Errand::create([
+        $errand = Errand::create([
             'passenger_id' => $passenger->getKey(),
             'status' => ErrandStatus::Requested,
             'description' => $request->description,
@@ -38,5 +42,12 @@ final readonly class CreateErrandAction
             'destination_site_id' => $request->destinationSiteId,
             'destination_text' => $request->destinationText,
         ]);
+
+        $this->push->toUsers(
+            $this->push->driversForErrands($request->vehicleType, $passenger->getKey()),
+            ServiceMessages::newErrand($request->vehicleType),
+        );
+
+        return $errand;
     }
 }

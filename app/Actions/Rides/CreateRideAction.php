@@ -6,18 +6,17 @@ namespace App\Actions\Rides;
 
 use App\Actions\Payments\CalculateSiteFareAction;
 use App\DTOs\Coordinates;
-use App\DTOs\PushNotification;
 use App\DTOs\RideRequest;
 use App\Enums\RideMode;
 use App\Enums\RideStatus;
 use App\Enums\VehicleType;
 use App\Events\Realtime\RideRequested;
-use App\Models\DeviceToken;
 use App\Models\Ride;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 use App\Services\Realtime\NearbyDriverFinder;
-use App\Services\Realtime\PushNotificationGateway;
 
 /**
  * Crea la solicitud de viaje de un pasajero.
@@ -51,7 +50,7 @@ final readonly class CreateRideAction
     public function __construct(
         private CalculateSiteFareAction $calculateFare,
         private NearbyDriverFinder $nearbyDrivers,
-        private PushNotificationGateway $pushGateway,
+        private PushNotifier $push,
     ) {}
 
     public function handle(User $passenger, RideRequest $request): Ride
@@ -61,6 +60,9 @@ final readonly class CreateRideAction
             : $this->createFromCatalog($passenger, $request);
 
         $this->notifyNearbyDrivers($ride, $request->origin);
+        // Push a todo conductor que recibe viajes (el pueblo es pequeño, como
+        // la lista): llega aunque tenga la app cerrada.
+        $this->push->toUsers($this->push->driversForRides($passenger->getKey()), ServiceMessages::newRide());
 
         return $ride;
     }
@@ -132,22 +134,5 @@ final readonly class CreateRideAction
             destinationText: $ride->destination_text,
         );
 
-        $this->sendPushToNearbyDrivers($driverIds);
-    }
-
-    /**
-     * @param  list<int>  $driverIds
-     */
-    private function sendPushToNearbyDrivers(array $driverIds): void
-    {
-        $notification = new PushNotification(
-            title: 'Nuevo viaje cerca de ti',
-            body: 'Hay un pasajero esperando cerca. Abre la app para ver el detalle.',
-        );
-
-        DeviceToken::query()
-            ->whereIn('user_id', $driverIds)
-            ->get()
-            ->each(fn (DeviceToken $token) => $this->pushGateway->send($token, $notification));
     }
 }

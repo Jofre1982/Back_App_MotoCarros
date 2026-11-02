@@ -9,6 +9,8 @@ use App\DTOs\FareBreakdown;
 use App\Enums\RideStatus;
 use App\Events\Realtime\RideStatusChanged;
 use App\Models\Ride;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 
 /**
  * Marca como completado un viaje que el conductor asignado tiene en curso
@@ -31,7 +33,10 @@ use App\Models\Ride;
  */
 final readonly class CompleteRideAction
 {
-    public function __construct(private ChargeRideAction $chargeRide) {}
+    public function __construct(
+        private ChargeRideAction $chargeRide,
+        private PushNotifier $push,
+    ) {}
 
     public function handle(Ride $ride): Ride
     {
@@ -69,6 +74,7 @@ final readonly class CompleteRideAction
         // Cierra el ciclo de vida para el pasajero que sigue el viaje por el
         // canal privado (historia #21).
         RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id, $ride->agreed_price);
+        $this->push->toUser($ride->passenger_id, ServiceMessages::rideCompleted($ride->final_fare));
 
         return $ride;
     }

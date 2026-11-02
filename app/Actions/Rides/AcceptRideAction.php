@@ -11,6 +11,8 @@ use App\Events\Realtime\RideStatusChanged;
 use App\Exceptions\Rides\RideNoLongerAvailableException;
 use App\Models\Ride;
 use App\Models\User;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 use App\Services\Realtime\NearbyDriverFinder;
 use Illuminate\Support\Facades\DB;
 
@@ -37,7 +39,10 @@ use Illuminate\Support\Facades\DB;
  */
 final readonly class AcceptRideAction
 {
-    public function __construct(private NearbyDriverFinder $nearbyDrivers) {}
+    public function __construct(
+        private NearbyDriverFinder $nearbyDrivers,
+        private PushNotifier $push,
+    ) {}
 
     /**
      * @throws RideNoLongerAvailableException si el viaje ya no está en
@@ -72,6 +77,10 @@ final readonly class AcceptRideAction
         RideStatusChanged::dispatch($accepted->id, $accepted->status, $accepted->driver_id, $accepted->agreed_price);
 
         $this->notifyOtherDrivers($accepted, $driver);
+        $this->push->toUser(
+            $accepted->passenger_id,
+            ServiceMessages::priceOffered($driver->name, $accepted->agreed_price, 'viaje'),
+        );
 
         return $accepted;
     }
