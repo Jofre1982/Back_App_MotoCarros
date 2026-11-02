@@ -7,6 +7,8 @@ namespace App\Actions\Rides;
 use App\Enums\RideStatus;
 use App\Events\Realtime\RideStatusChanged;
 use App\Models\Ride;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 use Illuminate\Support\Facades\Date;
 
 /**
@@ -15,8 +17,11 @@ use Illuminate\Support\Facades\Date;
  */
 final readonly class RespondToRidePriceAction
 {
+    public function __construct(private PushNotifier $push) {}
+
     public function handle(Ride $ride, bool $accept): Ride
     {
+        $driverId = $ride->driver_id;
         $ride->update($accept
             ? ['price_confirmed_at' => Date::now()]
             : [
@@ -27,6 +32,10 @@ final readonly class RespondToRidePriceAction
             ]);
 
         RideStatusChanged::dispatch($ride->id, $ride->status, $ride->driver_id, $ride->agreed_price);
+
+        $this->push->toUser($driverId, $accept
+            ? ServiceMessages::priceAccepted('Ve a recoger al pasajero.')
+            : ServiceMessages::priceRejected());
 
         return $ride->refresh();
     }

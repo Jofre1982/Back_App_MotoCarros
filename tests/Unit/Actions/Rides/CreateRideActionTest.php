@@ -38,6 +38,8 @@ class CreateRideActionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // El push se difiere hasta después de responder; acá se ejecuta ya.
+        $this->withoutDefer();
 
         $this->sitio = $this->siteWithFare(8850);
     }

@@ -6,6 +6,8 @@ namespace App\Actions\Errands;
 
 use App\Enums\ErrandStatus;
 use App\Models\Errand;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 use Illuminate\Support\Facades\Date;
 
 /**
@@ -14,8 +16,11 @@ use Illuminate\Support\Facades\Date;
  */
 final readonly class RespondToErrandPriceAction
 {
+    public function __construct(private PushNotifier $push) {}
+
     public function handle(Errand $errand, bool $accept): Errand
     {
+        $driverId = $errand->driver_id;
         $errand->update($accept
             ? ['price_confirmed_at' => Date::now()]
             : [
@@ -24,6 +29,10 @@ final readonly class RespondToErrandPriceAction
                 'agreed_price' => null,
                 'price_confirmed_at' => null,
             ]);
+
+        $this->push->toUser($driverId, $accept
+            ? ServiceMessages::priceAccepted('Ya puedes hacer el pedido.')
+            : ServiceMessages::priceRejected());
 
         return $errand->refresh();
     }

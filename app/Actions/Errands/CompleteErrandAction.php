@@ -6,6 +6,8 @@ namespace App\Actions\Errands;
 
 use App\Enums\ErrandStatus;
 use App\Models\Errand;
+use App\Services\Push\PushNotifier;
+use App\Services\Push\ServiceMessages;
 
 /**
  * Marca como completado un mandado que el conductor asignado tiene aceptado
@@ -19,12 +21,19 @@ use App\Models\Errand;
  */
 final readonly class CompleteErrandAction
 {
+    public function __construct(private PushNotifier $push) {}
+
     public function handle(Errand $errand): Errand
     {
         $errand->update([
             'status' => ErrandStatus::Completed,
             'completed_at' => now(),
         ]);
+
+        $this->push->toUser(
+            $errand->passenger_id,
+            ServiceMessages::errandCompleted($errand->agreed_price, ServiceMessages::errandName($errand->vehicle_type)),
+        );
 
         return $errand;
     }
