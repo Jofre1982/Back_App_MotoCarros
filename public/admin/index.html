@@ -226,7 +226,7 @@
     <div class="table-wrap">
       <table class="users" id="users-table" hidden>
         <thead>
-          <tr><th>Nombre</th><th>Contacto</th><th>Rol</th><th>Registro</th></tr>
+          <tr><th>Nombre</th><th>Contacto</th><th>Rol</th><th>Plan conductor</th><th>Registro</th></tr>
         </thead>
         <tbody id="users-body"></tbody>
       </table>
@@ -813,6 +813,8 @@
     }
     row.appendChild(roleCell);
 
+    row.appendChild(buildPlanCell(user));
+
     var dateCell = document.createElement("td");
     dateCell.textContent = new Date(user.registered_at).toLocaleString("es-CO", {
       dateStyle: "medium",
@@ -821,6 +823,85 @@
     row.appendChild(dateCell);
 
     return row;
+  }
+
+  // Plan del conductor: hasta cuándo tiene acceso y el botón para regalar
+  // meses (testers de la Play Store). Solo para cuentas con perfil de
+  // conductor.
+  function buildPlanCell(user) {
+    var cell = document.createElement("td");
+    if (!user.driver_verification_status) {
+      cell.textContent = "—";
+      cell.style.color = "var(--muted)";
+      return cell;
+    }
+
+    var status = document.createElement("div");
+    var ends = user.subscription_ends_at ? new Date(user.subscription_ends_at) : null;
+    if (ends && ends > new Date()) {
+      status.textContent = "Activo hasta " + ends.toLocaleDateString("es-CO", { dateStyle: "medium" });
+      status.style.color = "var(--success, #1a7f37)";
+    } else if (ends) {
+      status.textContent = "Venció el " + ends.toLocaleDateString("es-CO", { dateStyle: "medium" });
+      status.style.color = "var(--danger, #c0392b)";
+    } else {
+      status.textContent = "Sin meses";
+      status.style.color = "var(--muted)";
+    }
+    status.style.fontWeight = "600";
+    cell.appendChild(status);
+
+    var controls = document.createElement("div");
+    controls.style.display = "flex";
+    controls.style.gap = "6px";
+    controls.style.marginTop = "6px";
+    var months = document.createElement("select");
+    months.setAttribute("aria-label", "Meses a regalar");
+    [1, 2, 3, 6, 12].forEach(function (n) {
+      var option = document.createElement("option");
+      option.value = String(n);
+      option.textContent = n + (n === 1 ? " mes" : " meses");
+      months.appendChild(option);
+    });
+    var gift = document.createElement("button");
+    gift.type = "button";
+    gift.className = "btn-primary";
+    gift.textContent = "🎁 Regalar";
+    var error = document.createElement("div");
+    error.className = "error";
+    error.hidden = true;
+
+    gift.addEventListener("click", function () {
+      gift.disabled = true;
+      gift.textContent = "Guardando...";
+      error.hidden = true;
+      apiFetch("/admin/users/" + user.id + "/gift-months", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ months: Number(months.value) }),
+      })
+        .then(function (response) {
+          return response.json().then(function (body) {
+            if (!response.ok) throw new Error(body.message || "No se pudo regalar.");
+            return body;
+          });
+        })
+        .then(function (body) {
+          cell.replaceWith(buildPlanCell(body.data));
+        })
+        .catch(function (err) {
+          error.textContent = err.message;
+          error.hidden = false;
+          gift.disabled = false;
+          gift.textContent = "🎁 Regalar";
+        });
+    });
+
+    controls.appendChild(months);
+    controls.appendChild(gift);
+    cell.appendChild(controls);
+    cell.appendChild(error);
+    return cell;
   }
 
   loginForm.addEventListener("submit", function (event) {

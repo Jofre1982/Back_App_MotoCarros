@@ -2461,6 +2461,78 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/users/{id}/gift-months:
+    post:
+      tags:
+        - Admin
+      operationId: giftSubscriptionMonths
+      summary: Regalar meses de acceso a un conductor
+      description: >-
+        El administrador le regala meses de acceso a un conductor (por
+        ejemplo a los testers del lanzamiento). Se suman desde hoy, o desde
+        la fecha en que vence lo que ya tenía si todavía no venció. Solo
+        `admin`; **403** para cualquier otra cuenta, **404** si la cuenta no
+        existe y **422** si no tiene perfil de conductor o los meses no son
+        de 1 a 12.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - months
+              properties:
+                months:
+                  type: integer
+                  minimum: 1
+                  maximum: 12
+                  example: 1
+      responses:
+        "200":
+          description: La cuenta actualizada, con su nuevo `subscription_ends_at`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdminUser"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: La cuenta no es de administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: La cuenta no existe.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Meses fuera de 1 a 12, o la cuenta no es de conductor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/users:
     get:
       tags:
@@ -6441,8 +6513,18 @@ components:
         - role
         - roles
         - driver_verification_status
+        - subscription_ends_at
         - registered_at
       properties:
+        subscription_ends_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Hasta cuándo tiene el conductor acceso pagado o regalado (POST
+            /admin/users/{id}/gift-months). `null` si nunca tuvo, o si la
+            cuenta no tiene perfil de conductor.
+          example: "2026-12-05T20:00:00+00:00"
         avatar_url:
           type: string
           format: uri

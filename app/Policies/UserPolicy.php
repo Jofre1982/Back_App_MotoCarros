@@ -68,4 +68,12 @@ class UserPolicy
     {
         return $user->isAdmin();
     }
+
+    /**
+     * Regalar meses de acceso a un conductor: solo un admin.
+     */
+    public function giftSubscription(User $user): bool
+    {
+        return $user->isAdmin();
+    }
 }

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Admin\CreateCargoJobTypeController;
 use App\Http\Controllers\Api\V1\Admin\CreateSiteController;
 use App\Http\Controllers\Api\V1\Admin\DeleteCargoJobTypeController;
 use App\Http\Controllers\Api\V1\Admin\DeleteSiteController;
+use App\Http\Controllers\Api\V1\Admin\GiftSubscriptionMonthsController;
 use App\Http\Controllers\Api\V1\Admin\ListCargoJobTypesController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Admin\ListPendingAvatarsController;
@@ -253,6 +254,12 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:api')
             ->get('users', ListUsersController::class)
             ->name('users.index');
+
+        // Meses de acceso regalados a un conductor (testers de la Play
+        // Store). Solo `admin` (UserPolicy::giftSubscription).
+        Route::middleware('auth:api')
+            ->post('users/{user}/gift-months', GiftSubscriptionMonthsController::class)
+            ->name('users.gift-months');
 
         // Fotos de perfil de conductores por revisar (los pasajeros solo ven
         // una foto aprobada). Autorización en UserPolicy::reviewAvatar().
