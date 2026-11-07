@@ -928,6 +928,61 @@ paths:
               example:
                 message: Not found.
   /me:
+    delete:
+      tags:
+        - Profile
+      operationId: deleteAccount
+      summary: Eliminar la cuenta autenticada
+      description: >-
+        Borra la cuenta y sus datos (requisito de Google Play): perfil de
+        conductor, documentos, vehículo, foto de perfil, celulares
+        registrados para notificaciones, y los viajes y mandados que pidió
+        como pasajero. En los servicios que hizo como conductor queda sin
+        conductor (`driver: null`), para no borrar el historial de la otra
+        persona. Pide la contraseña otra vez. **422** si la contraseña no es
+        correcta (`password`) o si hay un viaje o pedido sin terminar
+        (`account`). Cierra la sesión: el token deja de servir.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  format: password
+                  example: secreto123
+      responses:
+        "204":
+          description: La cuenta se eliminó.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Contraseña incorrecta, o hay un viaje o pedido sin terminar.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: La contraseña no es correcta.
+                errors:
+                  password:
+                    - La contraseña no es correcta.
+        "429":
+          description: Demasiados intentos; espera un momento.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     get:
       tags:
         - Profile
