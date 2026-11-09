@@ -24,6 +24,8 @@ use Illuminate\Support\Carbon;
  * @property ErrandStatus $status
  * @property int $passenger_id
  * @property int|null $driver_id
+ * @property string|null $driver_vehicle_plate
+ * @property VehicleType|null $driver_vehicle_type
  * @property string $description
  * @property string|null $photo_path
  * @property float $origin_latitude
@@ -49,6 +51,8 @@ use Illuminate\Support\Carbon;
     'agreed_price',
     'price_confirmed_at',
     'completed_at',
+    'driver_vehicle_plate',
+    'driver_vehicle_type',
 ])]
 #[UsePolicy(ErrandPolicy::class)]
 class Errand extends Model
@@ -58,6 +62,7 @@ class Errand extends Model
     protected function casts(): array
     {
         return [
+            'driver_vehicle_type' => VehicleType::class,
             'status' => ErrandStatus::class,
             'vehicle_type' => VehicleType::class,
             'origin_latitude' => 'float',

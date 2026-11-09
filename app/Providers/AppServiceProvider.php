@@ -67,7 +67,8 @@ class AppServiceProvider extends ServiceProvider
     private function registerPushNotificationGateway(): void
     {
         $this->app->singleton(PushNotificationGateway::class, function (): PushNotificationGateway {
-            if (Config::string('push.provider') !== 'fcm') {
+            // Sin Config::string: `PUSH_PROVIDER=null` en el .env llega como null.
+            if (config('push.provider') !== 'fcm') {
                 return new NullPushNotificationGateway;
             }
 

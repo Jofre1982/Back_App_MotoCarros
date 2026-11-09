@@ -75,6 +75,15 @@ class RideResource extends JsonResource
             'driver' => $this->resource->driver === null
                 ? null
                 : new RideDriverResource($this->resource->driver),
+            'driver_vehicle' => ServiceHistoryFields::driverVehicle(
+                $this->resource->driver_vehicle_plate,
+                $this->resource->driver_vehicle_type,
+            ),
+            'passenger_name' => ServiceHistoryFields::passengerNameFor(
+                $request->user(),
+                $this->resource->driver_id,
+                $this->resource->passenger,
+            ),
             // Última posición del conductor mientras va a recoger o en el
             // viaje (la guarda `ShareDriverLocationAction`). `null` si no
             // hay una de los últimos minutos: una posición vieja daría un

@@ -6605,6 +6605,8 @@ components:
         - estimated_fare
         - agreed_price
         - driver
+        - driver_vehicle
+        - passenger_name
         - driver_location
         - requested_at
         - started_at
@@ -6612,6 +6614,32 @@ components:
         - final_fare
         - payment
       properties:
+        driver_vehicle:
+          type: object
+          nullable: true
+          description: >-
+            Placa y tipo del vehículo con el que el conductor aceptó este
+            servicio, guardados en ese momento: aunque después cambie de
+            vehículo, el historial sigue mostrando con cuál se hizo (para
+            reclamos u objetos olvidados). `null` mientras no hay conductor.
+          required:
+            - plate
+            - type
+          properties:
+            plate:
+              type: string
+              example: ABC12D
+            type:
+              type: string
+              enum: [motocarro, motocarga]
+              example: motocarro
+        passenger_name:
+          type: string
+          nullable: true
+          description: >-
+            Nombre del pasajero, solo para el conductor asignado (su
+            historial). `null` para cualquier otra cuenta.
+          example: María Pérez
         id:
           type: integer
           description: >-
@@ -7047,10 +7075,38 @@ components:
         - destination
         - destination_text
         - driver
+        - driver_vehicle
+        - passenger_name
         - agreed_price
         - requested_at
         - completed_at
       properties:
+        driver_vehicle:
+          type: object
+          nullable: true
+          description: >-
+            Placa y tipo del vehículo con el que el conductor aceptó este
+            servicio, guardados en ese momento: aunque después cambie de
+            vehículo, el historial sigue mostrando con cuál se hizo (para
+            reclamos u objetos olvidados). `null` mientras no hay conductor.
+          required:
+            - plate
+            - type
+          properties:
+            plate:
+              type: string
+              example: ABC12D
+            type:
+              type: string
+              enum: [motocarro, motocarga]
+              example: motocarro
+        passenger_name:
+          type: string
+          nullable: true
+          description: >-
+            Nombre del pasajero, solo para el conductor asignado (su
+            historial). `null` para cualquier otra cuenta.
+          example: María Pérez
         id:
           type: integer
           description: >-
