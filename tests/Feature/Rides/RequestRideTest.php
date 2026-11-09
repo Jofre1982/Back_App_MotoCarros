@@ -77,6 +77,8 @@ class RequestRideTest extends TestCase
                 'driver_vehicle' => null,
                 'passenger_name' => null,
                 'driver_location' => null,
+                'preferred_driver' => null,
+                'preferred_until' => null,
                 'requested_at' => $viaje->created_at?->toIso8601String(),
                 // El viaje nace sin empezar, pero el campo viaja igual: el
                 // schema `Ride` lo declara obligatorio y nullable (historia

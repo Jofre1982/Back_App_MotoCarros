@@ -10,6 +10,7 @@ use App\Models\Ride;
 use App\Models\User;
 use App\Services\Push\PushNotifier;
 use App\Services\Push\ServiceMessages;
+use Illuminate\Support\Facades\Date;
 
 /**
  * Mismo endpoint, dos operaciones distintas según quién cancela — ver
@@ -79,6 +80,8 @@ final readonly class CancelRideAction
             'driver_vehicle_type' => null,
             'agreed_price' => null,
             'price_confirmed_at' => null,
+            // Si era para su favorito y él lo soltó, queda para todos ya.
+            ...($ride->preferred_until?->isFuture() === true ? ['preferred_until' => Date::now()] : []),
         ]);
 
         $driver->driverProfile?->increment('cancellation_count');

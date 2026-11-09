@@ -35,12 +35,14 @@ final readonly class RideRequest
         public int $passengerCount,
         public RideMode $mode = RideMode::Catalog,
         public ?string $destinationText = null,
+        // Conductor favorito al que se le ofrece primero (o `null`).
+        public ?int $preferredDriverId = null,
     ) {}
 
     /**
      * Viaje solo recogida (historia #95).
      */
-    public static function pickupOnly(Coordinates $origin, ?string $destinationText, int $passengerCount): self
+    public static function pickupOnly(Coordinates $origin, ?string $destinationText, int $passengerCount, ?int $preferredDriverId = null): self
     {
         return new self(
             origin: $origin,
@@ -48,6 +50,7 @@ final readonly class RideRequest
             passengerCount: $passengerCount,
             mode: RideMode::PickupOnly,
             destinationText: $destinationText === null ? null : trim($destinationText),
+            preferredDriverId: $preferredDriverId,
         );
     }
 }

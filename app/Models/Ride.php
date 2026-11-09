@@ -37,6 +37,9 @@ use Illuminate\Support\Carbon;
  * @property RideMode $mode
  * @property int $passenger_id
  * @property int|null $driver_id
+ * @property int|null $preferred_driver_id
+ * @property Carbon|null $preferred_until
+ * @property Carbon|null $opened_to_all_at
  * @property string|null $driver_vehicle_plate
  * @property VehicleType|null $driver_vehicle_type
  * @property float $origin_latitude
@@ -70,6 +73,9 @@ use Illuminate\Support\Carbon;
     'price_confirmed_at',
     'driver_vehicle_plate',
     'driver_vehicle_type',
+    'preferred_driver_id',
+    'preferred_until',
+    'opened_to_all_at',
 ])]
 #[UsePolicy(RidePolicy::class)]
 class Ride extends Model
@@ -101,6 +107,8 @@ class Ride extends Model
             'final_fare' => 'integer',
             'agreed_price' => 'integer',
             'price_confirmed_at' => 'datetime',
+            'preferred_until' => 'datetime',
+            'opened_to_all_at' => 'datetime',
         ];
     }
 
@@ -147,6 +155,22 @@ class Ride extends Model
     public function payment(): HasOne
     {
         return $this->hasOne(Payment::class);
+    }
+
+    public function preferredDriver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'preferred_driver_id');
+    }
+
+    /**
+     * El pasajero se lo pidió primero a su conductor favorito y todavía no
+     * se cumplen los minutos de espera: nadie más puede verlo ni tomarlo.
+     */
+    public function isReservedForAnotherDriver(int $driverId): bool
+    {
+        return $this->preferred_driver_id !== null
+            && $this->preferred_driver_id !== $driverId
+            && $this->preferred_until?->isFuture() === true;
     }
 
     public function isPickupOnly(): bool
