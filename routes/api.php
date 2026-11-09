@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\V1\Errands\ShowErrandPhotoController;
 use App\Http\Controllers\Api\V1\Favorites\AddFavoriteDriverController;
 use App\Http\Controllers\Api\V1\Favorites\ListFavoriteDriversController;
 use App\Http\Controllers\Api\V1\Favorites\RemoveFavoriteDriverController;
+use App\Http\Controllers\Api\V1\Profile\DeleteAccountController;
 use App\Http\Controllers\Api\V1\Profile\ShowAvatarController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
 use App\Http\Controllers\Api\V1\Profile\ShowVehiclePhotoController;
@@ -132,6 +133,13 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:api')
         ->get('me', ShowProfileController::class)
         ->name('profile.show');
+
+    // Eliminar la cuenta (requisito de Google Play): pide la contraseña y
+    // falla con 422 si hay un viaje o pedido sin terminar. La página
+    // pública /eliminar-cuenta usa este mismo endpoint.
+    Route::middleware(['auth:api', 'throttle:auth'])
+        ->delete('me', DeleteAccountController::class)
+        ->name('profile.destroy');
 
     // Conductores favoritos del pasajero (pedido del dueño). Al pedir un
     // viaje puede ofrecérselo primero a uno de ellos (`preferred_driver_id`).
