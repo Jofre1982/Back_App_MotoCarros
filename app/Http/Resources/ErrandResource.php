@@ -51,6 +51,15 @@ class ErrandResource extends JsonResource
             'driver' => $this->resource->driver === null
                 ? null
                 : new RideDriverResource($this->resource->driver),
+            'driver_vehicle' => ServiceHistoryFields::driverVehicle(
+                $this->resource->driver_vehicle_plate,
+                $this->resource->driver_vehicle_type,
+            ),
+            'passenger_name' => ServiceHistoryFields::passengerNameFor(
+                $request->user(),
+                $this->resource->driver_id,
+                $this->resource->passenger,
+            ),
             'agreed_price' => $this->resource->agreed_price,
             'price_confirmed' => $this->resource->isPriceConfirmed(),
             'counterpart' => CounterpartResource::for(

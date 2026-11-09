@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\VehicleType;
 use App\Enums\RideMode;
 use App\Enums\RideStatus;
 use App\Policies\RidePolicy;
@@ -36,6 +37,8 @@ use Illuminate\Support\Carbon;
  * @property RideMode $mode
  * @property int $passenger_id
  * @property int|null $driver_id
+ * @property string|null $driver_vehicle_plate
+ * @property VehicleType|null $driver_vehicle_type
  * @property float $origin_latitude
  * @property float $origin_longitude
  * @property int|null $destination_site_id
@@ -65,6 +68,8 @@ use Illuminate\Support\Carbon;
     'destination_text',
     'agreed_price',
     'price_confirmed_at',
+    'driver_vehicle_plate',
+    'driver_vehicle_type',
 ])]
 #[UsePolicy(RidePolicy::class)]
 class Ride extends Model
@@ -84,6 +89,7 @@ class Ride extends Model
     protected function casts(): array
     {
         return [
+            'driver_vehicle_type' => VehicleType::class,
             'status' => RideStatus::class,
             'mode' => RideMode::class,
             'origin_latitude' => 'float',

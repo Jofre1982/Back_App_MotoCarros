@@ -75,6 +75,8 @@ final readonly class CancelRideAction
         $ride->update([
             'status' => RideStatus::Requested,
             'driver_id' => null,
+            'driver_vehicle_plate' => null,
+            'driver_vehicle_type' => null,
             'agreed_price' => null,
             'price_confirmed_at' => null,
         ]);
