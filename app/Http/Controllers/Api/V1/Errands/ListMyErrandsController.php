@@ -20,7 +20,7 @@ class ListMyErrandsController extends Controller
 
         $errands = Errand::query()
             ->where($column, $request->user()?->getKey())
-            ->with('driver', 'destinationSite')
+            ->with('driver', 'passenger', 'destinationSite')
             ->latest()
             ->latest('id')
             ->limit(self::LIMIT)

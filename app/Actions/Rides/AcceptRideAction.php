@@ -62,6 +62,10 @@ final readonly class AcceptRideAction
             $locked->update([
                 'status' => RideStatus::Accepted,
                 'driver_id' => $driver->getKey(),
+                // Con que vehiculo se hizo: queda en el historial aunque
+                // despues cambie de vehiculo.
+                'driver_vehicle_plate' => $driver->vehicle?->plate,
+                'driver_vehicle_type' => $driver->vehicle?->type,
                 // Solo un viaje solo recogida guarda precio acordado
                 // (historia #95); el de catálogo ya tiene el del sitio.
                 'agreed_price' => $locked->isPickupOnly() ? $agreedPrice : null,

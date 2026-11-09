@@ -32,6 +32,8 @@ final readonly class CancelErrandAction
             ? [
                 'status' => ErrandStatus::Requested,
                 'driver_id' => null,
+                'driver_vehicle_plate' => null,
+                'driver_vehicle_type' => null,
                 'agreed_price' => null,
                 'price_confirmed_at' => null,
             ]

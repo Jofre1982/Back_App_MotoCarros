@@ -43,6 +43,8 @@ final readonly class AcceptErrandAction
             $locked->update([
                 'status' => ErrandStatus::Accepted,
                 'driver_id' => $driver->getKey(),
+                'driver_vehicle_plate' => $driver->vehicle?->plate,
+                'driver_vehicle_type' => $driver->vehicle?->type,
                 'agreed_price' => $agreedPrice,
             ]);
 
