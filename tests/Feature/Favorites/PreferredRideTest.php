@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Realtime\PushNotificationGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -124,12 +125,12 @@ class PreferredRideTest extends TestCase
         $this->assertEqualsCanonicalizing(['favorito: 🛺 Nuevo viaje', 'otro: 🛺 Nuevo viaje'], $this->gateway->enviados);
     }
 
-    private function pedirAlFavorito(): \Illuminate\Testing\TestResponse
+    private function pedirAlFavorito(): TestResponse
     {
         return $this->pedir($this->favorito->id);
     }
 
-    private function pedir(?int $favorito): \Illuminate\Testing\TestResponse
+    private function pedir(?int $favorito): TestResponse
     {
         return $this->comoConductor($this->pasajero)->postJson('/api/v1/rides', array_filter([
             'mode' => 'pickup_only',
