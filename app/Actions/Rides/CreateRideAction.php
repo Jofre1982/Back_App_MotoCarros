@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\Push\PushNotifier;
 use App\Services\Push\ServiceMessages;
 use App\Services\Realtime\NearbyDriverFinder;
+use Illuminate\Support\Facades\Date;
 
 /**
  * Crea la solicitud de viaje de un pasajero.
@@ -47,6 +48,9 @@ use App\Services\Realtime\NearbyDriverFinder;
  */
 final readonly class CreateRideAction
 {
+    /** Tiempo que el viaje espera solo al conductor favorito. */
+    public const int PREFERRED_WINDOW_SECONDS = 120;
+
     public function __construct(
         private CalculateSiteFareAction $calculateFare,
         private NearbyDriverFinder $nearbyDrivers,
@@ -58,6 +62,19 @@ final readonly class CreateRideAction
         $ride = $request->mode === RideMode::PickupOnly
             ? $this->createPickupOnly($passenger, $request)
             : $this->createFromCatalog($passenger, $request);
+
+        if ($request->preferredDriverId !== null) {
+            // Se lo pidió primero a su favorito: solo él lo ve y le llega el
+            // aviso durante unos minutos (`OpenExpiredPreferredRidesAction`
+            // lo abre a todos después).
+            $ride->update([
+                'preferred_driver_id' => $request->preferredDriverId,
+                'preferred_until' => Date::now()->addSeconds(self::PREFERRED_WINDOW_SECONDS),
+            ]);
+            $this->push->toUser($request->preferredDriverId, ServiceMessages::chosenAsFavorite());
+
+            return $ride;
+        }
 
         $this->notifyNearbyDrivers($ride, $request->origin);
         // Push a todo conductor que recibe viajes (el pueblo es pequeño, como

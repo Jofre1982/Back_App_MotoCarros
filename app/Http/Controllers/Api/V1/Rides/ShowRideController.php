@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Rides;
 
+use App\Actions\Rides\OpenExpiredPreferredRidesAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Rides\ShowRideRequest;
 use App\Http\Resources\RideResource;
@@ -26,12 +27,16 @@ use App\Models\Ride;
  */
 class ShowRideController extends Controller
 {
-    public function __invoke(ShowRideRequest $request, Ride $ride): RideResource
+    public function __invoke(ShowRideRequest $request, Ride $ride, OpenExpiredPreferredRidesAction $openExpired): RideResource
     {
+        // Si su favorito no respondió a tiempo, el pasajero que espera es
+        // quien dispara el aviso a los demás conductores.
+        $openExpired->handle($ride);
+
         // Las relaciones se piden explícitamente en vez de dejar que el
         // Resource las cargue solas al serializar: son las únicas consultas
         // extra de este endpoint y así quedan a la vista de quien lea el
         // controller.
-        return new RideResource($ride->loadMissing('driver', 'destinationSite'));
+        return new RideResource($ride->refresh()->loadMissing('driver', 'destinationSite', 'preferredDriver'));
     }
 }

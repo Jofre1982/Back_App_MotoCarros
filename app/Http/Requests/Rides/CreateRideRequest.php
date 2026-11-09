@@ -8,6 +8,7 @@ use App\DTOs\Coordinates;
 use App\DTOs\RideRequest;
 use App\Enums\RideMode;
 use App\Enums\RideStatus;
+use App\Enums\VehicleType;
 use App\Http\Requests\Concerns\ValidatesRideDestination;
 use App\Models\Ride;
 use App\Models\Site;
@@ -53,6 +54,8 @@ class CreateRideRequest extends FormRequest
             'origin' => ['required', 'array'],
             'origin.latitude' => ['required', 'numeric', 'between:-90,90'],
             'origin.longitude' => ['required', 'numeric', 'between:-180,180'],
+            // Pedirle primero a un conductor favorito (opcional).
+            'preferred_driver_id' => ['sometimes', 'nullable', 'integer'],
         ];
 
         // Viaje solo recogida (historia #95): el destino es texto libre,
@@ -88,13 +91,44 @@ class CreateRideRequest extends FormRequest
     public function after(): array
     {
         if ($this->mode() === RideMode::PickupOnly) {
-            return [$this->rejectSecondActiveRide(...)];
+            return [$this->rejectSecondActiveRide(...), $this->rejectUnavailablePreferredDriver(...)];
         }
 
         return [
             $this->rejectSiteWithoutMotocarroFare(...),
             $this->rejectSecondActiveRide(...),
+            $this->rejectUnavailablePreferredDriver(...),
         ];
+    }
+
+    /**
+     * El favorito tiene que estar en la lista del pasajero y recibiendo
+     * viajes ahora: si no, el viaje esperaría minutos a alguien que no lo
+     * va a ver.
+     */
+    private function rejectUnavailablePreferredDriver(Validator $validator): void
+    {
+        $driverId = $this->preferredDriverId();
+        $passenger = $this->user();
+        if ($driverId === null || ! $passenger instanceof User || $validator->errors()->has('preferred_driver_id')) {
+            return;
+        }
+
+        $favorite = $passenger->favoriteDrivers()->with('vehicle', 'driverProfile')->find($driverId);
+        if (! $favorite instanceof User) {
+            $validator->errors()->add('preferred_driver_id', 'Ese conductor no está en tus favoritos.');
+
+            return;
+        }
+
+        if ($favorite->driverProfile?->is_available !== true || $favorite->vehicle?->type === VehicleType::Motocarga) {
+            $validator->errors()->add('preferred_driver_id', 'Tu conductor favorito no está recibiendo viajes ahora. Pide a todos los conductores.');
+        }
+    }
+
+    public function preferredDriverId(): ?int
+    {
+        return $this->filled('preferred_driver_id') ? $this->integer('preferred_driver_id') : null;
     }
 
     /**
@@ -170,6 +204,7 @@ class CreateRideRequest extends FormRequest
                 $origin,
                 $this->filled('destination_text') ? $this->string('destination_text')->toString() : null,
                 $this->passengerCount(),
+                $this->preferredDriverId(),
             );
         }
 
@@ -177,6 +212,7 @@ class CreateRideRequest extends FormRequest
             origin: $origin,
             destinationSiteId: $this->destinationSiteId(),
             passengerCount: $this->passengerCount(),
+            preferredDriverId: $this->preferredDriverId(),
         );
     }
 }

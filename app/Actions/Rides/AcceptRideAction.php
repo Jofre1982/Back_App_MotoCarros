@@ -55,7 +55,8 @@ final readonly class AcceptRideAction
             /** @var Ride $locked */
             $locked = Ride::query()->whereKey($ride->getKey())->lockForUpdate()->firstOrFail();
 
-            if ($locked->status !== RideStatus::Requested) {
+            if ($locked->status !== RideStatus::Requested
+                || $locked->isReservedForAnotherDriver((int) $driver->getKey())) {
                 throw new RideNoLongerAvailableException;
             }
 
