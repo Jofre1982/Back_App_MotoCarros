@@ -1,0 +1,21 @@
+name: tmp-pint
+on: push
+permissions:
+  contents: write
+jobs:
+  pint:
+    if: github.ref == 'refs/heads/feat/conductores-favoritos'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction --prefer-dist --no-scripts
+      - run: vendor/bin/pint -v tests/Feature/Favorites/PreferredRideTest.php || true
+      - run: |
+          git diff
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git rm -q .github/workflows/tmp-pint.yml
+          git commit -am "style: Pint en PreferredRideTest" && git push
