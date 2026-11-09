@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Enums\VehicleType;
 use App\Enums\RideMode;
 use App\Enums\RideStatus;
+use App\Enums\VehicleType;
 use App\Policies\RidePolicy;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
