@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Favorites;
 
 use App\DTOs\PushNotification;
-use App\Enums\RideStatus;
 use App\Models\DeviceToken;
 use App\Models\DriverProfile;
 use App\Models\Ride;
