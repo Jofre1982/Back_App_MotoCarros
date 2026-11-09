@@ -157,6 +157,9 @@ class Ride extends Model
         return $this->hasOne(Payment::class);
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function preferredDriver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'preferred_driver_id');

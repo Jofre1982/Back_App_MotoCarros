@@ -53,6 +53,17 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
+     * Conductores que este pasajero guardó como favoritos.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function favoriteDrivers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'favorite_drivers', 'passenger_id', 'driver_id')
+            ->withTimestamps();
+    }
+
+    /**
      * La moto del conductor. Uno a uno: `vehicles.user_id` es único, y un
      * conductor que quiere cambiar de moto actualiza la que tiene en vez de
      * registrar otra.
@@ -64,17 +75,6 @@ class User extends Authenticatable implements JWTSubject
      *
      * @return HasOne<Vehicle, $this>
      */
-    /**
-     * Conductores que este pasajero guardó como favoritos.
-     *
-     * @return BelongsToMany<User, $this>
-     */
-    public function favoriteDrivers(): BelongsToMany
-    {
-        return $this->belongsToMany(User::class, 'favorite_drivers', 'passenger_id', 'driver_id')
-            ->withTimestamps();
-    }
-
     public function vehicle(): HasOne
     {
         return $this->hasOne(Vehicle::class);

@@ -9,6 +9,7 @@ use App\Events\Realtime\RideStatusChanged;
 use App\Models\Ride;
 use App\Services\Push\PushNotifier;
 use App\Services\Push\ServiceMessages;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Date;
 
 /**
@@ -45,7 +46,7 @@ final readonly class RespondToRidePriceAction
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{preferred_until?: CarbonInterface}
      */
     private function endPreference(Ride $ride): array
     {
