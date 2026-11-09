@@ -80,7 +80,7 @@ class ServiceHistoryDetailsTest extends TestCase
             ->assertJsonPath('data.0.driver_vehicle.plate', 'ABC12D');
 
         $this->withToken($token)
-            ->getJson('/api/v1/me/errands?role=driver')
+            ->getJson('/api/v1/me/errands?as=driver')
             ->assertOk()
             ->assertJsonPath('data.0.passenger_name', 'María Pérez')
             ->assertJsonPath('data.0.driver_vehicle.plate', 'ABC12D');
