@@ -39,6 +39,9 @@ use App\Http\Controllers\Api\V1\Errands\ListErrandsController;
 use App\Http\Controllers\Api\V1\Errands\ListMyErrandsController;
 use App\Http\Controllers\Api\V1\Errands\RespondToErrandPriceController;
 use App\Http\Controllers\Api\V1\Errands\ShowErrandPhotoController;
+use App\Http\Controllers\Api\V1\Favorites\AddFavoriteDriverController;
+use App\Http\Controllers\Api\V1\Favorites\ListFavoriteDriversController;
+use App\Http\Controllers\Api\V1\Favorites\RemoveFavoriteDriverController;
 use App\Http\Controllers\Api\V1\Profile\DeleteAccountController;
 use App\Http\Controllers\Api\V1\Profile\ShowAvatarController;
 use App\Http\Controllers\Api\V1\Profile\ShowProfileController;
@@ -137,6 +140,19 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:api', 'throttle:auth'])
         ->delete('me', DeleteAccountController::class)
         ->name('profile.destroy');
+
+    // Conductores favoritos del pasajero (pedido del dueño). Al pedir un
+    // viaje puede ofrecérselo primero a uno de ellos (`preferred_driver_id`).
+    Route::middleware('auth:api')
+        ->get('me/favorite-drivers', ListFavoriteDriversController::class)
+        ->name('favorite-drivers.index');
+    Route::middleware('auth:api')
+        ->post('me/favorite-drivers', AddFavoriteDriverController::class)
+        ->name('favorite-drivers.store');
+    Route::middleware('auth:api')
+        ->delete('me/favorite-drivers/{driver}', RemoveFavoriteDriverController::class)
+        ->whereNumber('driver')
+        ->name('favorite-drivers.destroy');
 
     // PATCH y no PUT: solo se aceptan los campos de contacto presentes en el
     // body, el resto de la cuenta no se toca (historia #11).

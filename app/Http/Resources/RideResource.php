@@ -89,6 +89,13 @@ class RideResource extends JsonResource
             // hay una de los últimos minutos: una posición vieja daría un
             // "llega en X min" falso.
             'driver_location' => $this->driverLocation(),
+            // Se lo pidió primero a este conductor favorito; hasta
+            // `preferred_until` solo él puede tomarlo.
+            'preferred_driver' => $this->resource->preferredDriver === null ? null : [
+                'id' => $this->resource->preferredDriver->id,
+                'name' => $this->resource->preferredDriver->name,
+            ],
+            'preferred_until' => $this->resource->preferred_until?->toIso8601String(),
             // ISO-8601 explícito en vez del formato por defecto de Eloquent:
             // el contrato publica `format: date-time` y el default trae
             // microsegundos que nadie usa acá.

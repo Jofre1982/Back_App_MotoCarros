@@ -18,6 +18,11 @@ final class ServiceMessages
         return new PushNotification('🛺 Nuevo viaje', 'Un pasajero está esperando. Abre MotoYa para ver la solicitud.');
     }
 
+    public static function chosenAsFavorite(): PushNotification
+    {
+        return new PushNotification('⭐ ¡Un pasajero te eligió!', 'Te pidió el viaje a ti primero. Tienes 2 minutos para tomarlo en MotoYa.');
+    }
+
     public static function newErrand(?VehicleType $type): PushNotification
     {
         return $type === VehicleType::Motocarga

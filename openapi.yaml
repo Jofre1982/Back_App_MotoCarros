@@ -927,6 +927,106 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Not found.
+  /me/favorite-drivers:
+    get:
+      tags:
+        - Profile
+      operationId: listFavoriteDrivers
+      summary: Mis conductores favoritos
+      description: Los conductores que el pasajero guardó, ordenados por nombre.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: La lista (puede estar vacía).
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FavoriteDriver"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Profile
+      operationId: addFavoriteDriver
+      summary: Guardar un conductor como favorito
+      description: >-
+        Solo un conductor que ya le prestó un servicio (viaje o mandado) al
+        pasajero; **422** si no. Repetirlo no duplica.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - driver_id
+              properties:
+                driver_id:
+                  type: integer
+                  example: 7
+      responses:
+        "201":
+          description: El conductor guardado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/FavoriteDriver"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: El conductor nunca le prestó un servicio a este pasajero.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /me/favorite-drivers/{id}:
+    delete:
+      tags:
+        - Profile
+      operationId: removeFavoriteDriver
+      summary: Quitar un conductor de favoritos
+      description: Si no estaba en la lista, igual responde 204.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 7
+      responses:
+        "204":
+          description: Quitado.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /me:
     delete:
       tags:
@@ -6540,6 +6640,55 @@ components:
           minimum: 1
           maximum: 3
           example: 1
+        preferred_driver_id:
+          type: integer
+          nullable: true
+          description: >-
+            Opcional: pedírselo primero a un conductor favorito (de `GET
+            /me/favorite-drivers`, con `receiving_rides: true`). Durante 2
+            minutos solo él lo ve y le llega el aviso; después queda para
+            todos. **422** si no está en los favoritos o no está recibiendo
+            viajes.
+          example: 7
+    FavoriteDriver:
+      type: object
+      description: Un conductor que el pasajero guardó como favorito.
+      required:
+        - id
+        - name
+        - avatar_url
+        - vehicle
+        - receiving_rides
+      properties:
+        id:
+          type: integer
+          example: 7
+        name:
+          type: string
+          example: Jofre Sánchez
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+        vehicle:
+          type: object
+          nullable: true
+          required:
+            - plate
+            - type
+          properties:
+            plate:
+              type: string
+              example: ABC12D
+            type:
+              type: string
+              enum: [motocarro, motocarga]
+        receiving_rides:
+          type: boolean
+          description: >-
+            Tiene "Recibir viajes" encendido y su vehículo es motocarro: se
+            le puede pedir un viaje ya.
+          example: true
     AcceptRideRequest:
       type: object
       description: >-
@@ -6663,12 +6812,35 @@ components:
         - driver_vehicle
         - passenger_name
         - driver_location
+        - preferred_driver
+        - preferred_until
         - requested_at
         - started_at
         - completed_at
         - final_fare
         - payment
       properties:
+        preferred_driver:
+          type: object
+          nullable: true
+          description: >-
+            Conductor favorito al que el pasajero le pidió primero este viaje
+            (`null` si lo pidió a todos).
+          required:
+            - id
+            - name
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        preferred_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            Hasta cuándo solo el favorito puede ver y tomar el viaje; después,
+            todos los conductores.
         driver_vehicle:
           type: object
           nullable: true
