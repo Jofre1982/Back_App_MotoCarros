@@ -1,21 +1,30 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\ApproveDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\CreateAdController;
 use App\Http\Controllers\Api\V1\Admin\CreateCargoJobTypeController;
 use App\Http\Controllers\Api\V1\Admin\CreateSiteController;
+use App\Http\Controllers\Api\V1\Admin\DeleteAdController;
 use App\Http\Controllers\Api\V1\Admin\DeleteCargoJobTypeController;
 use App\Http\Controllers\Api\V1\Admin\DeleteSiteController;
 use App\Http\Controllers\Api\V1\Admin\GiftSubscriptionMonthsController;
+use App\Http\Controllers\Api\V1\Admin\ListAdsController;
 use App\Http\Controllers\Api\V1\Admin\ListCargoJobTypesController;
 use App\Http\Controllers\Api\V1\Admin\ListDriverDocumentsController;
 use App\Http\Controllers\Api\V1\Admin\ListPendingAvatarsController;
 use App\Http\Controllers\Api\V1\Admin\ListSitesController;
 use App\Http\Controllers\Api\V1\Admin\ListUsersController;
 use App\Http\Controllers\Api\V1\Admin\RejectDriverDocumentController;
+use App\Http\Controllers\Api\V1\Admin\ReplaceAdImageController;
 use App\Http\Controllers\Api\V1\Admin\ReviewAvatarController;
 use App\Http\Controllers\Api\V1\Admin\SetSiteFareController;
 use App\Http\Controllers\Api\V1\Admin\ShowDriverDocumentFileController;
+use App\Http\Controllers\Api\V1\Admin\UpdateAdController;
 use App\Http\Controllers\Api\V1\Admin\UpdateCargoJobTypeController;
+use App\Http\Controllers\Api\V1\Ads\ListActiveAdsController;
+use App\Http\Controllers\Api\V1\Ads\RecordAdClickController;
+use App\Http\Controllers\Api\V1\Ads\RecordAdViewController;
+use App\Http\Controllers\Api\V1\Ads\ShowAdImageController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPasswordResetController;
 use App\Http\Controllers\Api\V1\Auth\ConfirmPhoneVerificationController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
@@ -325,6 +334,32 @@ Route::prefix('v1')->group(function () {
         // a dónde va — así lo describió el dueño del producto. Mismo
         // criterio de autorización que sites (CargoJobTypePolicy, solo
         // `admin`).
+        // Anuncios de negocios locales que ve el pasajero mientras espera.
+        // Solo `admin` (AdPolicy). La imagen se cambia aparte porque PATCH
+        // no lleva archivos.
+        Route::middleware('auth:api')
+            ->get('ads', ListAdsController::class)
+            ->name('ads.index');
+
+        Route::middleware('auth:api')
+            ->post('ads', CreateAdController::class)
+            ->name('ads.store');
+
+        Route::middleware('auth:api')
+            ->patch('ads/{ad}', UpdateAdController::class)
+            ->whereNumber('ad')
+            ->name('ads.update');
+
+        Route::middleware('auth:api')
+            ->post('ads/{ad}/image', ReplaceAdImageController::class)
+            ->whereNumber('ad')
+            ->name('ads.image.replace');
+
+        Route::middleware('auth:api')
+            ->delete('ads/{ad}', DeleteAdController::class)
+            ->whereNumber('ad')
+            ->name('ads.destroy');
+
         Route::middleware('auth:api')
             ->get('cargo-job-types', ListCargoJobTypesController::class)
             ->name('cargo-job-types.index');
@@ -390,6 +425,27 @@ Route::prefix('v1')->group(function () {
     // al pedir un viaje (historia #87). Cualquier cuenta autenticada puede
     // consultarlo — administrarlo (crear/editar precios) sigue siendo
     // exclusivo del admin, bajo `/admin/sites` (historia #85).
+    // Anuncios que salen hoy, para el pasajero mientras espera su
+    // motocarro, con su imagen y los contadores de vistas y toques.
+    Route::middleware('auth:api')
+        ->get('ads', ListActiveAdsController::class)
+        ->name('ads.active');
+
+    Route::middleware('auth:api')
+        ->get('ads/{ad}/image', ShowAdImageController::class)
+        ->whereNumber('ad')
+        ->name('ads.image');
+
+    Route::middleware('auth:api')
+        ->post('ads/{ad}/view', RecordAdViewController::class)
+        ->whereNumber('ad')
+        ->name('ads.view');
+
+    Route::middleware('auth:api')
+        ->post('ads/{ad}/click', RecordAdClickController::class)
+        ->whereNumber('ad')
+        ->name('ads.click');
+
     Route::middleware('auth:api')
         ->get('sites', ListSitesForPassengerController::class)
         ->name('sites.index');
