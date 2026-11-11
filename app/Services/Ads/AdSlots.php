@@ -35,7 +35,7 @@ final class AdSlots
 
         // El día más lleno siempre es el inicio del rango o el día en que
         // empieza alguno de los anuncios que se cruzan con él.
-        $days = $ads->map(fn (Ad $ad) => $ad->starts_on->toDateString())
+        $days = $ads->toBase()->map(fn (Ad $ad) => $ad->starts_on->toDateString())
             ->filter(fn (string $day) => $day > $from)
             ->push($from)
             ->unique();

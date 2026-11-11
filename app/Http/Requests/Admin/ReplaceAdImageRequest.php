@@ -35,7 +35,7 @@ class ReplaceAdImageRequest extends FormRequest
         return $this->route('ad');
     }
 
-    public function image(): UploadedFile
+    public function uploadedImage(): UploadedFile
     {
         $image = $this->file('image');
         if (! $image instanceof UploadedFile) {

@@ -16,6 +16,6 @@ class ReplaceAdImageController extends Controller
 {
     public function __invoke(ReplaceAdImageRequest $request, ReplaceAdImageAction $replaceImage): AdResource
     {
-        return new AdResource($replaceImage->handle($request->ad(), $request->image()));
+        return new AdResource($replaceImage->handle($request->ad(), $request->uploadedImage()));
     }
 }

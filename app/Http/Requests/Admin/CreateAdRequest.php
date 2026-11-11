@@ -70,7 +70,7 @@ class CreateAdRequest extends FormRequest
         ];
     }
 
-    public function image(): ?UploadedFile
+    public function uploadedImage(): ?UploadedFile
     {
         $image = $this->file('image');
 

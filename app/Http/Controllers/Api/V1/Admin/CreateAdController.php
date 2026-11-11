@@ -17,7 +17,7 @@ class CreateAdController extends Controller
 {
     public function __invoke(CreateAdRequest $request, CreateAdAction $createAd): JsonResponse
     {
-        $ad = $createAd->handle($request->toAttributes(), $request->image());
+        $ad = $createAd->handle($request->toAttributes(), $request->uploadedImage());
 
         return (new AdResource($ad))
             ->response()
