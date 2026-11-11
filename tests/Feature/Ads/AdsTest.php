@@ -39,7 +39,7 @@ class AdsTest extends TestCase
                 'whatsapp' => '3001234567',
                 'starts_on' => '2026-11-12',
                 'ends_on' => '2026-12-12',
-                'image' => UploadedFile::fake()->image('logo.jpg'),
+                'image' => UploadedFile::fake()->create('logo.jpg', 100, 'image/jpeg'),
             ], ['Accept' => 'application/json'])
             ->assertCreated()
             ->assertJsonPath('data.status', 'active')
@@ -97,11 +97,11 @@ class AdsTest extends TestCase
 
     public function test_cambiar_la_imagen_y_borrar(): void
     {
-        $ad = Ad::factory()->create(['image_path' => UploadedFile::fake()->image('a.png')->store('ads', 'local')]);
+        $ad = Ad::factory()->create(['image_path' => UploadedFile::fake()->create('a.png', 100, 'image/png')->store('ads', 'local')]);
         $vieja = $ad->image_path;
 
         $this->comoAdmin()
-            ->post("/api/v1/admin/ads/{$ad->id}/image", ['image' => UploadedFile::fake()->image('b.png')], ['Accept' => 'application/json'])
+            ->post("/api/v1/admin/ads/{$ad->id}/image", ['image' => UploadedFile::fake()->create('b.png', 100, 'image/png')], ['Accept' => 'application/json'])
             ->assertOk();
         $this->assertNotNull($vieja);
         Storage::disk('local')->assertMissing($vieja);
@@ -144,7 +144,7 @@ class AdsTest extends TestCase
 
     public function test_cuenta_vistas_y_toques_y_sirve_la_imagen(): void
     {
-        $ad = Ad::factory()->create(['image_path' => UploadedFile::fake()->image('a.png')->store('ads', 'local')]);
+        $ad = Ad::factory()->create(['image_path' => UploadedFile::fake()->create('a.png', 100, 'image/png')->store('ads', 'local')]);
 
         $this->comoPasajero()->postJson("/api/v1/ads/{$ad->id}/view")->assertNoContent();
         $this->comoPasajero()->postJson("/api/v1/ads/{$ad->id}/view")->assertNoContent();
