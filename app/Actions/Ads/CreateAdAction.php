@@ -18,9 +18,12 @@ final class CreateAdAction
      */
     public function handle(array $attributes, ?UploadedFile $image): Ad
     {
-        return Ad::create([
+        $ad = Ad::create([
             ...$attributes,
             'image_path' => $image?->store('ads', 'local'),
         ]);
+
+        // `views`/`clicks` arrancan en 0 por default de la tabla.
+        return $ad->refresh();
     }
 }

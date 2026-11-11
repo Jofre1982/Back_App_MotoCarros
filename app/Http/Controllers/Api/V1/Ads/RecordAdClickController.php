@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1\Ads;
 use App\Actions\Ads\RecordAdClickAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Ads\ViewAdRequest;
+use App\Models\Ad;
 use Illuminate\Http\Response;
 
 /**
@@ -14,9 +15,9 @@ use Illuminate\Http\Response;
  */
 class RecordAdClickController extends Controller
 {
-    public function __invoke(ViewAdRequest $request, RecordAdClickAction $recordClick): Response
+    public function __invoke(ViewAdRequest $request, RecordAdClickAction $recordClick, Ad $ad): Response
     {
-        $recordClick->handle($request->ad());
+        $recordClick->handle($ad);
 
         return response()->noContent();
     }

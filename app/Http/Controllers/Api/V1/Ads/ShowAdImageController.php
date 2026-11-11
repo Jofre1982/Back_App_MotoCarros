@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1\Ads;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Ads\ViewAdRequest;
+use App\Models\Ad;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,9 +16,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 class ShowAdImageController extends Controller
 {
-    public function __invoke(ViewAdRequest $request): StreamedResponse
+    public function __invoke(ViewAdRequest $request, Ad $ad): StreamedResponse
     {
-        $path = $request->ad()->image_path;
+        $path = $ad->image_path;
         if ($path === null || ! Storage::disk('local')->exists($path)) {
             throw new NotFoundHttpException('Este anuncio no tiene imagen.');
         }

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Actions\Ads\DeleteAdAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\DeleteAdRequest;
+use App\Models\Ad;
 use Illuminate\Http\Response;
 
 /**
@@ -14,9 +15,9 @@ use Illuminate\Http\Response;
  */
 class DeleteAdController extends Controller
 {
-    public function __invoke(DeleteAdRequest $request, DeleteAdAction $deleteAd): Response
+    public function __invoke(DeleteAdRequest $request, DeleteAdAction $deleteAd, Ad $ad): Response
     {
-        $deleteAd->handle($request->ad());
+        $deleteAd->handle($ad);
 
         return response()->noContent();
     }
