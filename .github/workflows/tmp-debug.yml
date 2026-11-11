@@ -10,6 +10,11 @@ jobs:
         with:
           php-version: '8.3'
       - run: composer install --no-interaction --prefer-dist --no-scripts -q
-      - run: cp .env.example .env && php artisan key:generate -q && php artisan jwt:secret --force -q
-      - run: vendor/bin/phpunit --filter AdsTest --debug 2>&1 | tail -40 || true
-      - run: vendor/bin/phpunit --filter 'AdsTest::test_(no_deja|cuenta|pausar|cambiar|un_pasajero|el_pasajero|el_ultimo|sin_token)' 2>&1 | tail -40 || true
+      - run: cp .env.example .env && php artisan key:generate -q && php artisan jwt:secret --force -q && touch database/database.sqlite && php artisan migrate --force -q
+      - run: php artisan route:list --path=ads 2>&1 | tail -20 || true
+      - run: php artisan tinker --execute 'dump(App\Models\Ad::factory()->make()->toArray());' 2>&1 | tail -20 || true
+      - run: php artisan tinker --execute 'dump(App\Services\Ads\AdSlots::busiestDay("2026-11-12","2026-11-20"));' 2>&1 | tail -20 || true
+      - run: |
+          for t in test_sin_token_no_hay_anuncios test_un_pasajero_no_administra_anuncios test_el_pasajero_ve_solo_los_que_salen_hoy; do
+            echo "=== $t"; php -d display_errors=1 vendor/bin/phpunit --filter "AdsTest::$t\$" 2>&1 | tail -15; echo "exit $?"
+          done
