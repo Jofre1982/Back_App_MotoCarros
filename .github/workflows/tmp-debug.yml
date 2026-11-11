@@ -1,0 +1,15 @@
+name: tmp-debug
+on: push
+jobs:
+  dbg:
+    if: github.ref == 'refs/heads/feat/anuncios'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: composer install --no-interaction --prefer-dist --no-scripts -q
+      - run: cp .env.example .env && php artisan key:generate -q && php artisan jwt:secret --force -q
+      - run: vendor/bin/phpunit --filter AdsTest --debug 2>&1 | tail -40 || true
+      - run: vendor/bin/phpunit --filter 'AdsTest::test_(no_deja|cuenta|pausar|cambiar|un_pasajero|el_pasajero|el_ultimo|sin_token)' 2>&1 | tail -40 || true
