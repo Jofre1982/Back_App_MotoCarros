@@ -24,7 +24,7 @@ final readonly class ListUsersAction
     public function handle(?UserRole $role, ?string $search): LengthAwarePaginator
     {
         return User::query()
-            ->with('driverProfile')
+            ->with(['driverProfile.documents', 'vehicle'])
             ->when($role !== null, fn (Builder $query) => $query->where('role', $role))
             ->when($search !== null, fn (Builder $query) => $this->applySearch($query, (string) $search))
             ->orderByDesc('created_at')

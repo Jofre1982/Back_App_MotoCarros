@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Enums\DocumentStatus;
+use App\Enums\DocumentType;
 use App\Enums\DriverVerificationStatus;
+use App\Models\DriverDocument;
 use App\Models\DriverProfile;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -54,6 +58,28 @@ class ListUsersTest extends TestCase
             ->assertJsonPath('meta.total', 3)
             ->assertJsonPath('meta.per_page', 50)
             ->assertJsonPath('meta.totals', ['passenger' => 1, 'driver' => 1, 'admin' => 1]);
+    }
+
+    public function test_muestra_el_vehiculo_y_el_estado_de_su_foto(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $conFoto = User::factory()->driver()->create();
+        $perfil = DriverProfile::factory()->create(['user_id' => $conFoto->id]);
+        Vehicle::factory()->create(['user_id' => $conFoto->id, 'plate' => 'ABC12D']);
+        DriverDocument::factory()->create([
+            'driver_profile_id' => $perfil->id,
+            'type' => DocumentType::FotoVehiculo,
+            'status' => DocumentStatus::Pending,
+        ]);
+        $sinFoto = User::factory()->driver()->create();
+        DriverProfile::factory()->create(['user_id' => $sinFoto->id]);
+
+        $data = collect($this->withToken(JWTAuth::fromUser($admin))->getJson(self::URI)->assertOk()->json('data'))->keyBy('id');
+
+        $this->assertSame(['plate' => 'ABC12D', 'type' => 'motocarro'], $data[$conFoto->id]['vehicle']);
+        $this->assertSame('pending', $data[$conFoto->id]['vehicle_photo_status']);
+        $this->assertNull($data[$sinFoto->id]['vehicle']);
+        $this->assertNull($data[$sinFoto->id]['vehicle_photo_status']);
     }
 
     public function test_nunca_expone_la_contrasena(): void

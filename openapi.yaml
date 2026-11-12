@@ -6739,6 +6739,32 @@ components:
           nullable: true
           enum: [pending, approved, rejected, null]
           example: null
+        vehicle:
+          type: object
+          nullable: true
+          description: Vehículo registrado por el conductor; `null` si no tiene.
+          required:
+            - plate
+            - type
+          properties:
+            plate:
+              type: string
+              example: ABC12D
+            type:
+              type: string
+              enum:
+                - motocarro
+                - motocarga
+          example: null
+        vehicle_photo_status:
+          type: string
+          nullable: true
+          enum: [pending, approved, rejected, null]
+          description: >-
+            Estado de la última foto del vehículo (documento
+            `foto_vehiculo`). `null` si nunca subió una. El pasajero solo la
+            ve cuando está `approved`.
+          example: null
         id:
           type: integer
           example: 42
