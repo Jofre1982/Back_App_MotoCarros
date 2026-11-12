@@ -811,6 +811,9 @@
       status.textContent = VERIFICATION_LABELS[user.driver_verification_status] || user.driver_verification_status;
       roleCell.appendChild(status);
     }
+    if (user.driver_verification_status) {
+      roleCell.appendChild(buildVehicleInfo(user));
+    }
     row.appendChild(roleCell);
 
     row.appendChild(buildPlanCell(user));
@@ -823,6 +826,36 @@
     row.appendChild(dateCell);
 
     return row;
+  }
+
+  // Vehículo y foto del vehículo: el pasajero solo ve la foto aprobada
+  // (pestaña "Documentos pendientes").
+  var VEHICLE_PHOTO_LABELS = {
+    approved: ["📷 Foto del vehículo aprobada ✓", "var(--success, #1a7f37)"],
+    pending: ["📷 Foto del vehículo por revisar", "#b7791f"],
+    rejected: ["📷 Foto del vehículo rechazada", "var(--danger, #c0392b)"],
+  };
+
+  function buildVehicleInfo(user) {
+    var box = document.createElement("div");
+    box.style.fontSize = "0.8rem";
+    box.style.marginTop = "4px";
+
+    var vehicle = document.createElement("div");
+    vehicle.textContent = user.vehicle
+      ? "🛺 " + (user.vehicle.type === "motocarga" ? "Motocarga" : "Motocarro") + " · " + user.vehicle.plate
+      : "🛺 Sin vehículo registrado";
+    vehicle.style.color = "var(--muted)";
+    box.appendChild(vehicle);
+
+    var photo = document.createElement("div");
+    var label = VEHICLE_PHOTO_LABELS[user.vehicle_photo_status] || ["📷 No ha subido foto del vehículo", "var(--muted)"];
+    photo.textContent = label[0];
+    photo.style.color = label[1];
+    photo.style.fontWeight = "600";
+    box.appendChild(photo);
+
+    return box;
   }
 
   // Plan del conductor: hasta cuándo tiene acceso y el botón para regalar
