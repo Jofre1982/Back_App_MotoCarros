@@ -172,6 +172,11 @@
   }
   .hint { color: var(--muted); font-size: 0.85rem; margin: 0 0 12px; }
   .ok { color: #2b8a3e; font-size: 0.9rem; }
+  .ad-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; background: var(--bg); display: block; }
+  .ad-status-active { background: #ebfbee; border-color: #2b8a3e; color: #2b8a3e; }
+  .ad-status-scheduled { background: #e7f0ff; border-color: var(--primary); color: var(--primary); }
+  .ad-status-paused { background: #fff8e6; border-color: #b7791f; color: #b7791f; }
+  .ad-status-expired { color: var(--muted); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -203,6 +208,7 @@
     <button type="button" class="tab" id="tab-avatars" role="tab" aria-selected="false">Fotos de perfil</button>
     <button type="button" class="tab" id="tab-users" role="tab" aria-selected="false">Usuarios registrados</button>
     <button type="button" class="tab" id="tab-sites" role="tab" aria-selected="false">Destinos y precios</button>
+    <button type="button" class="tab" id="tab-ads" role="tab" aria-selected="false">Anuncios</button>
   </div>
 
   <div id="users-card" class="card" hidden>
@@ -287,6 +293,53 @@
     </div>
   </div>
 
+  <div id="ads-card" class="card" hidden>
+    <p class="hint">Anuncios de negocios que ve el pasajero mientras espera su motocarro (cambian cada 8 segundos). Salen solo entre las fechas que pongas. Máximo <strong id="ads-max">5</strong> anuncios saliendo el mismo día.</p>
+    <form id="ad-form" class="site-form">
+      <div class="field wide">
+        <label for="ad-business">Negocio</label>
+        <input id="ad-business" type="text" maxlength="60" placeholder="Ej. Droguería La 14" required>
+      </div>
+      <div class="field wide">
+        <label for="ad-message">Texto (máx. 140)</label>
+        <input id="ad-message" type="text" maxlength="140" placeholder="Ej. 2x1 en hamburguesas los viernes" required>
+      </div>
+      <div class="field">
+        <label for="ad-whatsapp">WhatsApp (opcional)</label>
+        <input id="ad-whatsapp" type="tel" maxlength="20" placeholder="3001234567">
+      </div>
+      <div class="field">
+        <label for="ad-starts">Desde</label>
+        <input id="ad-starts" type="date" required>
+      </div>
+      <div class="field">
+        <label for="ad-ends">Hasta</label>
+        <input id="ad-ends" type="date" required>
+      </div>
+      <div class="field wide">
+        <label for="ad-image">Imagen (jpg o png, opcional)</label>
+        <input id="ad-image" type="file" accept="image/jpeg,image/png">
+      </div>
+      <div class="field">
+        <button type="submit" id="ad-save" class="btn-primary">Guardar anuncio</button>
+        <button type="button" id="ad-cancel" class="btn-link" hidden>Cancelar edición</button>
+      </div>
+    </form>
+    <p id="ad-form-error" class="error" hidden></p>
+    <p id="ad-form-ok" class="ok" hidden></p>
+    <p id="ads-loading" class="loading">Cargando anuncios...</p>
+    <p id="ads-empty" class="empty" hidden>Todavía no hay anuncios. Cuando consigas el primer negocio, agrégalo arriba.</p>
+    <p id="ads-error" class="error" hidden></p>
+    <div class="table-wrap">
+      <table class="users" id="ads-table" hidden>
+        <thead>
+          <tr><th></th><th>Negocio</th><th>Fechas</th><th>Estado</th><th>Vistas</th><th>Toques WhatsApp</th><th></th></tr>
+        </thead>
+        <tbody id="ads-body"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div id="documents-card" class="card" hidden>
     <p id="documents-loading" class="loading">Cargando documentos...</p>
     <p id="documents-empty" class="empty" hidden>No hay documentos pendientes por ahora.</p>
@@ -350,7 +403,7 @@
     if (token) {
       headers["Authorization"] = "Bearer " + token;
     }
-    if (options.body && !headers["Content-Type"]) {
+    if (options.body && !headers["Content-Type"] && !(options.body instanceof FormData)) {
       headers["Content-Type"] = "application/json";
     }
     options.headers = headers;
@@ -371,6 +424,7 @@
     usersCard.hidden = true;
     sitesCard.hidden = true;
     avatarsCard.hidden = true;
+    adsCard.hidden = true;
     tabs.hidden = true;
     logoutButton.hidden = true;
   }
@@ -391,6 +445,8 @@
   var avatarsCard = document.getElementById("avatars-card");
   var usersCard = document.getElementById("users-card");
   var sitesCard = document.getElementById("sites-card");
+  var tabAds = document.getElementById("tab-ads");
+  var adsCard = document.getElementById("ads-card");
 
   function selectTab(name) {
     tabAvatars.setAttribute("aria-selected", String(name === "avatars"));
@@ -401,7 +457,11 @@
     documentsCard.hidden = name !== "documents";
     usersCard.hidden = name !== "users";
     sitesCard.hidden = name !== "sites";
-    if (name === "users") {
+    tabAds.setAttribute("aria-selected", String(name === "ads"));
+    adsCard.hidden = name !== "ads";
+    if (name === "ads") {
+      loadAds();
+    } else if (name === "users") {
       loadUsers(1);
     } else if (name === "avatars") {
       loadPendingAvatars();
@@ -416,6 +476,7 @@
   tabUsers.addEventListener("click", function () { selectTab("users"); });
   tabSites.addEventListener("click", function () { selectTab("sites"); });
   tabAvatars.addEventListener("click", function () { selectTab("avatars"); });
+  tabAds.addEventListener("click", function () { selectTab("ads"); });
 
   // ---- Fotos de perfil de conductores por aprobar ----
   var avatarsLoading = document.getElementById("avatars-loading");
@@ -1181,6 +1242,235 @@
         });
       });
   }
+
+  // ---- Anuncios de negocios locales ----
+  var AD_STATUS = {
+    active: "Saliendo",
+    scheduled: "Programado",
+    paused: "En pausa",
+    expired: "Vencido",
+  };
+  var adForm = document.getElementById("ad-form");
+  var adBusiness = document.getElementById("ad-business");
+  var adMessage = document.getElementById("ad-message");
+  var adWhatsapp = document.getElementById("ad-whatsapp");
+  var adStarts = document.getElementById("ad-starts");
+  var adEnds = document.getElementById("ad-ends");
+  var adImage = document.getElementById("ad-image");
+  var adSave = document.getElementById("ad-save");
+  var adCancel = document.getElementById("ad-cancel");
+  var adFormError = document.getElementById("ad-form-error");
+  var adFormOk = document.getElementById("ad-form-ok");
+  var adsLoading = document.getElementById("ads-loading");
+  var adsEmpty = document.getElementById("ads-empty");
+  var adsError = document.getElementById("ads-error");
+  var adsTable = document.getElementById("ads-table");
+  var adsBody = document.getElementById("ads-body");
+  var editingAdId = null;
+
+  function formatDay(day) {
+    var parts = day.split("-");
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+  }
+
+  function loadAds() {
+    adsLoading.hidden = false;
+    adsEmpty.hidden = true;
+    adsTable.hidden = true;
+    hideError(adsError);
+
+    apiFetch("/admin/ads")
+      .then(function (response) { return jsonOrThrow(response, "No se pudieron cargar los anuncios."); })
+      .then(function (body) {
+        adsBody.innerHTML = "";
+        if (body.data.length === 0) {
+          adsEmpty.hidden = false;
+          return;
+        }
+        body.data.forEach(function (ad) { adsBody.appendChild(buildAdRow(ad)); });
+        adsTable.hidden = false;
+      })
+      .catch(function (err) { showError(adsError, err.message); })
+      .finally(function () { adsLoading.hidden = true; });
+  }
+
+  function buildAdRow(ad) {
+    var row = document.createElement("tr");
+
+    var imageCell = document.createElement("td");
+    if (ad.image_url) {
+      apiFetch("/ads/" + ad.id + "/image")
+        .then(function (response) {
+          if (!response.ok) throw new Error();
+          return response.blob();
+        })
+        .then(function (blob) {
+          var img = document.createElement("img");
+          img.className = "ad-thumb";
+          img.src = URL.createObjectURL(blob);
+          img.alt = ad.business_name;
+          imageCell.appendChild(img);
+        })
+        .catch(function () {});
+    }
+    row.appendChild(imageCell);
+
+    var nameCell = document.createElement("td");
+    var strong = document.createElement("strong");
+    strong.textContent = ad.business_name;
+    nameCell.appendChild(strong);
+    var text = document.createElement("div");
+    text.textContent = ad.message;
+    nameCell.appendChild(text);
+    if (ad.whatsapp) {
+      var phone = document.createElement("div");
+      phone.style.color = "var(--muted)";
+      phone.textContent = "WhatsApp: " + ad.whatsapp;
+      nameCell.appendChild(phone);
+    }
+    row.appendChild(nameCell);
+
+    var datesCell = document.createElement("td");
+    datesCell.textContent = formatDay(ad.starts_on) + " al " + formatDay(ad.ends_on);
+    row.appendChild(datesCell);
+
+    var statusCell = document.createElement("td");
+    var badge = document.createElement("span");
+    badge.className = "badge ad-status-" + ad.status;
+    badge.textContent = AD_STATUS[ad.status] || ad.status;
+    statusCell.appendChild(badge);
+    row.appendChild(statusCell);
+
+    var viewsCell = document.createElement("td");
+    viewsCell.textContent = Number(ad.views).toLocaleString("es-CO");
+    row.appendChild(viewsCell);
+
+    var clicksCell = document.createElement("td");
+    clicksCell.textContent = Number(ad.clicks).toLocaleString("es-CO");
+    row.appendChild(clicksCell);
+
+    var actionsCell = document.createElement("td");
+    actionsCell.style.whiteSpace = "nowrap";
+    actionsCell.style.textAlign = "right";
+
+    function action(label, color, onClick) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn-link";
+      button.style.marginLeft = "12px";
+      if (color) button.style.color = color;
+      button.textContent = label;
+      button.addEventListener("click", function () { onClick(button); });
+      actionsCell.appendChild(button);
+    }
+
+    action("Editar", null, function () {
+      editingAdId = ad.id;
+      adBusiness.value = ad.business_name;
+      adMessage.value = ad.message;
+      adWhatsapp.value = ad.whatsapp || "";
+      adStarts.value = ad.starts_on;
+      adEnds.value = ad.ends_on;
+      adImage.value = "";
+      adSave.textContent = "Guardar cambios";
+      adCancel.hidden = false;
+      adBusiness.focus();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    if (ad.status !== "expired") {
+      action(ad.is_paused ? "Reanudar" : "Pausar", null, function (button) {
+        button.disabled = true;
+        apiFetch("/admin/ads/" + ad.id, { method: "PATCH", body: JSON.stringify({ is_paused: !ad.is_paused }) })
+          .then(function (response) { return jsonOrThrow(response, "No se pudo cambiar el anuncio."); })
+          .then(function () { loadAds(); })
+          .catch(function (err) {
+            showError(adsError, err.message);
+            button.disabled = false;
+          });
+      });
+    }
+
+    action("Borrar", "var(--danger)", function (button) {
+      if (!window.confirm("¿Borrar el anuncio de \"" + ad.business_name + "\"? Se pierden también sus números de vistas y toques.")) return;
+      button.disabled = true;
+      apiFetch("/admin/ads/" + ad.id, { method: "DELETE" })
+        .then(function (response) { return jsonOrThrow(response, "No se pudo borrar el anuncio."); })
+        .then(function () { loadAds(); })
+        .catch(function (err) {
+          showError(adsError, err.message);
+          button.disabled = false;
+        });
+    });
+
+    row.appendChild(actionsCell);
+    return row;
+  }
+
+  function resetAdForm() {
+    editingAdId = null;
+    adForm.reset();
+    adSave.textContent = "Guardar anuncio";
+    adCancel.hidden = true;
+  }
+
+  adCancel.addEventListener("click", function () {
+    resetAdForm();
+    hideError(adFormError);
+  });
+
+  adForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    hideError(adFormError);
+    adFormOk.hidden = true;
+
+    var file = adImage.files && adImage.files[0];
+    var name = adBusiness.value.trim();
+    var request;
+
+    if (editingAdId === null) {
+      var data = new FormData();
+      data.append("business_name", name);
+      data.append("message", adMessage.value.trim());
+      data.append("whatsapp", adWhatsapp.value.trim());
+      data.append("starts_on", adStarts.value);
+      data.append("ends_on", adEnds.value);
+      if (file) data.append("image", file);
+      request = apiFetch("/admin/ads", { method: "POST", body: data, headers: { Accept: "application/json" } })
+        .then(function (response) { return jsonOrThrow(response, "No se pudo crear el anuncio."); });
+    } else {
+      var adId = editingAdId;
+      request = apiFetch("/admin/ads/" + adId, {
+        method: "PATCH",
+        body: JSON.stringify({
+          business_name: name,
+          message: adMessage.value.trim(),
+          whatsapp: adWhatsapp.value.trim() || null,
+          starts_on: adStarts.value,
+          ends_on: adEnds.value,
+        }),
+      })
+        .then(function (response) { return jsonOrThrow(response, "No se pudo guardar el anuncio."); })
+        .then(function (body) {
+          if (!file) return body;
+          var image = new FormData();
+          image.append("image", file);
+          return apiFetch("/admin/ads/" + adId + "/image", { method: "POST", body: image, headers: { Accept: "application/json" } })
+            .then(function (response) { return jsonOrThrow(response, "Se guardó el texto pero no la imagen."); });
+        });
+    }
+
+    adSave.disabled = true;
+    request
+      .then(function () {
+        adFormOk.textContent = "Guardado: " + name + ".";
+        adFormOk.hidden = false;
+        resetAdForm();
+        loadAds();
+      })
+      .catch(function (err) { showError(adFormError, err.message); })
+      .finally(function () { adSave.disabled = false; });
+  });
 
   if (getToken()) {
     showDocuments();

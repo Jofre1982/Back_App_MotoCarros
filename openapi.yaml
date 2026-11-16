@@ -2320,6 +2320,389 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 message: Too Many Attempts.
+  /admin/ads:
+    get:
+      tags:
+        - Ads
+      operationId: listAds
+      summary: Listar los anuncios (panel)
+      description: >-
+        Todos los anuncios de negocios locales, con su estado y cuántas
+        veces se vieron y se tocaron. Los que terminan más tarde primero.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Anuncios.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Ad"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+    post:
+      tags:
+        - Ads
+      operationId: createAd
+      summary: Crear un anuncio
+      description: >-
+        Crea el anuncio de un negocio. `multipart/form-data` porque puede
+        llevar la imagen (jpg/png, hasta 5 MB). Sale entre `starts_on` y
+        `ends_on` (fechas de Colombia, ambas incluidas). No puede haber más
+        de `ADS_MAX_ACTIVE` (5) anuncios saliendo el mismo día.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - business_name
+                - message
+                - starts_on
+                - ends_on
+              properties:
+                business_name:
+                  type: string
+                  maxLength: 60
+                message:
+                  type: string
+                  maxLength: 140
+                whatsapp:
+                  type: string
+                  nullable: true
+                  description: Número con el que el pasajero escribe al negocio.
+                starts_on:
+                  type: string
+                  format: date
+                ends_on:
+                  type: string
+                  format: date
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Anuncio creado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ad"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "422":
+          description: Falta un campo, las fechas no cuadran o ya están ocupados todos los cupos (`slots`) en esas fechas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Ya hay 5 anuncios saliendo en esas fechas (son todos los cupos). Cambia las fechas o pausa otro anuncio.
+                errors:
+                  slots:
+                    - Ya hay 5 anuncios saliendo en esas fechas (son todos los cupos). Cambia las fechas o pausa otro anuncio.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /admin/ads/{ad}:
+    patch:
+      tags:
+        - Ads
+      operationId: updateAd
+      summary: Editar, pausar o reanudar un anuncio
+      description: >-
+        Cambia solo los campos que vengan. `is_paused: true` lo deja de
+        mostrar sin borrarlo; al reanudarlo se vuelven a revisar los cupos.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ad
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                business_name:
+                  type: string
+                  maxLength: 60
+                message:
+                  type: string
+                  maxLength: 140
+                whatsapp:
+                  type: string
+                  nullable: true
+                starts_on:
+                  type: string
+                  format: date
+                ends_on:
+                  type: string
+                  format: date
+                is_paused:
+                  type: boolean
+            example:
+              is_paused: true
+      responses:
+        "200":
+          description: El anuncio actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ad"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un anuncio con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\Ad] 1
+        "422":
+          description: Falta un campo, las fechas no cuadran o ya están ocupados todos los cupos (`slots`) en esas fechas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Ya hay 5 anuncios saliendo en esas fechas (son todos los cupos). Cambia las fechas o pausa otro anuncio.
+                errors:
+                  slots:
+                    - Ya hay 5 anuncios saliendo en esas fechas (son todos los cupos). Cambia las fechas o pausa otro anuncio.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+    delete:
+      tags:
+        - Ads
+      operationId: deleteAd
+      summary: Borrar un anuncio
+      description: >-
+        Borra el anuncio y su imagen.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ad
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "204":
+          description: Borrado.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un anuncio con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\Ad] 1
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /admin/ads/{ad}/image:
+    post:
+      tags:
+        - Ads
+      operationId: replaceAdImage
+      summary: Cambiar la imagen de un anuncio
+      description: >-
+        Reemplaza la imagen (jpg/png, hasta 5 MB) y borra la anterior.
+
+        Requiere un token vigente y rol `admin`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ad
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: El anuncio con su `image_url` nuevo.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Ad"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "403":
+          description: La cuenta autenticada no es administrador.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: This action is unauthorized.
+        "404":
+          description: No existe un anuncio con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\Ad] 1
+        "422":
+          description: Falta la imagen, no es jpg/png o pesa más de 5 MB.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: The image field is required.
+                errors:
+                  image:
+                    - The image field is required.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
   /admin/cargo-job-types:
     get:
       tags:
@@ -3633,6 +4016,188 @@ paths:
                 errors:
                   to:
                     - The to field must be a date after or equal to from.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /ads:
+    get:
+      tags:
+        - Ads
+      operationId: listActiveAds
+      summary: Anuncios que salen hoy
+      description: >-
+        Los anuncios que salen hoy (fecha de Colombia), sin pausar, en orden
+        aleatorio y como máximo `ADS_MAX_ACTIVE`. La app se los muestra al
+        pasajero mientras espera su motocarro, uno a la vez. Vacío si no hay.
+
+        Requiere un token vigente.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Anuncios.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicAd"
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /ads/{ad}/image:
+    get:
+      tags:
+        - Ads
+      operationId: showAdImage
+      summary: Imagen de un anuncio
+      description: Requiere un token vigente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ad
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: La imagen.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "404":
+          description: No existe el anuncio o no tiene imagen.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Este anuncio no tiene imagen.
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /ads/{ad}/view:
+    post:
+      tags:
+        - Ads
+      operationId: recordAdView
+      summary: Contar una vista
+      description: >-
+        La app la reporta la primera vez que le muestra el anuncio al
+        pasajero mientras espera un viaje. Requiere un token vigente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ad
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "204":
+          description: Contada.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "404":
+          description: No existe un anuncio con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\Ad] 1
+        "429":
+          description: Se superó el límite general de la API para este usuario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Too Many Attempts.
+  /ads/{ad}/click:
+    post:
+      tags:
+        - Ads
+      operationId: recordAdClick
+      summary: Contar un toque
+      description: >-
+        El pasajero tocó el botón de WhatsApp del anuncio. Requiere un token
+        vigente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ad
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "204":
+          description: Contado.
+        "401":
+          description: Falta el access token, es ilegible o ya venció.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Unauthenticated.
+        "404":
+          description: No existe un anuncio con ese id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: No query results for model [App\\Models\\Ad] 1
         "429":
           description: Se superó el límite general de la API para este usuario.
           content:
@@ -6124,6 +6689,81 @@ components:
           type: string
           format: date-time
           example: "2026-09-04T15:00:00.000000Z"
+    Ad:
+      type: object
+      description: >-
+        Anuncio de un negocio local como lo ve el admin: fechas, estado y
+        números para mostrarle al negocio.
+      required:
+        - id
+        - business_name
+        - message
+        - whatsapp
+        - image_url
+        - starts_on
+        - ends_on
+        - is_paused
+        - status
+        - views
+        - clicks
+      properties:
+        id:
+          type: integer
+          example: 1
+        business_name:
+          type: string
+          example: Droguería La 14
+        message:
+          type: string
+          example: Domicilios gratis en el pueblo
+        whatsapp:
+          type: string
+          nullable: true
+          example: "3001234567"
+        image_url:
+          type: string
+          nullable: true
+        starts_on:
+          type: string
+          format: date
+        ends_on:
+          type: string
+          format: date
+        is_paused:
+          type: boolean
+        status:
+          type: string
+          enum:
+            - active
+            - scheduled
+            - paused
+            - expired
+        views:
+          type: integer
+        clicks:
+          type: integer
+    PublicAd:
+      type: object
+      description: Anuncio como lo ve el pasajero.
+      required:
+        - id
+        - business_name
+        - message
+        - whatsapp
+        - image_url
+      properties:
+        id:
+          type: integer
+        business_name:
+          type: string
+        message:
+          type: string
+        whatsapp:
+          type: string
+          nullable: true
+        image_url:
+          type: string
+          nullable: true
     CargoJobType:
       type: object
       description: >-
