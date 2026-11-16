@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Enums\DocumentType;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -35,6 +36,23 @@ class AdminUserResource extends JsonResource
             'avatar_url' => AvatarUrl::own($this->resource),
             'avatar_status' => $this->resource->avatar_status,
             'registered_at' => $this->resource->created_at?->toIso8601String(),
+            // Para saber si el pasajero va a ver la foto del motocarro.
+            'vehicle' => $this->resource->vehicle === null ? null : [
+                'plate' => $this->resource->vehicle->plate,
+                'type' => $this->resource->vehicle->type->value,
+            ],
+            'vehicle_photo_status' => $this->vehiclePhotoStatus(),
         ];
+    }
+
+    /**
+     * Estado de la foto del vehículo que subió el conductor, o `null`
+     * si nunca subió una. Solo la `approved` la ve el pasajero.
+     */
+    private function vehiclePhotoStatus(): ?string
+    {
+        return $this->resource->driverProfile?->documents
+            ->firstWhere('type', DocumentType::FotoVehiculo)
+            ?->status->value;
     }
 }
